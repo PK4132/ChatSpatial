@@ -1,0 +1,566 @@
+# Chinese translations for ChatSpatial package.
+# Copyright (C) 2026, ChatSpatial Project
+# This file is distributed under the same license as the ChatSpatial package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ChatSpatial 1.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-04 09:38-0600\n"
+"PO-Revision-Date: 2026-02-04 09:38-0600\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_CN\n"
+
+#: ../../concepts.md:1
+msgid "Concepts"
+msgstr "概念"
+
+#: ../../concepts.md:3
+msgid "Understanding spatial transcriptomics analysis."
+msgstr "理解空间转录组分析。"
+
+#: ../../concepts.md:7
+msgid "What is Spatial Transcriptomics?"
+msgstr "什么是空间转录组？"
+
+#: ../../concepts.md:9
+msgid ""
+"Spatial transcriptomics measures gene expression while preserving the "
+"physical location of cells in tissue. Unlike standard single-cell RNA "
+"sequencing, it tells you **where** cells are, not just what they express."
+msgstr ""
+"空间转录组在保留组织中细胞物理位置的同时测量基因表达。与传统单细胞 RNA 测序不同，它告诉你细胞**在哪里**，而不只是表达什么。"
+
+#: ../../concepts.md:11
+msgid ""
+"**Key insight**: Location matters. A tumor cell behaves differently "
+"depending on whether it's surrounded by immune cells or fibroblasts."
+msgstr ""
+"**关键洞见**：位置很重要。肿瘤细胞的行为会随着其周围是免疫细胞还是成纤维细胞而改变。"
+
+#: ../../concepts.md:15
+msgid "Core Analysis Types"
+msgstr "核心分析类型"
+
+#: ../../concepts.md:17
+msgid "Spatial Domains"
+msgstr "空间区域"
+
+#: ../../concepts.md:19
+msgid ""
+"**What it does**: Groups tissue regions based on similar gene expression "
+"patterns."
+msgstr "**作用**：基于相似的基因表达模式对组织区域进行分组。"
+
+#: ../../concepts.md:21
+msgid ""
+"**When to use**: First step after preprocessing. Identifies tissue "
+"architecture like tumor regions, immune infiltrates, or tissue layers."
+msgstr ""
+"**何时使用**：预处理后的第一步。用于识别组织结构，如肿瘤区域、免疫浸润区或组织分层。"
+
+#: ../../concepts.md:23
+msgid "**Method selection**:"
+msgstr "**方法选择**："
+
+#: ../../concepts.md:0
+msgid "Your Data"
+msgstr "数据类型"
+
+#: ../../concepts.md:0
+msgid "Recommended Method"
+msgstr "推荐方法"
+
+#: ../../concepts.md:0
+msgid "Visium with H&E image"
+msgstr "Visium + H&E 图像"
+
+#: ../../concepts.md:0
+msgid "SpaGCN (uses histology)"
+msgstr "SpaGCN（使用组织学图像）"
+
+#: ../../concepts.md:0
+msgid "High-resolution (Xenium, MERFISH)"
+msgstr "高分辨率（Xenium、MERFISH）"
+
+#: ../../concepts.md:0
+msgid "STAGATE or GraphST"
+msgstr "STAGATE 或 GraphST"
+
+#: ../../concepts.md:0
+msgid "Quick exploratory analysis"
+msgstr "快速探索分析"
+
+#: ../../concepts.md:0
+msgid "Leiden clustering"
+msgstr "Leiden 聚类"
+
+#: ../../concepts.md:33
+msgid "Cell Type Annotation vs Deconvolution"
+msgstr "细胞类型注释 vs 去卷积"
+
+#: ../../concepts.md:35
+msgid "These two concepts are often confused. Here's the difference:"
+msgstr "这两个概念常被混淆。区别如下："
+
+#: ../../concepts.md:0
+msgid "**Annotation**"
+msgstr "**注释**"
+
+#: ../../concepts.md:0
+msgid "**Deconvolution**"
+msgstr "**去卷积**"
+
+#: ../../concepts.md:0
+msgid "**Output**"
+msgstr "**输出**"
+
+#: ../../concepts.md:0
+msgid "\"This spot is T cells\""
+msgstr "“这个 spot 是 T 细胞”"
+
+#: ../../concepts.md:0
+msgid "\"This spot is 60% T cells, 30% macrophages, 10% fibroblasts\""
+msgstr "“这个 spot 中 T 细胞占 60%，巨噬细胞 30%，成纤维细胞 10%”"
+
+#: ../../concepts.md:0
+msgid "**Best for**"
+msgstr "**适用场景**"
+
+#: ../../concepts.md:0
+msgid "Single-cell resolution data"
+msgstr "单细胞分辨率数据"
+
+#: ../../concepts.md:0
+msgid "Spot-based data (Visium)"
+msgstr "基于 spot 的数据（Visium）"
+
+#: ../../concepts.md:0
+msgid "**Assumption**"
+msgstr "**假设**"
+
+#: ../../concepts.md:0
+msgid "One cell type per spot"
+msgstr "每个 spot 只有一种细胞类型"
+
+#: ../../concepts.md:0
+msgid "Multiple cell types per spot"
+msgstr "每个 spot 可能包含多种细胞类型"
+
+#: ../../concepts.md:43
+msgid "**Rule of thumb**:"
+msgstr "**经验法则**："
+
+#: ../../concepts.md:44
+msgid "**Xenium, MERFISH, CosMx**: Use annotation (single-cell resolution)"
+msgstr "**Xenium、MERFISH、CosMx**：用注释（单细胞分辨率）"
+
+#: ../../concepts.md:45
+msgid "**Visium, Slide-seq**: Use deconvolution (multiple cells per spot)"
+msgstr "**Visium、Slide-seq**：用去卷积（每个 spot 多细胞）"
+
+#: ../../concepts.md:49
+msgid "Cell Communication"
+msgstr "细胞通讯"
+
+#: ../../concepts.md:51
+msgid ""
+"**What it does**: Identifies which cell types are \"talking\" to each other "
+"through ligand-receptor interactions."
+msgstr "**作用**：通过配体-受体相互作用识别哪些细胞类型在相互“对话”。"
+
+#: ../../concepts.md:53
+msgid ""
+"**Key concept**: Cell A expresses a ligand (signal molecule), Cell B "
+"expresses the receptor. If they're spatially close, they may be "
+"communicating."
+msgstr ""
+"**关键概念**：细胞 A 表达配体（信号分子），细胞 B 表达受体；如果它们空间上足够接近，可能存在通讯。"
+
+#: ../../concepts.md:55
+msgid "**Species matters**: Use the correct database:"
+msgstr "**物种很重要**：请选择正确的数据库："
+
+#: ../../concepts.md:56
+msgid "Human: `liana_resource=\"consensus\"`"
+msgstr "人类：`liana_resource=\"consensus\"`"
+
+#: ../../concepts.md:57
+msgid "Mouse: `liana_resource=\"mouseconsensus\"`"
+msgstr "小鼠：`liana_resource=\"mouseconsensus\"`"
+
+#: ../../concepts.md:61
+msgid "RNA Velocity"
+msgstr "RNA Velocity（RNA 速度）"
+
+#: ../../concepts.md:63
+msgid ""
+"**What it does**: Predicts future cell states by comparing spliced vs "
+"unspliced RNA."
+msgstr "**作用**：通过比较 spliced 与 unspliced RNA 预测未来的细胞状态。"
+
+#: ../../concepts.md:65
+msgid ""
+"**Key insight**: If a gene has more unspliced RNA, it's being upregulated. "
+"If more spliced, it's being downregulated. This tells you the \"direction\" "
+"cells are moving."
+msgstr ""
+"**关键洞见**：如果某基因的 unspliced RNA 更多，通常表示正在上调；如果 spliced 更多，表示正在下调。这反映了细胞变化的“方向”。"
+
+#: ../../concepts.md:67
+msgid ""
+"**Requirement**: Your data must have `spliced` and `unspliced` layers (from "
+"velocyto, kallisto, or STARsolo)."
+msgstr ""
+"**要求**：数据中必须包含 `spliced` 与 `unspliced` layers（来自 velocyto、kallisto 或 STARsolo）。"
+
+#: ../../concepts.md:71
+msgid "Choosing Methods"
+msgstr "方法选择"
+
+#: ../../concepts.md:73
+msgid "Deconvolution Methods"
+msgstr "去卷积方法"
+
+#: ../../concepts.md:0
+msgid "Method"
+msgstr "方法"
+
+#: ../../concepts.md:0
+msgid "Speed"
+msgstr "速度"
+
+#: ../../concepts.md:0
+msgid "Accuracy"
+msgstr "准确性"
+
+#: ../../concepts.md:0
+msgid "When to Use"
+msgstr "适用场景"
+
+#: ../../concepts.md:0
+msgid "**FlashDeconv**"
+msgstr "**FlashDeconv**"
+
+#: ../../concepts.md:0
+msgid "Fast"
+msgstr "快"
+
+#: ../../concepts.md:0
+msgid "Good"
+msgstr "良好"
+
+#: ../../concepts.md:0
+msgid "Default choice, quick exploration"
+msgstr "默认选择，快速探索"
+
+#: ../../concepts.md:0
+msgid "**Cell2location**"
+msgstr "**Cell2location**"
+
+#: ../../concepts.md:0
+msgid "Slow"
+msgstr "慢"
+
+#: ../../concepts.md:0
+msgid "Excellent"
+msgstr "极佳"
+
+#: ../../concepts.md:0
+msgid "Final analysis, publication"
+msgstr "最终分析、用于发表"
+
+#: ../../concepts.md:0
+msgid "**RCTD**"
+msgstr "**RCTD**"
+
+#: ../../concepts.md:0
+msgid "R users, batch processing"
+msgstr "R 用户、批量处理"
+
+#: ../../concepts.md:0
+msgid "**CARD**"
+msgstr "**CARD**"
+
+#: ../../concepts.md:0
+msgid "Medium"
+msgstr "中等"
+
+#: ../../concepts.md:0
+msgid "Need spatial imputation"
+msgstr "需要空间插补"
+
+#: ../../concepts.md:82
+msgid ""
+"**Accuracy vs Speed tradeoff**: Start with FlashDeconv for exploration, run "
+"Cell2location for final figures."
+msgstr "**准确性 vs 速度的权衡**：探索阶段先用 FlashDeconv，出最终图时再用 Cell2location。"
+
+#: ../../concepts.md:86
+msgid "Annotation Methods"
+msgstr "注释方法"
+
+#: ../../concepts.md:0
+msgid "Requires"
+msgstr "需要"
+
+#: ../../concepts.md:0
+msgid "Best For"
+msgstr "最适合"
+
+#: ../../concepts.md:0
+msgid "**Tangram**"
+msgstr "**Tangram**"
+
+#: ../../concepts.md:0
+msgid "Reference scRNA-seq"
+msgstr "参考 scRNA-seq"
+
+#: ../../concepts.md:0
+msgid "Most accurate when reference matches tissue"
+msgstr "当参考与组织匹配时最准确"
+
+#: ../../concepts.md:0
+msgid "**scANVI**"
+msgstr "**scANVI**"
+
+#: ../../concepts.md:0
+msgid "Large datasets, GPU available"
+msgstr "大数据集且有 GPU"
+
+#: ../../concepts.md:0
+msgid "**CellAssign**"
+msgstr "**CellAssign**"
+
+#: ../../concepts.md:0
+msgid "Marker gene list"
+msgstr "marker 基因列表"
+
+#: ../../concepts.md:0
+msgid "When you know cell type markers"
+msgstr "当你已知细胞类型 marker"
+
+#: ../../concepts.md:0
+msgid "**mLLMCelltype**"
+msgstr "**mLLMCelltype**"
+
+#: ../../concepts.md:0
+msgid "Nothing"
+msgstr "无"
+
+#: ../../concepts.md:0
+msgid "Quick automated annotation"
+msgstr "快速自动注释"
+
+#: ../../concepts.md:97
+msgid "Spatial Statistics"
+msgstr "空间统计"
+
+#: ../../concepts.md:0
+msgid "Analysis"
+msgstr "分析"
+
+#: ../../concepts.md:0
+msgid "Question It Answers"
+msgstr "回答的问题"
+
+#: ../../concepts.md:0
+msgid "**Moran's I**"
+msgstr "**Moran's I**"
+
+#: ../../concepts.md:0
+msgid "\"Is this gene spatially clustered?\" (global)"
+msgstr "“这个基因是否空间聚集？”（全局）"
+
+#: ../../concepts.md:0
+msgid "**Local Moran's I**"
+msgstr "**Local Moran's I**"
+
+#: ../../concepts.md:0
+msgid "\"Where are the clusters?\" (local hotspots)"
+msgstr "“聚集发生在哪里？”（局部热点）"
+
+#: ../../concepts.md:0
+msgid "**Getis-Ord Gi***"
+msgstr "**Getis-Ord Gi***"
+
+#: ../../concepts.md:0
+msgid "\"Where are the high/low expression hotspots?\""
+msgstr "“高/低表达热点在哪里？”"
+
+#: ../../concepts.md:0
+msgid "**Neighborhood enrichment**"
+msgstr "**邻域富集**"
+
+#: ../../concepts.md:0
+msgid "\"Do these cell types co-localize?\""
+msgstr "“这些细胞类型是否共定位？”"
+
+#: ../../concepts.md:0
+msgid "**Co-occurrence**"
+msgstr "**共现分析**"
+
+#: ../../concepts.md:0
+msgid "\"How does co-localization change with distance?\""
+msgstr "“共定位如何随距离变化？”"
+
+#: ../../concepts.md:109
+msgid "Understanding Results"
+msgstr "结果解读"
+
+#: ../../concepts.md:111
+msgid "Interpreting Deconvolution"
+msgstr "解读去卷积结果"
+
+#: ../../concepts.md:113
+msgid "Good deconvolution results show:"
+msgstr "好的去卷积结果通常表现为："
+
+#: ../../concepts.md:114
+msgid "Cell type proportions sum to ~1.0 per spot"
+msgstr "每个 spot 的细胞类型比例之和约为 1.0"
+
+#: ../../concepts.md:115
+msgid "Known tissue structure is visible (e.g., epithelium vs stroma)"
+msgstr "能看到已知的组织结构（例如上皮 vs 基质）"
+
+#: ../../concepts.md:116
+msgid "Proportions correlate with histology"
+msgstr "比例与组织学特征相关"
+
+#: ../../concepts.md:118
+msgid "Warning signs:"
+msgstr "警示信号："
+
+#: ../../concepts.md:119
+msgid "One cell type dominates everywhere (>80%)"
+msgstr "某一种细胞类型在几乎所有位置占主导（>80%）"
+
+#: ../../concepts.md:120
+msgid "Proportions don't match expected tissue composition"
+msgstr "比例与预期组织组成不符"
+
+#: ../../concepts.md:121
+msgid "Results change dramatically with different methods"
+msgstr "不同方法得到的结果差异过大"
+
+#: ../../concepts.md:125
+msgid "Interpreting Spatial Statistics"
+msgstr "解读空间统计结果"
+
+#: ../../concepts.md:127
+msgid "**Moran's I interpretation**:"
+msgstr "**Moran's I 解释：**"
+
+#: ../../concepts.md:128
+msgid "I > 0: Clustered (similar values near each other)"
+msgstr "I > 0：聚集（相似值彼此相邻）"
+
+#: ../../concepts.md:129
+msgid "I ~ 0: Random"
+msgstr "I ≈ 0：随机"
+
+#: ../../concepts.md:130
+msgid "I < 0: Dispersed (dissimilar values near each other)"
+msgstr "I < 0：离散（不相似值彼此相邻）"
+
+#: ../../concepts.md:132
+msgid "**p-value**: Tests if pattern is significant vs random."
+msgstr "**p-value**：检验该模式相对于随机是否显著。"
+
+#: ../../concepts.md:136
+msgid "Common Pitfalls"
+msgstr "常见坑"
+
+#: ../../concepts.md:138
+msgid "1. Skipping Preprocessing"
+msgstr "1. 跳过预处理"
+
+#: ../../concepts.md:140
+msgid ""
+"Most analyses fail because preprocessing wasn't run. Always preprocess first:"
+msgstr "很多分析失败是因为没有运行预处理。务必先预处理："
+
+#: ../../concepts.md:145
+msgid "2. Wrong Species Parameter"
+msgstr "2. 物种参数错误"
+
+#: ../../concepts.md:147
+msgid "Cell communication analysis requires correct species:"
+msgstr "细胞通讯分析需要正确的物种设置："
+
+#: ../../concepts.md:156
+msgid "3. Expecting Single-Cell Resolution from Visium"
+msgstr "3. 指望 Visium 提供单细胞分辨率"
+
+#: ../../concepts.md:158
+msgid ""
+"Visium spots contain 1-10 cells. Use deconvolution to estimate proportions, "
+"not annotation to assign types."
+msgstr "Visium 的一个 spot 含 1–10 个细胞。请用去卷积估计比例，而不是用注释强行赋予单一类型。"
+
+#: ../../concepts.md:160
+msgid "4. Using GPU Methods Without GPU"
+msgstr "4. 没有 GPU 却使用依赖 GPU 的方法"
+
+#: ../../concepts.md:162
+msgid "Methods like Cell2location are 10-100x slower without GPU. Either:"
+msgstr "像 Cell2location 这类方法在没有 GPU 时会慢 10–100 倍。你可以："
+
+#: ../../concepts.md:163
+msgid "Set `use_gpu=False` explicitly"
+msgstr "显式设置 `use_gpu=False`"
+
+#: ../../concepts.md:164
+msgid "Use CPU-friendly alternatives (FlashDeconv, RCTD)"
+msgstr "使用更适合 CPU 的替代方案（FlashDeconv、RCTD）"
+
+#: ../../concepts.md:168
+msgid "Workflow Patterns"
+msgstr "工作流模式"
+
+#: ../../concepts.md:170
+msgid "Standard Discovery Workflow"
+msgstr "标准探索工作流"
+
+#: ../../concepts.md:176
+msgid "Best for: Initial exploration of new dataset."
+msgstr "适用于：新数据集的初步探索。"
+
+#: ../../concepts.md:178
+msgid "Reference-Based Workflow"
+msgstr "基于参考数据的工作流"
+
+#: ../../concepts.md:184
+msgid "Best for: When you have matching single-cell reference data."
+msgstr "适用于：你有匹配的单细胞参考数据时。"
+
+#: ../../concepts.md:186
+msgid "Publication Workflow"
+msgstr "发表级工作流"
+
+#: ../../concepts.md:192
+msgid "Best for: Comprehensive analysis for publication."
+msgstr "适用于：面向发表的全面分析。"
+
+#: ../../concepts.md:196
+msgid "Next Steps"
+msgstr "下一步"
+
+#: ../../concepts.md:198
+msgid "[Quick Start](quickstart.md) — Get running in 5 minutes"
+msgstr "[快速开始](quickstart.md) — 5 分钟上手"
+
+#: ../../concepts.md:199
+msgid "[Examples](examples.md) — See all analysis types"
+msgstr "[示例](examples.md) — 查看所有分析类型"
+
+#: ../../concepts.md:200
+msgid ""
+"[Methods Reference](advanced/methods-reference.md) — Full parameter details"
+msgstr "[方法参考](advanced/methods-reference.md) — 完整参数说明"

@@ -1,0 +1,31 @@
+{#-
+Language switcher for a 2-build setup:
+- English at site root
+- Chinese at /zh/
+
+Relies on:
+- `language` (Sphinx template context, e.g. "en" / "zh_CN")
+- `pagename` (docname, e.g. "index" / "advanced/faq")
+- `master_doc` (typically "index")
+-#}
+
+{%- set is_zh = (language or "").startswith("zh") -%}
+{%- set depth = pagename.count("/") -%}
+{%- set up = "../" * depth -%}
+
+{%- if is_zh -%}
+  {%- set en_href = ("../" * (depth + 1)) + ("" if pagename == master_doc else (pagename + ".html")) -%}
+  <div class="language-switcher" role="navigation" aria-label="Language">
+    <a class="muted-link language-switcher__link" href="{{ en_href }}" title="English">EN</a>
+    <span class="language-switcher__sep">/</span>
+    <span class="language-switcher__current" title="中文">中文</span>
+  </div>
+{%- else -%}
+  {%- set zh_href = up + "zh/" + ("" if pagename == master_doc else (pagename + ".html")) -%}
+  <div class="language-switcher" role="navigation" aria-label="Language">
+    <span class="language-switcher__current" title="English">EN</span>
+    <span class="language-switcher__sep">/</span>
+    <a class="muted-link language-switcher__link" href="{{ zh_href }}" title="中文">中文</a>
+  </div>
+{%- endif -%}
+

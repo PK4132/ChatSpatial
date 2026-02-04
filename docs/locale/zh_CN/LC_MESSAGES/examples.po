@@ -1,0 +1,352 @@
+# Chinese translations for ChatSpatial package.
+# Copyright (C) 2026, ChatSpatial Project
+# This file is distributed under the same license as the ChatSpatial package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ChatSpatial 1.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-04 09:38-0600\n"
+"PO-Revision-Date: 2026-02-04 09:38-0600\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_CN\n"
+
+#: ../../examples.md:1
+msgid "Examples"
+msgstr "示例"
+
+#: ../../examples.md:3
+msgid "Natural language commands for spatial transcriptomics analysis."
+msgstr "用于空间转录组分析的自然语言指令示例。"
+
+#: ../../examples.md:7
+msgid "Standard Workflow"
+msgstr "标准工作流"
+
+#: ../../examples.md:9
+msgid "A typical analysis follows this flow:"
+msgstr "典型分析流程如下："
+
+#: ../../examples.md:15
+msgid "1. Load Your Data"
+msgstr "1. 加载数据"
+
+#: ../../examples.md:22
+msgid "2. Preprocess"
+msgstr "2. 预处理"
+
+#: ../../examples.md:30
+msgid "3. Analyze"
+msgstr "3. 分析"
+
+#: ../../examples.md:32
+msgid "Choose your analysis type below."
+msgstr "在下方选择分析类型。"
+
+#: ../../examples.md:34
+msgid "4. Visualize"
+msgstr "4. 可视化"
+
+#: ../../examples.md:44
+msgid "Analysis Types"
+msgstr "分析类型"
+
+#: ../../examples.md:46
+msgid "Spatial Domains"
+msgstr "空间区域"
+
+#: ../../examples.md:48
+msgid "Identify tissue regions and niches."
+msgstr "识别组织区域与微环境。"
+
+#: ../../examples.md:57
+msgid "**Methods**: SpaGCN (default), STAGATE, GraphST, Leiden, Louvain"
+msgstr "**方法**：SpaGCN（默认）、STAGATE、GraphST、Leiden、Louvain"
+
+#: ../../examples.md:61
+msgid "Cell Type Annotation"
+msgstr "细胞类型注释"
+
+#: ../../examples.md:63
+msgid "Assign cell types to spots or cells."
+msgstr "为 spot 或细胞分配细胞类型。"
+
+#: ../../examples.md:72
+msgid "**Methods**: Tangram, scANVI, CellAssign, scType, SingleR, mLLMCelltype"
+msgstr "**方法**：Tangram、scANVI、CellAssign、scType、SingleR、mLLMCelltype"
+
+#: ../../examples.md:74
+msgid ""
+"**Requires**: Reference dataset with cell type labels (for transfer methods)"
+msgstr "**需要**：带细胞类型标签的参考数据集（用于 label transfer 方法）"
+
+#: ../../examples.md:78
+msgid "Deconvolution"
+msgstr "去卷积"
+
+#: ../../examples.md:80
+msgid "Estimate cell type proportions in each spot."
+msgstr "估计每个 spot 的细胞类型比例。"
+
+#: ../../examples.md:89
+msgid ""
+"**Methods**: FlashDeconv (default, fastest), Cell2location, RCTD, DestVI, "
+"Stereoscope, Tangram, SPOTlight, CARD"
+msgstr ""
+"**方法**：FlashDeconv（默认、最快）、Cell2location、RCTD、DestVI、Stereoscope、Tangram、SPOTlight、CARD"
+
+#: ../../examples.md:91
+msgid "**Requires**: Reference single-cell dataset with cell type annotations"
+msgstr "**需要**：带细胞类型注释的参考单细胞数据集"
+
+#: ../../examples.md:95 ../../examples.md:284
+msgid "Spatial Statistics"
+msgstr "空间统计"
+
+#: ../../examples.md:97
+msgid "Analyze spatial patterns and autocorrelation."
+msgstr "分析空间模式与自相关。"
+
+#: ../../examples.md:107
+msgid ""
+"**Methods**: Moran's I, Local Moran's I, Geary's C, Getis-Ord Gi*, Ripley's "
+"K, neighborhood enrichment, co-occurrence"
+msgstr ""
+"**方法**：Moran's I、Local Moran's I、Geary's C、Getis-Ord Gi*、Ripley's K、邻域富集、共现分析"
+
+#: ../../examples.md:111
+msgid "Spatially Variable Genes"
+msgstr "空间变异基因"
+
+#: ../../examples.md:113
+msgid "Find genes with spatial expression patterns."
+msgstr "寻找具有空间表达模式的基因。"
+
+#: ../../examples.md:121
+msgid "**Methods**: SPARK-X (default, fast), SpatialDE"
+msgstr "**方法**：SPARK-X（默认、快）、SpatialDE"
+
+#: ../../examples.md:125
+msgid "Differential Expression"
+msgstr "差异表达"
+
+#: ../../examples.md:127
+msgid "Compare gene expression between groups."
+msgstr "比较不同组之间的基因表达。"
+
+#: ../../examples.md:137
+msgid "Condition Comparison"
+msgstr "条件比较"
+
+#: ../../examples.md:139
+msgid "Compare experimental conditions with proper statistics."
+msgstr "用合适的统计方法比较实验条件。"
+
+#: ../../examples.md:147
+msgid "**Requires**: Sample/patient identifiers for pseudobulk analysis"
+msgstr "**需要**：用于 pseudobulk 分析的样本/患者标识符"
+
+#: ../../examples.md:151
+msgid "Cell Communication"
+msgstr "细胞通讯"
+
+#: ../../examples.md:153
+msgid "Analyze ligand-receptor interactions."
+msgstr "分析配体-受体相互作用。"
+
+#: ../../examples.md:162
+msgid "**Methods**: FastCCC (default, fastest), LIANA, CellPhoneDB, CellChat"
+msgstr "**方法**：FastCCC（默认、最快）、LIANA、CellPhoneDB、CellChat"
+
+#: ../../examples.md:164
+msgid "**Requires**: Cell type annotations"
+msgstr "**需要**：细胞类型注释"
+
+#: ../../examples.md:168
+msgid "RNA Velocity"
+msgstr "RNA Velocity（RNA 速度）"
+
+#: ../../examples.md:170
+msgid "Understand cellular dynamics."
+msgstr "理解细胞动态。"
+
+#: ../../examples.md:178
+msgid "**Methods**: scVelo (deterministic/stochastic/dynamical), VeloVI"
+msgstr "**方法**：scVelo（deterministic/stochastic/dynamical）、VeloVI"
+
+#: ../../examples.md:180
+msgid "**Requires**: Spliced and unspliced count layers"
+msgstr "**需要**：spliced/unspliced 计数层"
+
+#: ../../examples.md:184
+msgid "Trajectory Analysis"
+msgstr "轨迹分析"
+
+#: ../../examples.md:186
+msgid "Infer developmental trajectories."
+msgstr "推断发育轨迹。"
+
+#: ../../examples.md:195
+msgid "**Methods**: CellRank (requires velocity), Palantir, DPT"
+msgstr "**方法**：CellRank（需要 velocity）、Palantir、DPT"
+
+#: ../../examples.md:199
+msgid "Pathway Enrichment"
+msgstr "通路富集"
+
+#: ../../examples.md:201
+msgid "Find enriched biological pathways."
+msgstr "寻找富集的生物通路。"
+
+#: ../../examples.md:210
+msgid "**Methods**: ORA (default), GSEA, ssGSEA, Enrichr"
+msgstr "**方法**：ORA（默认）、GSEA、ssGSEA、Enrichr"
+
+#: ../../examples.md:214
+msgid "CNV Analysis"
+msgstr "CNV 分析"
+
+#: ../../examples.md:216
+msgid "Detect copy number variations."
+msgstr "检测拷贝数变异。"
+
+#: ../../examples.md:224
+msgid "**Methods**: inferCNVpy (default), Numbat"
+msgstr "**方法**：inferCNVpy（默认）、Numbat"
+
+#: ../../examples.md:226
+msgid "**Requires**: Normal cell types as reference"
+msgstr "**需要**：正常细胞类型作为参考"
+
+#: ../../examples.md:230
+msgid "Multi-Sample Integration"
+msgstr "多样本整合"
+
+#: ../../examples.md:232
+msgid "Combine multiple datasets."
+msgstr "合并多个数据集。"
+
+#: ../../examples.md:240
+msgid "**Methods**: Harmony (default), BBKNN, Scanorama, scVI"
+msgstr "**方法**：Harmony（默认）、BBKNN、Scanorama、scVI"
+
+#: ../../examples.md:244
+msgid "Spatial Registration"
+msgstr "空间配准"
+
+#: ../../examples.md:246
+msgid "Align tissue sections."
+msgstr "对齐组织切片。"
+
+#: ../../examples.md:253
+msgid "**Methods**: PASTE, STalign"
+msgstr "**方法**：PASTE、STalign"
+
+#: ../../examples.md:257
+msgid "Visualization Examples"
+msgstr "可视化示例"
+
+#: ../../examples.md:259
+msgid "Basic Plots"
+msgstr "基础图形"
+
+#: ../../examples.md:268
+msgid "Deconvolution Results"
+msgstr "去卷积结果"
+
+#: ../../examples.md:276
+msgid "Communication Results"
+msgstr "通讯结果"
+
+#: ../../examples.md:294
+msgid "Complete Workflows"
+msgstr "完整工作流"
+
+#: ../../examples.md:296
+msgid "Basic Spatial Analysis (5 min)"
+msgstr "基础空间分析（5 分钟）"
+
+#: ../../examples.md:306
+msgid "Deconvolution Workflow (10 min)"
+msgstr "去卷积工作流（10 分钟）"
+
+#: ../../examples.md:316
+msgid "Cell Communication Workflow (10 min)"
+msgstr "细胞通讯工作流（10 分钟）"
+
+#: ../../examples.md:326
+msgid "Trajectory Workflow (15 min)"
+msgstr "轨迹分析工作流（15 分钟）"
+
+#: ../../examples.md:338
+msgid "Tips"
+msgstr "小贴士"
+
+#: ../../examples.md:340
+msgid "**Be specific when needed**"
+msgstr "**需要时尽量具体**"
+
+#: ../../examples.md:341
+msgid "General: \"Analyze the data\" → ChatSpatial chooses defaults"
+msgstr "泛化：\"分析数据\" → ChatSpatial 使用默认设置"
+
+#: ../../examples.md:342
+msgid ""
+"Specific: \"Use SpaGCN with 7 domains\" → ChatSpatial uses your settings"
+msgstr "具体：\"用 SpaGCN 并设为 7 个区域\" → ChatSpatial 使用你的设置"
+
+#: ../../examples.md:344
+msgid "**Chain commands naturally**"
+msgstr "**自然串联指令**"
+
+#: ../../examples.md:345
+msgid "\"Load the data, preprocess it, and identify spatial domains\""
+msgstr "\"加载数据，预处理，然后识别空间区域\""
+
+#: ../../examples.md:347
+msgid "**Reference previous results**"
+msgstr "**引用之前的结果**"
+
+#: ../../examples.md:348
+msgid "\"Find markers for the domains we just identified\""
+msgstr "\"为刚识别出的空间区域寻找 marker 基因\""
+
+#: ../../examples.md:349
+msgid "\"Visualize the deconvolution results\""
+msgstr "\"可视化去卷积结果\""
+
+#: ../../examples.md:351
+msgid "**Ask for help**"
+msgstr "**随时求助**"
+
+#: ../../examples.md:352
+msgid "\"What methods are available for deconvolution?\""
+msgstr "\"去卷积有哪些可用方法？\""
+
+#: ../../examples.md:353
+msgid "\"How should I preprocess my data?\""
+msgstr "\"我该如何预处理数据？\""
+
+#: ../../examples.md:357
+msgid "Next Steps"
+msgstr "下一步"
+
+#: ../../examples.md:359
+msgid "[Concepts](concepts.md) — Understand when to use which method"
+msgstr "[概念](concepts.md) — 了解何时该用哪种方法"
+
+#: ../../examples.md:360
+msgid ""
+"[Methods Reference](advanced/methods-reference.md) — Full parameter details "
+"for all 20 tools"
+msgstr "[方法参考](advanced/methods-reference.md) — 全部 20 个工具的完整参数说明"
+
+#: ../../examples.md:361
+msgid ""
+"[Troubleshooting](advanced/troubleshooting.md) — Solutions to common issues"
+msgstr "[故障排查](advanced/troubleshooting.md) — 常见问题解决方案"

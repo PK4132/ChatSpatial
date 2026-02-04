@@ -1,0 +1,207 @@
+# Chinese translations for ChatSpatial package.
+# Copyright (C) 2026, ChatSpatial Project
+# This file is distributed under the same license as the ChatSpatial package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ChatSpatial 1.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-04 09:38-0600\n"
+"PO-Revision-Date: 2026-02-04 09:38-0600\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ../../quickstart.md:1
+msgid "Quick Start"
+msgstr "快速开始"
+
+#: ../../quickstart.md:3
+msgid ""
+"First time? Complete [Installation](https://github.com/cafferychen777/"
+"ChatSpatial/blob/main/INSTALLATION.md) first, then come back here."
+msgstr ""
+"第一次使用？请先完成 [安装](https://github.com/cafferychen777/ChatSpatial/"
+"blob/main/INSTALLATION.md)，然后再回到这里。"
+
+#: ../../quickstart.md:7
+msgid "Your First Analysis"
+msgstr "你的第一次分析"
+
+#: ../../quickstart.md:9
+msgid "Open Claude and type:"
+msgstr "打开 Claude 并输入："
+
+#: ../../quickstart.md:15
+msgid "ChatSpatial handles the rest."
+msgstr "剩下的交给 ChatSpatial。"
+
+#: ../../quickstart.md:19
+msgid "What You Can Do"
+msgstr "你可以做什么"
+
+#: ../../quickstart.md:0
+msgid "Task"
+msgstr "任务"
+
+#: ../../quickstart.md:0
+msgid "Say This"
+msgstr "这样说"
+
+#: ../../quickstart.md:0
+msgid "Load data"
+msgstr "加载数据"
+
+#: ../../quickstart.md:0
+msgid "\"Load my Visium data from /path/to/data\""
+msgstr "\"从 /path/to/data 加载我的 Visium 数据\""
+
+#: ../../quickstart.md:0
+msgid "Preprocess"
+msgstr "预处理"
+
+#: ../../quickstart.md:0
+msgid "\"Normalize and cluster the data\""
+msgstr "\"对数据做归一化并聚类\""
+
+#: ../../quickstart.md:0
+msgid "Find domains"
+msgstr "识别空间区域"
+
+#: ../../quickstart.md:0
+msgid "\"Identify spatial domains with SpaGCN\""
+msgstr "\"用 SpaGCN 识别空间区域\""
+
+#: ../../quickstart.md:0
+msgid "Annotate cells"
+msgstr "细胞注释"
+
+#: ../../quickstart.md:0
+msgid "\"Annotate cell types using the reference\""
+msgstr "\"使用参考数据注释细胞类型\""
+
+#: ../../quickstart.md:0
+msgid "Deconvolve"
+msgstr "去卷积"
+
+#: ../../quickstart.md:0
+msgid "\"Estimate cell type proportions\""
+msgstr "\"估计细胞类型比例\""
+
+#: ../../quickstart.md:0
+msgid "Analyze patterns"
+msgstr "分析模式"
+
+#: ../../quickstart.md:0
+msgid "\"Find spatially variable genes\""
+msgstr "\"寻找空间变异基因\""
+
+#: ../../quickstart.md:0
+msgid "Visualize"
+msgstr "可视化"
+
+#: ../../quickstart.md:0
+msgid "\"Show expression of CD3D on the tissue\""
+msgstr "\"在组织上展示 CD3D 的表达\""
+
+#: ../../quickstart.md:33
+msgid "Sample Data"
+msgstr "示例数据"
+
+#: ../../quickstart.md:35
+msgid "Test with our datasets:"
+msgstr "你可以用我们的数据集进行测试："
+
+#: ../../quickstart.md:37
+msgid ""
+"[card_spatial.h5ad](https://github.com/cafferychen777/ChatSpatial/releases/"
+"tag/v0.3.0-data) (7.7 MB) - Pancreatic spatial"
+msgstr ""
+"[card_spatial.h5ad](https://github.com/cafferychen777/ChatSpatial/releases/"
+"tag/v0.3.0-data)（7.7 MB）- 胰腺空间数据"
+
+#: ../../quickstart.md:38
+msgid ""
+"[card_reference_filtered.h5ad](https://github.com/cafferychen777/ChatSpatial/"
+"releases/tag/v0.3.0-data) (36 MB) - Reference"
+msgstr ""
+"[card_reference_filtered.h5ad](https://github.com/cafferychen777/ChatSpatial/"
+"releases/tag/v0.3.0-data)（36 MB）- 参考数据"
+
+#: ../../quickstart.md:42
+msgid "What Success Looks Like"
+msgstr "成功示例"
+
+#: ../../quickstart.md:44
+msgid "**After loading:**"
+msgstr "**加载完成后：**"
+
+#: ../../quickstart.md:52
+msgid "**After preprocessing:**"
+msgstr "**预处理完成后：**"
+
+#: ../../quickstart.md:60
+msgid "**Visualizations** appear directly in the chat."
+msgstr "**可视化结果** 会直接出现在聊天窗口中。"
+
+#: ../../quickstart.md:64
+msgid "Quick Troubleshooting"
+msgstr "快速排查"
+
+#: ../../quickstart.md:0
+msgid "Issue"
+msgstr "问题"
+
+#: ../../quickstart.md:0
+msgid "Fix"
+msgstr "解决方法"
+
+#: ../../quickstart.md:0
+msgid "Tools not showing"
+msgstr "工具未显示"
+
+#: ../../quickstart.md:0
+msgid "Restart Claude"
+msgstr "重启 Claude"
+
+#: ../../quickstart.md:0
+msgid "\"Dataset not found\""
+msgstr "\"未找到数据集\""
+
+#: ../../quickstart.md:0
+msgid "Use absolute path: `/Users/you/data.h5ad`"
+msgstr "使用绝对路径：`/Users/you/data.h5ad`"
+
+#: ../../quickstart.md:0
+msgid "Analysis fails"
+msgstr "分析失败"
+
+#: ../../quickstart.md:0
+msgid "Run preprocessing first"
+msgstr "先运行预处理"
+
+#: ../../quickstart.md:72
+msgid "More: [Troubleshooting Guide](advanced/troubleshooting.md)"
+msgstr "更多内容：[故障排查指南](advanced/troubleshooting.md)"
+
+#: ../../quickstart.md:76
+msgid "Next Steps"
+msgstr "下一步"
+
+#: ../../quickstart.md:78
+msgid "[Concepts](concepts.md) — Understand what each analysis does"
+msgstr "[概念](concepts.md) — 了解每项分析在做什么"
+
+#: ../../quickstart.md:79
+msgid "[Examples](examples.md) — Complete workflows"
+msgstr "[示例](examples.md) — 完整工作流"
+
+#: ../../quickstart.md:80
+msgid ""
+"[Methods Reference](advanced/methods-reference.md) — All 20 tools with "
+"parameters"
+msgstr "[方法参考](advanced/methods-reference.md) — 全部 20 个工具及其参数"

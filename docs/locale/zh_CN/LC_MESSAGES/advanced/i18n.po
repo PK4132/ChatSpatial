@@ -1,0 +1,257 @@
+# Chinese translations for ChatSpatial package.
+# Copyright (C) 2026, ChatSpatial Project
+# This file is distributed under the same license as the ChatSpatial package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ChatSpatial 1.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-04 10:06-0600\n"
+"PO-Revision-Date: 2026-02-04 09:38-0600\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ../../advanced/i18n.md:1
+msgid "Internationalization (i18n)"
+msgstr "国际化（i18n）"
+
+#: ../../advanced/i18n.md:3
+msgid ""
+"This documentation site is built with Sphinx. Multi-language support uses "
+"Sphinx gettext catalogs (`.po` files)."
+msgstr ""
+"本文档站使用 Sphinx 构建。多语言支持通过 Sphinx 的 gettext 目录（`.po` 文件）"
+"实现。"
+
+#: ../../advanced/i18n.md:5
+msgid "Current setup"
+msgstr "当前设置"
+
+#: ../../advanced/i18n.md:7
+msgid "Default language: English (`en`) at site root"
+msgstr "默认语言：英文（`en`），发布在站点根目录"
+
+#: ../../advanced/i18n.md:8
+msgid "Chinese (Simplified): `zh_CN` published under `/zh/`"
+msgstr "简体中文：`zh_CN`，发布在 `/zh/`"
+
+#: ../../advanced/i18n.md:9
+msgid "Translation files live in `code/docs/locale/<lang>/LC_MESSAGES/`"
+msgstr "翻译文件位于 `code/docs/locale/<lang>/LC_MESSAGES/`"
+
+#: ../../advanced/i18n.md:11
+msgid ""
+"GitHub Pages builds both languages in `code/.github/workflows/pages.yml`."
+msgstr ""
+"GitHub Pages 会在 `code/.github/workflows/pages.yml` 中同时构建两种语言。"
+
+#: ../../advanced/i18n.md:13
+msgid ""
+"This site also includes a global language switcher (top-right on every page) "
+"implemented via Sphinx template overrides under `code/docs/_templates/`."
+msgstr ""
+"本站还包含全站语言切换（每页右上角），通过 `code/docs/_templates/` 下的 "
+"Sphinx 模板覆盖实现。"
+
+#: ../../advanced/i18n.md:15
+msgid "First-principles translation guidelines (for consistency)"
+msgstr "第一性原理翻译指南（保证一致性）"
+
+#: ../../advanced/i18n.md:17
+msgid ""
+"To keep the Chinese site **elegant, coherent, and context-consistent**, "
+"treat translation as a *semantic mapping* rather than a word-for-word "
+"rewrite:"
+msgstr ""
+"为了让中文站点**优雅、连贯、上下文一致**，请把翻译当作“语义映射”，而不是逐词改写："
+
+#: ../../advanced/i18n.md:19
+msgid ""
+"**Preserve meaning first**: keep definitions, constraints, and caveats "
+"intact; avoid “free” paraphrasing that changes technical intent."
+msgstr "**先保真**：保持定义、约束与注意事项不走样；避免改变技术意图的“自由”改写。"
+
+#: ../../advanced/i18n.md:20
+msgid ""
+"**Keep structure stable**: don’t reorder sections or rewrite headings into "
+"new concepts; mirroring the English information architecture keeps "
+"navigation and cross-page references consistent."
+msgstr ""
+"**结构稳定**：不要重新排序章节或把标题改写成新概念；保持与英文信息架构一致，有助于导航与跨页引用一致。"
+
+#: ../../advanced/i18n.md:21
+msgid ""
+"**Translate user-facing text, not code**: do *not* translate tool names, "
+"parameter names, file paths, environment variables, or code blocks."
+msgstr "**翻译面向用户的文字，不翻译代码**：不要翻译工具名、参数名、文件路径、环境变量或代码块。"
+
+#: ../../advanced/i18n.md:22
+msgid ""
+"**Be consistent with terminology**: pick one Chinese term per core concept "
+"and reuse it everywhere; add new terms intentionally (not ad hoc)."
+msgstr "**术语一致**：每个核心概念选定一个中文译法并全站复用；新增术语要有意识地引入（避免临时起意）。"
+
+#: ../../advanced/i18n.md:23
+msgid ""
+"**Prefer clarity over literalness**: when English is terse, use natural "
+"Chinese but keep it concise."
+msgstr "**清晰优先于直译**：英文很简洁时，用自然中文表达，但保持简洁。"
+
+#: ../../advanced/i18n.md:25
+msgid "Recommended terminology (zh_CN)"
+msgstr "推荐术语表（zh_CN）"
+
+#: ../../advanced/i18n.md:0
+msgid "English"
+msgstr "英文"
+
+#: ../../advanced/i18n.md:0
+msgid "zh_CN"
+msgstr ""
+
+#: ../../advanced/i18n.md:0
+msgid "spatial transcriptomics"
+msgstr "spatial transcriptomics"
+
+#: ../../advanced/i18n.md:0
+msgid "空间转录组"
+msgstr "空间转录组"
+
+#: ../../advanced/i18n.md:0
+msgid "spatial domain(s)"
+msgstr "spatial domain(s)"
+
+#: ../../advanced/i18n.md:0
+msgid "空间区域"
+msgstr "空间区域"
+
+#: ../../advanced/i18n.md:0
+msgid "deconvolution"
+msgstr "deconvolution"
+
+#: ../../advanced/i18n.md:0
+msgid "去卷积"
+msgstr "去卷积"
+
+#: ../../advanced/i18n.md:0
+msgid "cell type annotation"
+msgstr "cell type annotation"
+
+#: ../../advanced/i18n.md:0
+msgid "细胞类型注释"
+msgstr "细胞类型注释"
+
+#: ../../advanced/i18n.md:0
+msgid "spot"
+msgstr "spot"
+
+#: ../../advanced/i18n.md:0
+msgid "spot（必要时首次可写“spot（点位）”）"
+msgstr "spot（必要时首次可写“spot（点位）”）"
+
+#: ../../advanced/i18n.md:0
+msgid "ligand–receptor (LR)"
+msgstr "ligand–receptor (LR)"
+
+#: ../../advanced/i18n.md:0
+msgid "配体-受体（LR）"
+msgstr "配体-受体（LR）"
+
+#: ../../advanced/i18n.md:0
+msgid "trajectory / pseudotime"
+msgstr "trajectory / pseudotime"
+
+#: ../../advanced/i18n.md:0
+msgid "轨迹 / 伪时间"
+msgstr "轨迹 / 伪时间"
+
+#: ../../advanced/i18n.md:0
+msgid "workflow"
+msgstr "workflow"
+
+#: ../../advanced/i18n.md:0
+msgid "工作流"
+msgstr "工作流"
+
+#: ../../advanced/i18n.md:38
+msgid "Add a new language"
+msgstr "添加新语言"
+
+#: ../../advanced/i18n.md:40
+msgid "Create a locale folder:"
+msgstr "创建 locale 目录："
+
+#: ../../advanced/i18n.md:46
+msgid "Example: `code/docs/locale/ja/LC_MESSAGES/` for Japanese."
+msgstr "例如：日文使用 `code/docs/locale/ja/LC_MESSAGES/`。"
+
+#: ../../advanced/i18n.md:48
+msgid "Generate/update translation templates (`.pot`):"
+msgstr "生成/更新翻译模板（`.pot`）："
+
+#: ../../advanced/i18n.md:55
+msgid "Create/update `.po` files (recommended: `sphinx-intl`):"
+msgstr "创建/更新 `.po` 文件（推荐：`sphinx-intl`）："
+
+#: ../../advanced/i18n.md:62
+msgid "Translate strings in:"
+msgstr "在这里翻译字符串："
+
+#: ../../advanced/i18n.md:68
+msgid "Build that language locally:"
+msgstr "本地构建该语言："
+
+#: ../../advanced/i18n.md:75
+msgid "Notes / pitfalls"
+msgstr "注意事项 / 常见坑"
+
+#: ../../advanced/i18n.md:77
+msgid ""
+"Keep filenames the same across languages; Sphinx switches text via catalogs, "
+"not via separate source trees."
+msgstr ""
+"各语言的源文件名保持一致；Sphinx 通过 catalog 切换文本，而不是维护多份源文件"
+"树。"
+
+#: ../../advanced/i18n.md:78
+msgid ""
+"Raw HTML blocks (``.. raw:: html``) are not extracted for translation. "
+"Prefer normal reStructuredText/Markdown text for translatable UI copy."
+msgstr ""
+"Raw HTML 块（`.. raw:: html`）不会被抽取用于翻译。可翻译的 UI 文案请优先使用"
+"普通 reStructuredText/Markdown 文本。"
+
+#: ../../advanced/i18n.md:79
+msgid ""
+"Avoid translating code blocks unless you *really* want localized code "
+"comments/output."
+msgstr "除非你确实需要本地化代码注释/输出，否则尽量不要翻译代码块。"
+
+#: ../../advanced/i18n.md:81
+msgid "Quality checklist (recommended)"
+msgstr "质量检查清单（推荐）"
+
+#: ../../advanced/i18n.md:83
+msgid "`msgfmt -c` on updated `.po` files (catches format mistakes early)."
+msgstr "对更新后的 `.po` 文件运行 `msgfmt -c`（尽早发现格式错误）。"
+
+#: ../../advanced/i18n.md:84
+msgid "Build the Chinese site locally and spot-check:"
+msgstr "本地构建中文站点并抽查："
+
+#: ../../advanced/i18n.md:85
+msgid "Navigation labels (sidebar, section titles)"
+msgstr "导航文案（侧边栏、章节标题）"
+
+#: ../../advanced/i18n.md:86
+msgid "Tables and admonitions"
+msgstr "表格与提示块（admonitions）"
+
+#: ../../advanced/i18n.md:87
+msgid "Cross-page links (especially `/zh/...`)"
+msgstr "跨页面链接（尤其是 `/zh/...`）"

@@ -1,0 +1,247 @@
+# Chinese translations for ChatSpatial package.
+# Copyright (C) 2026, ChatSpatial Project
+# This file is distributed under the same license as the ChatSpatial package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ChatSpatial 1.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-04 09:38-0600\n"
+"PO-Revision-Date: 2026-02-04 09:38-0600\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_CN\n"
+
+#: ../../advanced/troubleshooting.md:1
+msgid "Troubleshooting"
+msgstr "故障排查"
+
+#: ../../advanced/troubleshooting.md:3
+msgid "Quick solutions to common problems."
+msgstr "常见问题的快速解决方案。"
+
+#: ../../advanced/troubleshooting.md:7
+msgid "MCP Connection"
+msgstr "MCP 连接"
+
+#: ../../advanced/troubleshooting.md:9
+msgid "Tools not showing in Claude"
+msgstr "Claude 中未显示工具"
+
+#: ../../advanced/troubleshooting.md:11
+msgid "**Check config path:**"
+msgstr "**检查配置文件路径：**"
+
+#: ../../advanced/troubleshooting.md:12
+msgid ""
+"macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`"
+msgstr "macOS：`~/Library/Application Support/Claude/claude_desktop_config.json`"
+
+#: ../../advanced/troubleshooting.md:13
+msgid "Windows: `%APPDATA%\\Claude\\claude_desktop_config.json`"
+msgstr "Windows：`%APPDATA%\\Claude\\claude_desktop_config.json`"
+
+#: ../../advanced/troubleshooting.md:14
+msgid "Linux: `~/.config/Claude/claude_desktop_config.json`"
+msgstr "Linux：`~/.config/Claude/claude_desktop_config.json`"
+
+#: ../../advanced/troubleshooting.md:16
+msgid "**Verify JSON syntax** (missing commas, brackets)"
+msgstr "**检查 JSON 语法**（逗号、括号是否缺失）"
+
+#: ../../advanced/troubleshooting.md:18
+msgid "**Restart Claude** after config changes"
+msgstr "配置修改后**重启 Claude**"
+
+#: ../../advanced/troubleshooting.md:20
+msgid "**Test server:**"
+msgstr "**测试服务器：**"
+
+#: ../../advanced/troubleshooting.md:27
+msgid "Data Loading"
+msgstr "数据加载"
+
+#: ../../advanced/troubleshooting.md:29
+msgid "\"Dataset not found\""
+msgstr "“未找到数据集”"
+
+#: ../../advanced/troubleshooting.md:31
+msgid "**Use absolute paths:**"
+msgstr "**使用绝对路径：**"
+
+#: ../../advanced/troubleshooting.md:39
+msgid "File format not recognized"
+msgstr "文件格式无法识别"
+
+#: ../../advanced/troubleshooting.md:41
+msgid ""
+"**H5AD:** Verify with `python -c \"import scanpy as sc; "
+"sc.read_h5ad('file.h5ad')\"`"
+msgstr ""
+"**H5AD：**用 `python -c \"import scanpy as sc; sc.read_h5ad('file.h5ad')\"` 验证"
+
+#: ../../advanced/troubleshooting.md:42
+msgid "**Visium:** Point to directory containing `spatial/` folder"
+msgstr "**Visium：**指向包含 `spatial/` 文件夹的目录"
+
+#: ../../advanced/troubleshooting.md:43
+msgid "**Check file:** `file yourdata.h5ad` should show \"HDF5\""
+msgstr "**检查文件：**`file yourdata.h5ad` 应显示 “HDF5”"
+
+#: ../../advanced/troubleshooting.md:47
+msgid "Analysis Errors"
+msgstr "分析错误"
+
+#: ../../advanced/troubleshooting.md:49
+msgid "\"Run preprocessing first\""
+msgstr "“请先运行预处理”"
+
+#: ../../advanced/troubleshooting.md:51
+msgid "Most analyses require preprocessing. Ask Claude:"
+msgstr "大多数分析都需要预处理。对 Claude 这样说："
+
+#: ../../advanced/troubleshooting.md:56
+msgid "\"No significant results\""
+msgstr "“没有显著结果”"
+
+#: ../../advanced/troubleshooting.md:58
+msgid "Check data quality (>500 spots, >1000 genes)"
+msgstr "检查数据质量（>500 个 spot、>1000 个基因）"
+
+#: ../../advanced/troubleshooting.md:59
+msgid "Lower significance thresholds"
+msgstr "放宽显著性阈值"
+
+#: ../../advanced/troubleshooting.md:60
+msgid "Try different methods"
+msgstr "尝试不同方法"
+
+#: ../../advanced/troubleshooting.md:62
+msgid "Cell communication fails"
+msgstr "细胞通讯分析失败"
+
+#: ../../advanced/troubleshooting.md:71
+msgid "Memory Issues"
+msgstr "内存问题"
+
+#: ../../advanced/troubleshooting.md:73
+msgid "System freezes / MemoryError"
+msgstr "系统卡死 / MemoryError"
+
+#: ../../advanced/troubleshooting.md:75
+msgid "Subsample data for testing"
+msgstr "先对数据做子采样用于测试"
+
+#: ../../advanced/troubleshooting.md:76
+msgid "Use smaller batch sizes"
+msgstr "使用更小的 batch size"
+
+#: ../../advanced/troubleshooting.md:77
+msgid "Monitor with `top` command"
+msgstr "用 `top` 命令监控"
+
+#: ../../advanced/troubleshooting.md:78
+msgid "For large datasets: use 32GB+ RAM or cloud"
+msgstr "对大数据集：使用 32GB+ 内存或云端资源"
+
+#: ../../advanced/troubleshooting.md:80
+msgid "CUDA out of memory"
+msgstr "CUDA 显存不足"
+
+#: ../../advanced/troubleshooting.md:82
+msgid "Set `use_gpu=False`"
+msgstr "设置 `use_gpu=False`"
+
+#: ../../advanced/troubleshooting.md:83
+msgid "Reduce batch size"
+msgstr "减小 batch size"
+
+#: ../../advanced/troubleshooting.md:84
+msgid "Run `torch.cuda.empty_cache()`"
+msgstr "运行 `torch.cuda.empty_cache()`"
+
+#: ../../advanced/troubleshooting.md:88
+msgid "Quick Fixes"
+msgstr "快速修复"
+
+#: ../../advanced/troubleshooting.md:0
+msgid "Problem"
+msgstr "问题"
+
+#: ../../advanced/troubleshooting.md:0
+msgid "Solution"
+msgstr "解决方案"
+
+#: ../../advanced/troubleshooting.md:0
+msgid "Import errors"
+msgstr "导入错误"
+
+#: ../../advanced/troubleshooting.md:0
+msgid "`pip install --upgrade chatspatial[full]`"
+msgstr ""
+
+#: ../../advanced/troubleshooting.md:0
+msgid "Claude not connecting"
+msgstr "Claude 无法连接"
+
+#: ../../advanced/troubleshooting.md:0
+msgid "Restart Claude, check JSON config"
+msgstr "重启 Claude，检查 JSON 配置"
+
+#: ../../advanced/troubleshooting.md:0
+msgid "Path errors"
+msgstr "路径错误"
+
+#: ../../advanced/troubleshooting.md:0
+msgid "Use absolute paths"
+msgstr "使用绝对路径"
+
+#: ../../advanced/troubleshooting.md:0
+msgid "Analysis fails"
+msgstr "分析失败"
+
+#: ../../advanced/troubleshooting.md:0
+msgid "Run preprocessing first"
+msgstr "先运行预处理"
+
+#: ../../advanced/troubleshooting.md:0
+msgid "R methods fail"
+msgstr "R 方法失败"
+
+#: ../../advanced/troubleshooting.md:0
+msgid "Install R + packages"
+msgstr "安装 R 及其依赖包"
+
+#: ../../advanced/troubleshooting.md:100
+msgid "Get Help"
+msgstr "获取帮助"
+
+#: ../../advanced/troubleshooting.md:102
+msgid ""
+"[GitHub Issues](https://github.com/cafferychen777/ChatSpatial/issues) — "
+"Report bugs"
+msgstr "[GitHub Issues](https://github.com/cafferychen777/ChatSpatial/issues) — 报告问题"
+
+#: ../../advanced/troubleshooting.md:103
+msgid "[FAQ](faq.md) — Common questions"
+msgstr "[FAQ](faq.md) — 常见问题"
+
+#: ../../advanced/troubleshooting.md:107
+msgid "Next Steps"
+msgstr "下一步"
+
+#: ../../advanced/troubleshooting.md:109
+msgid "[FAQ](faq.md) — Frequently asked questions"
+msgstr "[FAQ](faq.md) — 常见问题（FAQ）"
+
+#: ../../advanced/troubleshooting.md:110
+msgid "[Configuration Guide](configuration.md) — Detailed MCP setup"
+msgstr "[配置指南](configuration.md) — 详细的 MCP 配置"
+
+#: ../../advanced/troubleshooting.md:111
+msgid "[Methods Reference](methods-reference.md) — All tools and parameters"
+msgstr "[方法参考](methods-reference.md) — 全部工具与参数"

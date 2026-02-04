@@ -1,0 +1,282 @@
+# Chinese translations for ChatSpatial package.
+# Copyright (C) 2026, ChatSpatial Project
+# This file is distributed under the same license as the ChatSpatial package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ChatSpatial 1.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-04 10:25-0600\n"
+"PO-Revision-Date: 2026-02-04 09:38-0600\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ../../advanced/configuration.md:1
+msgid "Configuration Guide"
+msgstr "配置指南"
+
+#: ../../advanced/configuration.md:3
+msgid "Configure ChatSpatial MCP server for your environment."
+msgstr "为你的环境配置 ChatSpatial MCP 服务器。"
+
+#: ../../advanced/configuration.md:7
+msgid "MCP Client Configuration"
+msgstr "MCP 客户端配置"
+
+#: ../../advanced/configuration.md:9
+msgid "Claude Code (Recommended)"
+msgstr "Claude Code（推荐）"
+
+#: ../../advanced/configuration.md:25 ../../advanced/configuration.md:74
+#: ../../advanced/configuration.md:115
+msgid "**Key points:**"
+msgstr "**要点：**"
+
+#: ../../advanced/configuration.md:26
+msgid "The `--` separates the Python path from the module arguments"
+msgstr "`--` 用于分隔 Python 路径与模块参数"
+
+#: ../../advanced/configuration.md:27
+msgid "Always use absolute path from `which python`"
+msgstr "始终使用 `which python` 输出的绝对路径"
+
+#: ../../advanced/configuration.md:28
+msgid "Use `--scope user` to make ChatSpatial available across all projects"
+msgstr "使用 `--scope user` 让 ChatSpatial 在所有项目中可用"
+
+#: ../../advanced/configuration.md:32
+msgid "Codex (CLI and IDE Extension)"
+msgstr "Codex（CLI 与 IDE 扩展）"
+
+#: ../../advanced/configuration.md:34
+msgid ""
+"Codex stores MCP configuration in `~/.codex/config.toml`. The CLI and IDE "
+"extension share this configuration."
+msgstr ""
+"Codex 将 MCP 配置存放在 `~/.codex/config.toml` 中。CLI 与 IDE 扩展共用该配"
+"置。"
+
+#: ../../advanced/configuration.md:36
+msgid "**Add via CLI:**"
+msgstr "**通过 CLI 添加：**"
+
+#: ../../advanced/configuration.md:51
+msgid "**Or edit `~/.codex/config.toml` directly:**"
+msgstr "**或直接编辑 `~/.codex/config.toml`：**"
+
+#: ../../advanced/configuration.md:63
+msgid "**Advanced options:**"
+msgstr "**高级选项：**"
+
+#: ../../advanced/configuration.md:75
+msgid "Use `[mcp_servers.chatspatial]` (underscore, not hyphen)"
+msgstr "使用 `[mcp_servers.chatspatial]`（下划线，不是连字符）"
+
+#: ../../advanced/configuration.md:76
+msgid "Configuration is shared between CLI and IDE extension"
+msgstr "配置在 CLI 与 IDE 扩展间共享"
+
+#: ../../advanced/configuration.md:77
+msgid "Use `/mcp` in Codex TUI to verify connection"
+msgstr "在 Codex TUI 中使用 `/mcp` 验证连接"
+
+#: ../../advanced/configuration.md:81
+msgid "OpenCode (CLI and TUI)"
+msgstr "OpenCode（CLI 与 TUI）"
+
+#: ../../advanced/configuration.md:83
+msgid "OpenCode stores MCP configuration in:"
+msgstr "OpenCode 将 MCP 配置存放在："
+
+#: ../../advanced/configuration.md:85
+msgid "Global: `~/.config/opencode/opencode.json`"
+msgstr "全局：`~/.config/opencode/opencode.json`"
+
+#: ../../advanced/configuration.md:86
+msgid "Project: `opencode.json` (in your project root)"
+msgstr "项目：`opencode.json`（位于项目根目录）"
+
+#: ../../advanced/configuration.md:88
+msgid "Project config takes precedence when both exist."
+msgstr "当两者同时存在时，以项目配置优先。"
+
+#: ../../advanced/configuration.md:90
+msgid "**Add via CLI (wizard):**"
+msgstr "**通过 CLI 添加（向导）：**"
+
+#: ../../advanced/configuration.md:97
+msgid "**Or edit config JSON directly (recommended for repeatability):**"
+msgstr "**或直接编辑配置 JSON（推荐，便于复现）：**"
+
+#: ../../advanced/configuration.md:116
+msgid "Use the **absolute** Python path from `which python`"
+msgstr "使用 `which python` 输出的 **绝对** Python 路径"
+
+#: ../../advanced/configuration.md:117
+msgid "`command` is an array: `[executable, ...args]`"
+msgstr "`command` 是一个数组：`[executable, ...args]`"
+
+#: ../../advanced/configuration.md:118
+msgid "Prefer project-level `opencode.json` if you want repo-specific settings"
+msgstr "如果你希望使用仓库级设置，优先使用项目级 `opencode.json`"
+
+#: ../../advanced/configuration.md:119
+msgid "Docs: https://opencode.ai/docs/mcp"
+msgstr "文档：https://opencode.ai/docs/mcp"
+
+#: ../../advanced/configuration.md:123
+msgid "Claude Desktop"
+msgstr "Claude Desktop"
+
+#: ../../advanced/configuration.md:125
+msgid "Edit Claude Desktop configuration file:"
+msgstr "编辑 Claude Desktop 配置文件："
+
+#: ../../advanced/configuration.md:127
+msgid "**Location:**"
+msgstr "**位置：**"
+
+#: ../../advanced/configuration.md:128
+msgid ""
+"macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`"
+msgstr ""
+"macOS：`~/Library/Application Support/Claude/claude_desktop_config.json`"
+
+#: ../../advanced/configuration.md:129
+msgid "Windows: `%APPDATA%\\Claude\\claude_desktop_config.json`"
+msgstr "Windows：`%APPDATA%\\Claude\\claude_desktop_config.json`"
+
+#: ../../advanced/configuration.md:130
+msgid "Linux: `~/.config/Claude/claude_desktop_config.json`"
+msgstr "Linux：`~/.config/Claude/claude_desktop_config.json`"
+
+#: ../../advanced/configuration.md:132
+msgid "**Configuration:**"
+msgstr "**配置：**"
+
+#: ../../advanced/configuration.md:145
+msgid "**Example with actual path:**"
+msgstr "**实际路径示例：**"
+
+#: ../../advanced/configuration.md:158
+msgid "**Important:** Restart Claude Desktop after configuration changes."
+msgstr "**重要：**修改配置后重启 Claude Desktop。"
+
+#: ../../advanced/configuration.md:162
+msgid "Other MCP Clients"
+msgstr "其他 MCP 客户端"
+
+#: ../../advanced/configuration.md:164
+msgid "For other MCP-compatible clients:"
+msgstr "对于其他兼容 MCP 的客户端："
+
+#: ../../advanced/configuration.md:166
+msgid ""
+"**Find Python path:** Activate virtual environment and run `which python`"
+msgstr "**找到 Python 路径：**激活虚拟环境并运行 `which python`"
+
+#: ../../advanced/configuration.md:167
+msgid "**Use in configuration:** Replace `\"python\"` with the full path"
+msgstr "**写入配置：**用完整路径替换 `\"python\"`"
+
+#: ../../advanced/configuration.md:169
+msgid ""
+"ChatSpatial follows the standard MCP protocol and works with any MCP-"
+"compatible client."
+msgstr "ChatSpatial 遵循标准 MCP 协议，可在任何兼容 MCP 的客户端中使用。"
+
+#: ../../advanced/configuration.md:173
+msgid "Environment Variables (Optional)"
+msgstr "环境变量（可选）"
+
+#: ../../advanced/configuration.md:175
+msgid "Configure ChatSpatial behavior using environment variables:"
+msgstr "使用环境变量配置 ChatSpatial 行为："
+
+#: ../../advanced/configuration.md:177
+msgid "Data Storage"
+msgstr "数据存储"
+
+#: ../../advanced/configuration.md:184
+msgid ""
+"**Usage:** When you use `export_data()` without specifying `path`, datasets "
+"are saved to this directory."
+msgstr ""
+"**用途：**当你使用 `export_data()` 且未指定 `path` 时，数据集会保存到该目录。"
+
+#: ../../advanced/configuration.md:186
+msgid "**Default:** `.chatspatial_saved/` next to original data file"
+msgstr "**默认：**在原始数据文件旁的 `.chatspatial_saved/`"
+
+#: ../../advanced/configuration.md:190
+msgid "Troubleshooting Configuration"
+msgstr "配置故障排查"
+
+#: ../../advanced/configuration.md:192
+msgid "Common Issues"
+msgstr "常见问题"
+
+#: ../../advanced/configuration.md:0
+msgid "Problem"
+msgstr "问题"
+
+#: ../../advanced/configuration.md:0
+msgid "Solution"
+msgstr "解决方案"
+
+#: ../../advanced/configuration.md:0
+msgid "\"python not found\""
+msgstr "“找不到 python”"
+
+#: ../../advanced/configuration.md:0
+msgid "Use full path to virtual environment Python"
+msgstr "使用虚拟环境 Python 的完整路径"
+
+#: ../../advanced/configuration.md:0
+msgid "\"module not found\""
+msgstr "“找不到模块”"
+
+#: ../../advanced/configuration.md:0
+msgid "Ensure virtual environment is activated before adding server"
+msgstr "添加服务器前确保已激活虚拟环境"
+
+#: ../../advanced/configuration.md:0
+msgid "Claude can't connect"
+msgstr "Claude 无法连接"
+
+#: ../../advanced/configuration.md:0
+msgid "Check JSON syntax and restart Claude Desktop"
+msgstr "检查 JSON 语法并重启 Claude Desktop"
+
+#: ../../advanced/configuration.md:0
+msgid "Server not showing up"
+msgstr "服务器未显示"
+
+#: ../../advanced/configuration.md:0
+msgid "Verify Python path is correct with `which python`"
+msgstr "用 `which python` 验证 Python 路径是否正确"
+
+#: ../../advanced/configuration.md:201
+msgid "Verify Configuration"
+msgstr "验证配置"
+
+#: ../../advanced/configuration.md:218
+msgid "Next Steps"
+msgstr "下一步"
+
+#: ../../advanced/configuration.md:220
+msgid "[Quick Start](../quickstart.md) - Start analyzing data"
+msgstr "[快速开始](../quickstart.md) — 开始分析数据"
+
+#: ../../advanced/configuration.md:221
+msgid "[Troubleshooting](troubleshooting.md) - Solve common problems"
+msgstr "[故障排查](troubleshooting.md) — 解决常见问题"
+
+#: ../../advanced/configuration.md:222
+msgid "[Methods Reference](methods-reference.md) - Explore available tools"
+msgstr "[方法参考](methods-reference.md) — 浏览可用工具"

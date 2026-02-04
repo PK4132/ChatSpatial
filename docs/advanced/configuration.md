@@ -78,6 +78,48 @@ enabled = true              # Set to false to disable without deleting
 
 ---
 
+### OpenCode (CLI and TUI)
+
+OpenCode stores MCP configuration in:
+
+- Global: `~/.config/opencode/opencode.json`
+- Project: `opencode.json` (in your project root)
+
+Project config takes precedence when both exist.
+
+**Add via CLI (wizard):**
+
+```bash
+opencode mcp add
+opencode mcp list
+```
+
+**Or edit config JSON directly (recommended for repeatability):**
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "chatspatial": {
+      "type": "local",
+      "command": ["/path/to/venv/bin/python", "-m", "chatspatial", "server"],
+      "enabled": true,
+      "environment": {
+        "CHATSPATIAL_DATA_DIR": "/path/to/data"
+      }
+    }
+  }
+}
+```
+
+**Key points:**
+- Use the **absolute** Python path from `which python`
+- `command` is an array: `[executable, ...args]`
+- Prefer project-level `opencode.json` if you want repo-specific settings
+- Docs: https://opencode.ai/docs/mcp
+
+---
+
 ### Claude Desktop
 
 Edit Claude Desktop configuration file:

@@ -38,8 +38,20 @@ source_suffix = {
 # Patterns to exclude
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
+# Templates (overrides theme templates when filenames match)
+templates_path = ["_templates"]
+
 # The master toctree document
 master_doc = "index"
+
+# -- Internationalization ----------------------------------------------------
+# Default language for the built site. On CI we override this per-build via:
+#   sphinx-build ... -D language=zh_CN
+language = os.environ.get("SPHINX_LANGUAGE", "en")
+
+# Translation catalogs live under docs/locale/<lang>/LC_MESSAGES/*.po
+locale_dirs = ["locale/"]
+gettext_compact = False
 
 # -- Options for HTML output -------------------------------------------------
 
@@ -60,7 +72,7 @@ html_theme_options = {
     # Source links
     "source_repository": "https://github.com/cafferychen777/ChatSpatial",
     "source_branch": "main",
-    "source_directory": "docs/",
+    "source_directory": "code/docs/",
 
     # Light mode colors - Clean scientific palette
     "light_css_variables": {
@@ -138,6 +150,9 @@ html_theme_options = {
         },
     ],
 }
+
+# Keep URLs stable (avoid directory-style URLs) so /zh/ links are predictable.
+html_use_directory_uris = False
 
 # Static files
 html_static_path = ["_static"]

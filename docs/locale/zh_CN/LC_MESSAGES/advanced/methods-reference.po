@@ -1,0 +1,1402 @@
+# Chinese translations for ChatSpatial package.
+# Copyright (C) 2026, ChatSpatial Project
+# This file is distributed under the same license as the ChatSpatial package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ChatSpatial 1.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-04 09:38-0600\n"
+"PO-Revision-Date: 2026-02-04 09:38-0600\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_CN\n"
+
+#: ../../advanced/methods-reference.md:1
+msgid "Methods Reference"
+msgstr "方法参考"
+
+#: ../../advanced/methods-reference.md:3
+msgid "All 20 ChatSpatial tools with parameters and options."
+msgstr "全部 20 个 ChatSpatial 工具及其参数与选项。"
+
+#: ../../advanced/methods-reference.md:7
+msgid "Quick Reference"
+msgstr "快速索引"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Category"
+msgstr "分类"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Tools"
+msgstr "工具"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Data"
+msgstr "数据"
+
+#: ../../advanced/methods-reference.md:0
+msgid ""
+"`load_data`, `preprocess_data`, `compute_embeddings`, `export_data`, "
+"`reload_data`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Spatial"
+msgstr "空间"
+
+#: ../../advanced/methods-reference.md:0
+msgid ""
+"`analyze_spatial_statistics`, `find_spatial_genes`, "
+"`identify_spatial_domains`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Cells"
+msgstr "细胞"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`annotate_cell_types`, `deconvolve_data`, `analyze_cell_communication`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Genes"
+msgstr "基因"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`find_markers`, `compare_conditions`, `analyze_enrichment`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+#: ../../advanced/methods-reference.md:254
+msgid "Dynamics"
+msgstr "动态"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`analyze_velocity_data`, `analyze_trajectory_data`, `analyze_cnv`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Multi-sample"
+msgstr "多样本"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`integrate_samples`, `register_spatial_data`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Output"
+msgstr "输出"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`visualize_data`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:21
+msgid "Data Management"
+msgstr "数据管理"
+
+#: ../../advanced/methods-reference.md:23
+msgid "load_data"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:25
+msgid "Load spatial transcriptomics data."
+msgstr "加载空间转录组数据。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Parameter"
+msgstr "参数"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Type"
+msgstr "类型"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Description"
+msgstr "说明"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`data_path`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "str"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Path to file or folder"
+msgstr "文件或文件夹路径"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`data_type`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`visium`, `xenium`, `slide_seq`, `merfish`, `seqfish`, `generic`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`name`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Optional dataset name"
+msgstr "可选的数据集名称"
+
+#: ../../advanced/methods-reference.md:33
+msgid "**Supported formats**: H5AD, 10X Visium folders, H5, MTX"
+msgstr "**支持的格式**：H5AD、10X Visium 文件夹、H5、MTX"
+
+#: ../../advanced/methods-reference.md:37
+msgid "preprocess_data"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:39
+msgid "Normalize, filter, and prepare data."
+msgstr "归一化、过滤并准备数据。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Default"
+msgstr "默认值"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`normalization`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`log`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`log`, `sct`, `pearson_residuals`, `scvi`, `none`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`n_hvgs`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "2000"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Highly variable genes"
+msgstr "高变基因数"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`n_pcs`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "30"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Principal components"
+msgstr "主成分数"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`n_neighbors`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "15"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Neighbor graph"
+msgstr "邻居图"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`clustering_resolution`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "1.0"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Leiden clustering"
+msgstr "Leiden 聚类"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`filter_genes_min_cells`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "3"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Min cells per gene"
+msgstr "每个基因的最小细胞数"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`filter_cells_min_genes`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Min genes per cell"
+msgstr "每个细胞的最小基因数"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`filter_mito_pct`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "20.0"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Max mitochondrial %"
+msgstr "线粒体比例上限（%）"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`scale`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "False"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Scale to unit variance before PCA"
+msgstr "PCA 前缩放到单位方差"
+
+#: ../../advanced/methods-reference.md:53
+msgid "**Advanced options**:"
+msgstr "**高级选项：**"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`scrublet_enable`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Enable doublet detection (for single-cell resolution data)"
+msgstr "启用 doublet 检测（适用于单细胞分辨率数据）"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`normalize_target_sum`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "None"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Target counts per cell (None=median, 1e4=Visium, 1e6=MERFISH)"
+msgstr "每个细胞的目标计数（None=中位数，1e4=Visium，1e6=MERFISH）"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`remove_mito_genes`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "True"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Exclude mito genes from HVG"
+msgstr "从高变基因中排除线粒体基因"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`batch_key`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`batch`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Batch column for batch-aware normalization"
+msgstr "用于批次感知归一化的 batch 列"
+
+#: ../../advanced/methods-reference.md:64
+msgid "compute_embeddings"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:66
+msgid "Compute dimensionality reduction and clustering."
+msgstr "计算降维结果与聚类。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`compute_pca`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Compute PCA"
+msgstr "计算 PCA"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`compute_umap`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Compute UMAP"
+msgstr "计算 UMAP"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`compute_clustering`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`compute_spatial_neighbors`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Spatial graph"
+msgstr "空间图"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Clustering resolution"
+msgstr "聚类分辨率"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`force`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Recompute if exists"
+msgstr "若已存在则重新计算"
+
+#: ../../advanced/methods-reference.md:80
+msgid "export_data / reload_data"
+msgstr "export_data / reload_data"
+
+#: ../../advanced/methods-reference.md:82
+msgid "Export dataset for external scripts, reload after modifications."
+msgstr "导出数据集以供外部脚本使用，并在修改后重新加载。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`data_id`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "required"
+msgstr "必填"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Dataset ID"
+msgstr "数据集 ID"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`path`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "auto"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Custom path (default: `~/.chatspatial/active/`)"
+msgstr "自定义路径（默认：`~/.chatspatial/active/`）"
+
+#: ../../advanced/methods-reference.md:91
+msgid "Spatial Analysis"
+msgstr "空间分析"
+
+#: ../../advanced/methods-reference.md:93
+msgid "analyze_spatial_statistics"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:95
+msgid "Analyze spatial patterns and autocorrelation."
+msgstr "分析空间模式与自相关。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`analysis_type`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`neighborhood`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "See types below"
+msgstr "见下方类型"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`cluster_key`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Required for group-based analyses"
+msgstr "分组分析需要该参数"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`genes`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Specific genes to analyze"
+msgstr "指定要分析的基因"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`n_top_genes`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "20"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Top HVGs to analyze (if genes not specified)"
+msgstr "要分析的高变基因数量（未指定 genes 时）"
+
+#: ../../advanced/methods-reference.md:0
+msgid "8"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Spatial neighbors"
+msgstr "空间邻居数"
+
+#: ../../advanced/methods-reference.md:105
+msgid "**Analysis types**:"
+msgstr "**分析类型：**"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Requires cluster_key"
+msgstr "需要 cluster_key"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`moran`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Gene"
+msgstr "基因"
+
+#: ../../advanced/methods-reference.md:0
+msgid "No"
+msgstr "否"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`local_moran`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`geary`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`getis_ord`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`bivariate_moran`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Group"
+msgstr "分组"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Yes"
+msgstr "是"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`co_occurrence`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`ripley`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`join_count`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`centrality`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Network"
+msgstr "网络"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Optional"
+msgstr "可选"
+
+#: ../../advanced/methods-reference.md:122
+msgid "find_spatial_genes"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:124
+msgid "Identify spatially variable genes."
+msgstr "识别空间变异基因。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`method`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`sparkx`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`sparkx`, `spatialde`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Top genes to return (None = all significant)"
+msgstr "返回的基因数量（None=返回所有显著基因）"
+
+#: ../../advanced/methods-reference.md:133
+msgid "identify_spatial_domains"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:135
+msgid "Find tissue domains and spatial niches."
+msgstr "识别组织区域与空间微环境。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`spagcn`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`spagcn`, `stagate`, `graphst`, `leiden`, `louvain`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`n_domains`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "7"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Expected number of domains"
+msgstr "期望的区域数量"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`resolution`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "0.5"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:145
+msgid "Cell Analysis"
+msgstr "细胞分析"
+
+#: ../../advanced/methods-reference.md:147
+msgid "annotate_cell_types"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:149
+msgid "Assign cell types."
+msgstr "分配细胞类型。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`tangram`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "See methods below"
+msgstr "见下方方法"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`reference_data_id`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Reference dataset (for transfer methods)"
+msgstr "参考数据集（用于 label transfer 方法）"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`cell_type_key`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Cell type column in reference"
+msgstr "参考数据中的细胞类型列"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`marker_genes`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Marker dict (for CellAssign)"
+msgstr "marker 字典（用于 CellAssign）"
+
+#: ../../advanced/methods-reference.md:158
+#: ../../advanced/methods-reference.md:181
+msgid "**Methods**:"
+msgstr "**方法：**"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Method"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Requires Reference"
+msgstr "需要参考数据"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Notes"
+msgstr "备注"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Spatial mapping"
+msgstr "空间映射"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`scanvi`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Deep learning transfer"
+msgstr "深度学习迁移"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`cellassign`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Marker-based"
+msgstr "基于 marker"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`sctype`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Automatic (R)"
+msgstr "自动（R）"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`singler`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Reference-based (R)"
+msgstr "基于参考（R）"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`mllmcelltype`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "LLM-based"
+msgstr "基于 LLM"
+
+#: ../../advanced/methods-reference.md:171
+msgid "deconvolve_data"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:173
+msgid "Estimate cell type proportions per spot."
+msgstr "估计每个 spot 的细胞类型比例。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`flashdeconv`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Reference dataset"
+msgstr "参考数据集"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Speed"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "GPU"
+msgstr "GPU"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Fast"
+msgstr "快"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Default, recommended"
+msgstr "默认，推荐"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`cell2location`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Slow"
+msgstr "慢"
+
+#: ../../advanced/methods-reference.md:0
+msgid "High accuracy"
+msgstr "高准确性"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`rctd`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "R-based"
+msgstr "基于 R"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`destvi`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Medium"
+msgstr "中等"
+
+#: ../../advanced/methods-reference.md:0
+msgid "scvi-tools"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`stereoscope`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Alternative DL"
+msgstr "替代的深度学习方法"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`spotlight`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`card`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "R-based, imputation"
+msgstr "基于 R，含插补"
+
+#: ../../advanced/methods-reference.md:196
+msgid "analyze_cell_communication"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:198
+msgid "Analyze ligand-receptor interactions."
+msgstr "分析配体-受体相互作用。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`fastccc`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`fastccc`, `liana`, `cellphonedb`, `cellchat_r`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`species`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`human`, `mouse`, `zebrafish`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Cell type column"
+msgstr "细胞类型列"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`liana_resource`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`consensus`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "LR database (`mouseconsensus` for mouse)"
+msgstr "配体-受体（LR）数据库（小鼠用 `mouseconsensus`）"
+
+#: ../../advanced/methods-reference.md:209
+msgid "Gene Analysis"
+msgstr "基因分析"
+
+#: ../../advanced/methods-reference.md:211
+msgid "find_markers"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:213
+msgid "Find differentially expressed genes."
+msgstr "寻找差异表达基因。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`group_key`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Grouping column"
+msgstr "分组列"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`group1`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "First group (None = each vs rest)"
+msgstr "第一组（None=每组 vs 其余）"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`group2`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Second group"
+msgstr "第二组"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`wilcoxon`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`wilcoxon`, `t-test`, `t-test_overestim_var`, `logreg`, `pydeseq2`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "50"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Top genes per group"
+msgstr "每组 top 基因数"
+
+#: ../../advanced/methods-reference.md:225
+msgid "compare_conditions"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:227
+msgid "Compare experimental conditions (pseudobulk DESeq2)."
+msgstr "比较实验条件（pseudobulk DESeq2）。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`condition_key`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Condition column"
+msgstr "条件列"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`condition1`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Treatment group"
+msgstr "处理组"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`condition2`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Control group"
+msgstr "对照组"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`sample_key`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Sample/patient column"
+msgstr "样本/患者列"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Stratify by cell type"
+msgstr "按细胞类型分层"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Top DEGs"
+msgstr "Top 差异基因数"
+
+#: ../../advanced/methods-reference.md:240
+msgid "analyze_enrichment"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:242
+msgid "Gene set enrichment analysis."
+msgstr "基因集富集分析。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`pathway_ora`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`pathway_ora`, `pathway_gsea`, `pathway_ssgsea`, `spatial_enrichmap`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`gene_set_database`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`GO_Biological_Process`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "See databases below"
+msgstr "见下方数据库"
+
+#: ../../advanced/methods-reference.md:250
+msgid ""
+"**Databases**: `GO_Biological_Process`, `GO_Molecular_Function`, "
+"`KEGG_Pathways`, `Reactome_Pathways`, `MSigDB_Hallmark`"
+msgstr ""
+"**数据库**：`GO_Biological_Process`、`GO_Molecular_Function`、`KEGG_Pathways`、`Reactome_Pathways`、`MSigDB_Hallmark`"
+
+#: ../../advanced/methods-reference.md:256
+msgid "analyze_velocity_data"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:258
+msgid "RNA velocity analysis."
+msgstr "RNA velocity 分析。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`scvelo`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`scvelo`, `velovi`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`mode`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`stochastic`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`deterministic`, `stochastic`, `dynamical`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:265
+msgid "**Requires**: `spliced` and `unspliced` layers"
+msgstr "**需要**：`spliced` 与 `unspliced` layers"
+
+#: ../../advanced/methods-reference.md:269
+msgid "analyze_trajectory_data"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:271
+msgid "Trajectory and pseudotime inference."
+msgstr "轨迹与伪时间推断。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`cellrank`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`cellrank`, `palantir`, `dpt`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`root_cells`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Starting cells"
+msgstr "起始细胞"
+
+#: ../../advanced/methods-reference.md:278
+msgid "**Note**: CellRank requires velocity data"
+msgstr "**注意**：CellRank 需要 velocity 数据"
+
+#: ../../advanced/methods-reference.md:282
+msgid "analyze_cnv"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:284
+msgid "Copy number variation detection."
+msgstr "拷贝数变异（CNV）检测。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`infercnvpy`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`infercnvpy`, `numbat`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`reference_key`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`reference_categories`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Normal cell types"
+msgstr "正常细胞类型"
+
+#: ../../advanced/methods-reference.md:294
+msgid "Multi-Sample"
+msgstr "多样本"
+
+#: ../../advanced/methods-reference.md:296
+msgid "integrate_samples"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:298
+msgid "Batch integration."
+msgstr "批次整合。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`data_ids`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "List of dataset IDs"
+msgstr "数据集 ID 列表"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`harmony`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`harmony`, `bbknn`, `scanorama`, `scvi`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Batch column"
+msgstr "批次列"
+
+#: ../../advanced/methods-reference.md:308
+msgid "register_spatial_data"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:310
+msgid "Align spatial sections."
+msgstr "对齐空间切片。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`source_id`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Source dataset"
+msgstr "源数据集"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`target_id`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Target dataset"
+msgstr "目标数据集"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`paste`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`paste`, `stalign`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:320
+msgid "Visualization"
+msgstr "可视化"
+
+#: ../../advanced/methods-reference.md:322
+msgid "visualize_data"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:324
+msgid "Create all plot types."
+msgstr "生成所有类型的图。"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`plot_type`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`feature`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`subtype`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Visualization variant"
+msgstr "可视化子类型"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Gene(s) or column to show"
+msgstr "要展示的基因或列"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`basis`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`spatial`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`spatial`, `umap`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`colormap`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`coolwarm`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Color scheme"
+msgstr "配色方案"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`dpi`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "300"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Resolution"
+msgstr "分辨率"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`output_format`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`png`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`png`, `pdf`, `svg`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:337
+msgid "**Plot types and subtypes**:"
+msgstr "**图形类型与子类型：**"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Subtypes"
+msgstr "子类型"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Use"
+msgstr "用途"
+
+#: ../../advanced/methods-reference.md:0
+msgid "—"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Gene/metadata on spatial or UMAP"
+msgstr "在 spatial 或 UMAP 上展示基因/元数据"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`expression`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`heatmap`, `violin`, `dotplot`, `correlation`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Aggregated expression"
+msgstr "汇总表达"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`deconvolution`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`spatial_multi`, `pie`, `dominant`, `diversity`, `umap`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Cell proportions"
+msgstr "细胞比例"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`communication`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`dotplot`, `tileplot`, `circle_plot`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "LR interactions"
+msgstr "LR 相互作用"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`interaction`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Spatial LR pairs"
+msgstr "空间 LR 配对"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`trajectory`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`pseudotime`, `fate_map`, `gene_trends`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Pseudotime"
+msgstr "伪时间"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`velocity`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`stream`, `phase`, `paga`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "RNA velocity"
+msgstr "RNA velocity"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`statistics`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`neighborhood`, `co_occurrence`, `ripley`, `moran`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Spatial stats"
+msgstr "空间统计"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`enrichment`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`barplot`, `dotplot`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Pathway results"
+msgstr "通路结果"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`cnv`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`heatmap`, `spatial`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "CNV results"
+msgstr "CNV 结果"
+
+#: ../../advanced/methods-reference.md:0
+msgid "`integration`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "`batch`, `cluster`"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Integration QC"
+msgstr "整合质控"
+
+#: ../../advanced/methods-reference.md:355
+msgid "GPU Acceleration"
+msgstr "GPU 加速"
+
+#: ../../advanced/methods-reference.md:357
+msgid "Set `use_gpu=True` for these methods:"
+msgstr "对以下方法设置 `use_gpu=True`："
+
+#: ../../advanced/methods-reference.md:0
+msgid "Methods"
+msgstr "方法"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Preprocessing"
+msgstr "预处理"
+
+#: ../../advanced/methods-reference.md:0
+msgid "scVI normalization"
+msgstr "scVI 归一化"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Annotation"
+msgstr "注释"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Tangram, scANVI"
+msgstr "Tangram, scANVI"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Deconvolution"
+msgstr "去卷积"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Cell2location, DestVI, Stereoscope, Tangram"
+msgstr "Cell2location, DestVI, Stereoscope, Tangram"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Domains"
+msgstr "区域"
+
+#: ../../advanced/methods-reference.md:0
+msgid "STAGATE, GraphST"
+msgstr "STAGATE, GraphST"
+
+#: ../../advanced/methods-reference.md:0
+msgid "Velocity"
+msgstr "速度"
+
+#: ../../advanced/methods-reference.md:0
+msgid "VeloVI"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "Integration"
+msgstr "整合"
+
+#: ../../advanced/methods-reference.md:0
+msgid "scVI"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "CNV"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:0
+msgid "inferCNVpy"
+msgstr ""
+
+#: ../../advanced/methods-reference.md:371
+msgid "Next Steps"
+msgstr "下一步"
+
+#: ../../advanced/methods-reference.md:373
+msgid "[Examples](../examples.md) — See methods in action"
+msgstr "[示例](../examples.md) — 查看方法如何实际使用"
+
+#: ../../advanced/methods-reference.md:374
+msgid "[Concepts](../concepts.md) — When to use which method"
+msgstr "[概念](../concepts.md) — 何时该用哪种方法"
+
+#: ../../advanced/methods-reference.md:375
+msgid "[Troubleshooting](troubleshooting.md) — Common issues and fixes"
+msgstr "[故障排查](troubleshooting.md) — 常见问题与解决方案"

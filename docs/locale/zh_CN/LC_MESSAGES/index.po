@@ -1,0 +1,114 @@
+# Chinese translations for ChatSpatial package.
+# Copyright (C) 2026, ChatSpatial Project
+# This file is distributed under the same license as the ChatSpatial package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ChatSpatial 1.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-04 09:38-0600\n"
+"PO-Revision-Date: 2026-02-04 09:38-0600\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: zh_CN\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: ../../index.rst:33 ../../index.rst:97
+msgid "Getting Started"
+msgstr "入门"
+
+#: ../../index.rst:68 ../../index.rst:106
+msgid "Reference"
+msgstr "参考"
+
+#: ../../index.rst:88 ../../index.rst:114
+msgid "Support"
+msgstr "支持"
+
+#: ../../index.rst:2
+msgid "ChatSpatial"
+msgstr "ChatSpatial"
+
+#: ../../index.rst:4
+msgid ""
+"**MCP server for spatial transcriptomics analysis via natural language.**"
+msgstr "**面向空间转录组分析的自然语言 MCP 服务。**"
+
+#: ../../index.rst:6
+msgid "Analyze your spatial data by chatting with Claude. No coding required."
+msgstr "通过与 Claude 对话来分析你的空间数据。无需编程。"
+
+#: ../../index.rst:38
+msgid "Quick Start"
+msgstr "快速开始"
+
+#: ../../index.rst:43
+msgid "**Your first analysis**"
+msgstr "**你的第一次分析**"
+
+#: ../../index.rst:45
+msgid "Load data and start analyzing with natural language."
+msgstr "加载数据，并用自然语言开始分析。"
+
+#: ../../index.rst:47
+msgid "Concepts"
+msgstr "概念"
+
+#: ../../index.rst:52
+msgid "**Understand the methods**"
+msgstr "**理解这些方法**"
+
+#: ../../index.rst:54
+msgid "When to use which method and why."
+msgstr "了解何时该用哪种方法，以及原因。"
+
+#: ../../index.rst:56
+msgid "Examples"
+msgstr "示例"
+
+#: ../../index.rst:61
+msgid "**See what's possible**"
+msgstr "**看看能做什么**"
+
+#: ../../index.rst:63
+msgid "Natural language commands for every analysis type."
+msgstr "覆盖各类分析的自然语言指令示例。"
+
+#: ../../index.rst:73
+msgid "Methods Reference"
+msgstr "方法参考"
+
+#: ../../index.rst:77
+msgid "All 20 MCP tools with parameters"
+msgstr "全部 20 个 MCP 工具及其参数"
+
+#: ../../index.rst:79
+msgid "Configuration"
+msgstr "配置"
+
+#: ../../index.rst:83
+msgid "MCP client configuration"
+msgstr "MCP 客户端配置"
+
+#: ../../index.rst:90
+msgid ":doc:`advanced/troubleshooting` — Common issues and solutions"
+msgstr ":doc:`advanced/troubleshooting` — 常见问题与解决方案"
+
+#: ../../index.rst:91
+msgid ":doc:`advanced/faq` — Frequently asked questions"
+msgstr ":doc:`advanced/faq` — 常见问题（FAQ）"
+
+#: ../../index.rst:92
+msgid ":doc:`advanced/i18n` — Translating the docs"
+msgstr ":doc:`advanced/i18n` — 文档翻译（i18n）"
+
+#: ../../index.rst:93
+msgid ""
+"`GitHub Issues <https://github.com/cafferychen777/ChatSpatial/issues>`_ — "
+"Report bugs"
+msgstr ""
+"`GitHub Issues <https://github.com/cafferychen777/ChatSpatial/issues>`_ — 报"
+"告问题"

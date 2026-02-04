@@ -5,14 +5,27 @@ ChatSpatial
 
 Analyze your spatial data by chatting with Claude. No coding required.
 
-.. raw:: html
+.. only:: en
 
-   <div style="margin: 2rem 0; padding: 1.5rem; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 12px; border-left: 4px solid #1565C0;">
-     <p style="margin: 0; font-size: 1.1rem; color: #1e293b;">
-       <strong>60+ methods</strong> across 15 analysis categories.
-       Supports 10x Visium, Xenium, Slide-seq, MERFISH, and more.
-     </p>
-   </div>
+   .. raw:: html
+
+      <div style="margin: 2rem 0; padding: 1.5rem; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 12px; border-left: 4px solid #1565C0;">
+        <p style="margin: 0; font-size: 1.1rem; color: #1e293b;">
+          <strong>60+ methods</strong> across 15 analysis categories.
+          Supports 10x Visium, Xenium, Slide-seq, MERFISH, and more.
+        </p>
+      </div>
+
+.. only:: zh
+
+   .. raw:: html
+
+      <div style="margin: 2rem 0; padding: 1.5rem; background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 12px; border-left: 4px solid #1565C0;">
+        <p style="margin: 0; font-size: 1.1rem; color: #1e293b;">
+          覆盖 <strong>15 类分析的 60+ 方法</strong>。
+          支持 10x Visium、Xenium、Slide-seq、MERFISH 等。
+        </p>
+      </div>
 
 ----
 
@@ -76,6 +89,7 @@ Support
 
 - :doc:`advanced/troubleshooting` — Common issues and solutions
 - :doc:`advanced/faq` — Frequently asked questions
+- :doc:`advanced/i18n` — Translating the docs
 - `GitHub Issues <https://github.com/cafferychen777/ChatSpatial/issues>`_ — Report bugs
 
 ----
@@ -104,3 +118,4 @@ Support
 
    advanced/troubleshooting
    advanced/faq
+   advanced/i18n

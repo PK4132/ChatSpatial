@@ -1,0 +1,381 @@
+# Chinese translations for ChatSpatial package.
+# Copyright (C) 2026, ChatSpatial Project
+# This file is distributed under the same license as the ChatSpatial package.
+# Automatically generated, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: ChatSpatial 1.1\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-02-04 09:38-0600\n"
+"PO-Revision-Date: 2026-02-04 09:38-0600\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: zh_CN\n"
+
+#: ../../advanced/faq.md:1
+msgid "Frequently Asked Questions"
+msgstr "常见问题（FAQ）"
+
+#: ../../advanced/faq.md:3
+msgid "Common questions and their answers."
+msgstr "常见问题与解答。"
+
+#: ../../advanced/faq.md:7
+msgid "General Questions"
+msgstr "基本问题"
+
+#: ../../advanced/faq.md:9
+msgid "What is ChatSpatial?"
+msgstr "什么是 ChatSpatial？"
+
+#: ../../advanced/faq.md:11
+msgid ""
+"ChatSpatial is an LLM agent for spatial transcriptomics analysis via MCP. It "
+"integrates 60+ methods from Python and R ecosystems into a unified "
+"conversational interface."
+msgstr ""
+"ChatSpatial 是一个通过 MCP 进行空间转录组分析的 LLM 智能体。它将 Python 与 R 生态中的 60+ 种方法整合为统一的对话式接口。"
+
+#: ../../advanced/faq.md:13
+msgid "What is MCP?"
+msgstr "什么是 MCP？"
+
+#: ../../advanced/faq.md:15
+msgid ""
+"MCP (Model Context Protocol) is an open standard that enables secure "
+"connections between AI applications and external tools. ChatSpatial uses MCP "
+"to allow LLMs like Claude to perform spatial analysis through natural "
+"language."
+msgstr ""
+"MCP（Model Context Protocol）是一项开放标准，用于在 AI 应用与外部工具之间建立安全连接。ChatSpatial 使用 MCP，让 Claude 等 LLM 可以通过自然语言执行空间分析。"
+
+#: ../../advanced/faq.md:17
+msgid "What data formats does ChatSpatial support?"
+msgstr "ChatSpatial 支持哪些数据格式？"
+
+#: ../../advanced/faq.md:19
+msgid "H5AD (AnnData format)"
+msgstr "H5AD（AnnData 格式）"
+
+#: ../../advanced/faq.md:20
+msgid "10X Visium spatial folders"
+msgstr "10X Visium 空间数据文件夹"
+
+#: ../../advanced/faq.md:21
+msgid "H5 files from 10X Genomics"
+msgstr "10X Genomics 的 H5 文件"
+
+#: ../../advanced/faq.md:22
+msgid "MTX matrix files"
+msgstr "MTX 矩阵文件"
+
+#: ../../advanced/faq.md:23
+msgid "Slide-seq, MERFISH, and other spatial formats"
+msgstr "Slide-seq、MERFISH 以及其他空间数据格式"
+
+#: ../../advanced/faq.md:25
+msgid "Do I need programming experience?"
+msgstr "需要编程经验吗？"
+
+#: ../../advanced/faq.md:27
+msgid ""
+"No! ChatSpatial is designed for natural language conversation. However, "
+"understanding basic spatial transcriptomics concepts is helpful."
+msgstr "不需要！ChatSpatial 旨在通过自然语言对话使用。不过，了解一些基础的空间转录组概念会更有帮助。"
+
+#: ../../advanced/faq.md:31
+msgid "Installation and Setup"
+msgstr "安装与设置"
+
+#: ../../advanced/faq.md:33
+msgid "What Python version do I need?"
+msgstr "需要什么版本的 Python？"
+
+#: ../../advanced/faq.md:35
+msgid "Python 3.11 or higher (3.12 recommended, 3.13 supported)."
+msgstr "Python 3.11 或更高版本（推荐 3.12，支持 3.13）。"
+
+#: ../../advanced/faq.md:37
+msgid "Should I use a virtual environment?"
+msgstr "应该使用虚拟环境吗？"
+
+#: ../../advanced/faq.md:39
+msgid ""
+"Yes, strongly recommended! Virtual environments prevent dependency conflicts."
+msgstr "是的，强烈推荐！虚拟环境可以避免依赖冲突。"
+
+#: ../../advanced/faq.md:41
+msgid "How do I configure ChatSpatial?"
+msgstr "如何配置 ChatSpatial？"
+
+#: ../../advanced/faq.md:43
+msgid ""
+"See our [Configuration Guide](configuration.md) for MCP client setup "
+"instructions."
+msgstr "请参阅[配置指南](configuration.md)获取 MCP 客户端设置说明。"
+
+#: ../../advanced/faq.md:45
+msgid "Can I use ChatSpatial without Claude?"
+msgstr "不用 Claude 也能用 ChatSpatial 吗？"
+
+#: ../../advanced/faq.md:47
+msgid "Yes! ChatSpatial works with any MCP-compatible client."
+msgstr "可以！ChatSpatial 适用于任何兼容 MCP 的客户端。"
+
+#: ../../advanced/faq.md:51
+msgid "Analysis Questions"
+msgstr "分析相关问题"
+
+#: ../../advanced/faq.md:53
+msgid "How do I choose the right method?"
+msgstr "如何选择合适的方法？"
+
+#: ../../advanced/faq.md:55
+msgid ""
+"See our [Concepts Guide](../concepts.md) for detailed method comparisons. "
+"Quick summary:"
+msgstr "请参阅[概念指南](../concepts.md)了解详细的方法对比。简要总结如下："
+
+#: ../../advanced/faq.md:57
+msgid "**Cell Type Annotation:**"
+msgstr "**细胞类型注释：**"
+
+#: ../../advanced/faq.md:0
+msgid "Situation"
+msgstr "场景"
+
+#: ../../advanced/faq.md:0
+msgid "Recommended Method"
+msgstr "推荐方法"
+
+#: ../../advanced/faq.md:0
+msgid "Have reference scRNA-seq"
+msgstr "有参考 scRNA-seq 数据"
+
+#: ../../advanced/faq.md:0
+msgid "Tangram or scANVI"
+msgstr "Tangram 或 scANVI"
+
+#: ../../advanced/faq.md:0
+msgid "Have marker gene list"
+msgstr "有 marker 基因列表"
+
+#: ../../advanced/faq.md:0
+msgid "CellAssign"
+msgstr ""
+
+#: ../../advanced/faq.md:0
+msgid "Want automatic annotation"
+msgstr "想要自动注释"
+
+#: ../../advanced/faq.md:0
+msgid "mLLMCelltype"
+msgstr ""
+
+#: ../../advanced/faq.md:64
+msgid "**Spatial Domains:**"
+msgstr "**空间区域（Spatial Domains）：**"
+
+#: ../../advanced/faq.md:0
+msgid "Visium with H&E image"
+msgstr "Visium + H&E 图像"
+
+#: ../../advanced/faq.md:0
+msgid "SpaGCN"
+msgstr ""
+
+#: ../../advanced/faq.md:0
+msgid "High-resolution, no image"
+msgstr "高分辨率、无图像"
+
+#: ../../advanced/faq.md:0
+msgid "STAGATE or GraphST"
+msgstr "STAGATE 或 GraphST"
+
+#: ../../advanced/faq.md:0
+msgid "Quick exploration"
+msgstr "快速探索"
+
+#: ../../advanced/faq.md:0
+msgid "Leiden"
+msgstr ""
+
+#: ../../advanced/faq.md:71
+msgid "**Deconvolution:**"
+msgstr "**去卷积：**"
+
+#: ../../advanced/faq.md:0
+msgid "FlashDeconv (fast)"
+msgstr "FlashDeconv（快）"
+
+#: ../../advanced/faq.md:0
+msgid "Publication quality"
+msgstr "发表级质量"
+
+#: ../../advanced/faq.md:0
+msgid "Cell2location (accurate)"
+msgstr "Cell2location（准确）"
+
+#: ../../advanced/faq.md:0
+msgid "R environment"
+msgstr "R 环境"
+
+#: ../../advanced/faq.md:0
+msgid "RCTD"
+msgstr ""
+
+#: ../../advanced/faq.md:78
+msgid "Why does my analysis take so long?"
+msgstr "为什么分析会这么慢？"
+
+#: ../../advanced/faq.md:80
+msgid "Large datasets and complex methods can be time-consuming. Tips:"
+msgstr "大数据集与复杂方法会更耗时。建议："
+
+#: ../../advanced/faq.md:81
+msgid "Use GPU acceleration when available (Cell2location, scVI)"
+msgstr "可用时使用 GPU 加速（Cell2location、scVI）"
+
+#: ../../advanced/faq.md:82
+msgid "Reduce dataset size for initial testing"
+msgstr "初次测试时先缩小数据规模"
+
+#: ../../advanced/faq.md:83
+msgid "Use faster methods for exploratory analysis"
+msgstr "探索阶段优先使用更快的方法"
+
+#: ../../advanced/faq.md:84
+msgid "Check system resources (RAM, CPU)"
+msgstr "检查系统资源（RAM、CPU）"
+
+#: ../../advanced/faq.md:86
+msgid "How much memory do I need?"
+msgstr "需要多少内存？"
+
+#: ../../advanced/faq.md:88
+msgid "Depends on dataset size:"
+msgstr "取决于数据集大小："
+
+#: ../../advanced/faq.md:89
+msgid "Small (<5000 cells): 8GB RAM sufficient"
+msgstr "小型（<5000 cells）：8GB 内存即可"
+
+#: ../../advanced/faq.md:90
+msgid "Medium (5000-50000 cells): 16GB RAM recommended"
+msgstr "中型（5000–50000 cells）：建议 16GB 内存"
+
+#: ../../advanced/faq.md:91
+msgid "Large (>50000 cells): 32GB+ RAM needed"
+msgstr "大型（>50000 cells）：需要 32GB+ 内存"
+
+#: ../../advanced/faq.md:95
+msgid "Advanced Topics"
+msgstr "高级话题"
+
+#: ../../advanced/faq.md:97
+msgid "Can I use ChatSpatial in research publications?"
+msgstr "可以在科研论文中使用 ChatSpatial 吗？"
+
+#: ../../advanced/faq.md:99
+msgid ""
+"Yes! ChatSpatial is open-source under MIT license. Please cite our paper if "
+"you use it in published research."
+msgstr "可以！ChatSpatial 在 MIT 许可证下开源。如果你在发表研究中使用，请引用我们的论文。"
+
+#: ../../advanced/faq.md:101
+msgid "How do I contribute?"
+msgstr "如何参与贡献？"
+
+#: ../../advanced/faq.md:103
+msgid ""
+"See our [Contributing Guide](https://github.com/cafferychen777/ChatSpatial/"
+"blob/main/CONTRIBUTING.md)."
+msgstr "请参阅[贡献指南](https://github.com/cafferychen777/ChatSpatial/blob/main/CONTRIBUTING.md)。"
+
+#: ../../advanced/faq.md:105
+msgid "Can I add my own analysis methods?"
+msgstr "可以添加自己的分析方法吗？"
+
+#: ../../advanced/faq.md:107
+msgid ""
+"Yes! ChatSpatial's modular architecture makes it easy to add new tools. See "
+"developer documentation."
+msgstr "可以！ChatSpatial 的模块化架构便于添加新工具。请参阅开发者文档。"
+
+#: ../../advanced/faq.md:109
+msgid "Is GPU acceleration supported?"
+msgstr "支持 GPU 加速吗？"
+
+#: ../../advanced/faq.md:111
+msgid ""
+"Yes, for many methods including Cell2location, scANVI, STAGATE, and VeloVI. "
+"Set `use_gpu=True` in parameters to enable."
+msgstr "支持，许多方法（Cell2location、scANVI、STAGATE、VeloVI 等）都可以。将参数中的 `use_gpu=True` 即可启用。"
+
+#: ../../advanced/faq.md:113
+msgid ""
+"See [Methods Reference](methods-reference.md) for the full list of GPU-"
+"accelerated methods."
+msgstr "详见[方法参考](methods-reference.md)中的 GPU 加速方法列表。"
+
+#: ../../advanced/faq.md:117
+msgid "Data and Privacy"
+msgstr "数据与隐私"
+
+#: ../../advanced/faq.md:119
+msgid "Is my data sent to external servers?"
+msgstr "我的数据会发送到外部服务器吗？"
+
+#: ../../advanced/faq.md:121
+msgid ""
+"No. ChatSpatial runs locally. Your data never leaves your computer. Only "
+"natural language commands are sent to the LLM for interpretation."
+msgstr "不会。ChatSpatial 在本地运行，你的数据不会离开你的电脑。只有自然语言指令会发送给 LLM 用于解析。"
+
+#: ../../advanced/faq.md:123
+msgid "Can I use ChatSpatial offline?"
+msgstr "可以离线使用 ChatSpatial 吗？"
+
+#: ../../advanced/faq.md:125
+msgid ""
+"Analysis tools work offline, but you need internet to communicate with the "
+"LLM (Claude) for command interpretation."
+msgstr "分析工具可离线运行，但要与 LLM（Claude）通信解析指令仍需要联网。"
+
+#: ../../advanced/faq.md:127
+msgid "How is my data stored?"
+msgstr "数据如何存储？"
+
+#: ../../advanced/faq.md:129
+msgid ""
+"Data is stored in standard H5AD format. You control save locations through "
+"the `CHATSPATIAL_DATA_DIR` environment variable."
+msgstr "数据以标准 H5AD 格式存储。你可以通过 `CHATSPATIAL_DATA_DIR` 环境变量控制保存位置。"
+
+#: ../../advanced/faq.md:133
+msgid "Still Have Questions?"
+msgstr "还有问题？"
+
+#: ../../advanced/faq.md:135
+msgid "Check the [Quick Start](../quickstart.md)"
+msgstr "查看[快速开始](../quickstart.md)"
+
+#: ../../advanced/faq.md:136
+msgid "Read the [Methods Reference](methods-reference.md)"
+msgstr "阅读[方法参考](methods-reference.md)"
+
+#: ../../advanced/faq.md:137
+msgid ""
+"Browse [GitHub Discussions](https://github.com/cafferychen777/ChatSpatial/"
+"discussions)"
+msgstr "浏览[GitHub Discussions](https://github.com/cafferychen777/ChatSpatial/discussions)"
+
+#: ../../advanced/faq.md:138
+msgid ""
+"[Report issues on GitHub](https://github.com/cafferychen777/ChatSpatial/"
+"issues)"
+msgstr "[在 GitHub 提交问题](https://github.com/cafferychen777/ChatSpatial/issues)"

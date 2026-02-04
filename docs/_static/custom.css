@@ -137,6 +137,42 @@ table.docutils tr:hover td {
 }
 
 /* ============================================
+   Language Switcher
+   ============================================ */
+
+.language-switcher {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-background-border);
+    background: var(--color-background-secondary);
+    font-size: 0.85rem;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+.language-switcher__current {
+    font-weight: 600;
+    color: var(--color-foreground-primary);
+}
+
+.language-switcher__sep {
+    opacity: 0.6;
+}
+
+.language-switcher__link {
+    color: var(--color-foreground-primary);
+}
+
+/* Tighter spacing in the mobile header */
+.mobile-header .language-switcher {
+    padding: 0.1rem 0.35rem;
+    font-size: 0.8rem;
+}
+
+/* ============================================
    Admonitions (Notes, Warnings, etc.)
    ============================================ */
 
