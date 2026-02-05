@@ -95,14 +95,12 @@ def deconvolve(
             ro.globalenv["gene_names_spatial"] = ro.StrVector(spatial_data.var_names)
             ro.globalenv["spot_names"] = ro.StrVector(spatial_data.obs_names)
 
-            ro.r(
-                """
+            ro.r("""
                 rownames(sc_count) <- gene_names_ref
                 colnames(sc_count) <- cell_names
                 rownames(spatial_count) <- gene_names_spatial
                 colnames(spatial_count) <- spot_names
-            """
-            )
+            """)
 
         # Transfer metadata
         with localconverter(ro.default_converter + pandas2ri.converter):
@@ -112,8 +110,7 @@ def deconvolve(
             ro.globalenv["minCountSpot"] = minCountSpot
 
         # Create CARD object and run deconvolution
-        ro.r(
-            """
+        ro.r("""
             capture.output(
                 CARD_obj <- createCARDObject(
                     sc_count = sc_count,
@@ -132,8 +129,7 @@ def deconvolve(
                 CARD_obj <- CARD_deconvolution(CARD_object = CARD_obj),
                 file = "/dev/null"
             )
-        """
-        )
+        """)
 
         # Extract results
         with localconverter(
@@ -153,8 +149,7 @@ def deconvolve(
         imputed_coordinates = None
 
         if imputation:
-            ro.r(
-                f"""
+            ro.r(f"""
                 capture.output(
                     CARD_impute <- CARD.imputation(
                         CARD_object = CARD_obj,
@@ -163,8 +158,7 @@ def deconvolve(
                     ),
                     file = "/dev/null"
                 )
-            """
-            )
+            """)
 
             with localconverter(ro.default_converter + pandas2ri.converter):
                 imputed_row_names = list(ro.r("rownames(CARD_impute@refined_prop)"))
@@ -225,13 +219,11 @@ def deconvolve(
         if imputation:
             cleanup_vars.append("CARD_impute")
 
-        ro.r(
-            f"""
+        ro.r(f"""
             rm(list = c({', '.join(f'"{v}"' for v in cleanup_vars)}),
                envir = .GlobalEnv)
             gc()
-        """
-        )
+        """)
 
         return proportions, stats
 
