@@ -5,8 +5,8 @@ on:
   push:
     branches: ["main"]
     paths:
-      - 'docs/**'
-      - '.github/workflows/pages.yml'
+      - 'code/docs/**'
+      - 'code/.github/workflows/pages.yml'
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -37,12 +37,12 @@ jobs:
         with:
           python-version: '3.12'
           cache: 'pip'
-          cache-dependency-path: 'docs/requirements.txt'
+          cache-dependency-path: 'code/docs/requirements.txt'
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install -r docs/requirements.txt
+          pip install -r code/docs/requirements.txt
 
       - name: Setup Pages
         id: pages
@@ -50,18 +50,23 @@ jobs:
 
       - name: Build with Sphinx
         run: |
-          cd docs
-          sphinx-build -b html . _build/html
+          cd code/docs
+          # English (default) at site root
+          sphinx-build -b html -d _build/doctrees/en -t en . _build/html
+
+          # Chinese at /zh/
+          sphinx-build -b html -d _build/doctrees/zh -t zh -D language=zh_CN . _build/html/zh
 
       - name: Test built site
         run: |
-          test -f docs/_build/html/index.html || (echo "Site build failed - index.html not found" && exit 1)
+          test -f code/docs/_build/html/index.html || (echo "Site build failed - index.html not found" && exit 1)
+          test -f code/docs/_build/html/zh/index.html || (echo "ZH site build failed - zh/index.html not found" && exit 1)
           echo "Site built successfully"
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: "docs/_build/html/"
+          path: "code/docs/_build/html/"
 
   # Deployment job
   deploy:
