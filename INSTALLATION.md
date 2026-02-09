@@ -27,15 +27,24 @@ pip install chatspatial[full]
 
 ## Step 3: Configure MCP Client
 
+ChatSpatial works with **any MCP-compatible client** — not limited to Claude/Anthropic.
+
 ```bash
 # Get your Python path
 which python  # e.g., /Users/you/venv/bin/python
 
-# Add to Claude Code (recommended)
+# Claude Code
 claude mcp add chatspatial /path/to/venv/bin/python -- -m chatspatial server
+
+# OpenCode (supports Qwen, DeepSeek, Doubao, etc.)
+# See: https://github.com/opencode-ai/opencode
+opencode mcp add
+
+# Codex
+codex mcp add chatspatial -- /path/to/venv/bin/python -m chatspatial server
 ```
 
-**Other clients:** See [Configuration Guide](docs/advanced/configuration.md) for Codex, Claude Desktop, and advanced options.
+**Other clients:** See [Configuration Guide](docs/advanced/configuration.md) for Claude Desktop, OpenCode with custom LLMs, and advanced options.
 
 ## Step 4: Verify
 

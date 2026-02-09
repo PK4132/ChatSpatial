@@ -63,6 +63,8 @@ pip install chatspatial
 claude mcp add chatspatial /path/to/venv/bin/python -- -m chatspatial server
 ```
 
+> **Works with any MCP-compatible client** — not just Claude. Use with [OpenCode](https://opencode.ai/), Codex, or any client supporting [Model Context Protocol](https://modelcontextprotocol.io/). Configure your preferred LLM (Qwen, DeepSeek, Doubao, etc.) as the backend.
+
 See [Installation Guide](INSTALLATION.md) for detailed setup including virtual environments and all MCP clients.
 
 ---

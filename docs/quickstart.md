@@ -6,7 +6,7 @@ First time? Complete [Installation](https://github.com/cafferychen777/ChatSpatia
 
 ## Your First Analysis
 
-Open Claude and type:
+Open your MCP client (Claude, OpenCode, Codex, etc.) and type:
 
 ```
 Load /path/to/spatial_data.h5ad and show the tissue structure
@@ -65,7 +65,7 @@ Preprocessing complete
 
 | Issue | Fix |
 |-------|-----|
-| Tools not showing | Restart Claude |
+| Tools not showing | Restart your MCP client |
 | "Dataset not found" | Use absolute path: `/Users/you/data.h5ad` |
 | Analysis fails | Run preprocessing first |
 

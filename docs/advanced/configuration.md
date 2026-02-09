@@ -159,14 +159,24 @@ Edit Claude Desktop configuration file:
 
 ---
 
-### Other MCP Clients
+### Other MCP Clients (Qwen, DeepSeek, Doubao, etc.)
 
-For other MCP-compatible clients:
+ChatSpatial is an MCP server that works with **any MCP-compatible client** — not limited to Claude/Anthropic.
+
+**Using OpenCode with other LLMs:**
+
+[OpenCode](https://opencode.ai/) supports multiple LLM providers. You can use ChatSpatial with Qwen, DeepSeek, Doubao, or any other supported model:
+
+1. Install OpenCode and configure your preferred LLM as the backend
+2. Add ChatSpatial as an MCP server (see OpenCode section above)
+3. Start analyzing with your chosen LLM
+
+**For any MCP-compatible client:**
 
 1. **Find Python path:** Activate virtual environment and run `which python`
-2. **Use in configuration:** Replace `"python"` with the full path
+2. **Configure MCP server:** Use command `/path/to/venv/bin/python -m chatspatial server`
 
-ChatSpatial follows the standard MCP protocol and works with any MCP-compatible client.
+The key requirement is **MCP support**, not a specific LLM provider.
 
 ---
 

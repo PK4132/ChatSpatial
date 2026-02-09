@@ -2,6 +2,12 @@
 _build/
 _autosummary/
 
+# Large binary files (keep PNG, exclude PDF)
+*.pdf
+
+# Compiled translation catalogs (generated during builds)
+locale/**/LC_MESSAGES/*.mo
+
 # Sphinx generated files
 .doctrees/
 .buildinfo
