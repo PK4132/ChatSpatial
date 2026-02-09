@@ -175,9 +175,13 @@ async def identify_spatial_domains(
             domain_labels, embeddings_key, statistics = await _identify_domains_graphst(
                 adata_subset, params, ctx
             )
+        elif params.method == "banksy":
+            domain_labels, embeddings_key, statistics = await _identify_domains_banksy(
+                adata_subset, params, ctx
+            )
         else:
             raise ParameterError(
-                f"Unsupported method: {params.method}. Available methods: spagcn, leiden, louvain, stagate, graphst"
+                f"Unsupported method: {params.method}. Available methods: spagcn, leiden, louvain, stagate, graphst, banksy"
             )
 
         # Store domain labels in original adata
@@ -827,3 +831,138 @@ async def _identify_domains_graphst(
         ) from e
     except Exception as e:
         raise ProcessingError(f"GraphST execution failed: {e}") from e
+
+
+async def _identify_domains_banksy(
+    adata: Any, params: SpatialDomainParameters, ctx: "ToolContext"
+) -> tuple:
+    """
+    Identifies spatial domains using the BANKSY algorithm.
+
+    BANKSY (Building Aggregates with a Neighborhood Kernel and Spatial Yardstick)
+    augments gene expression with spatial neighborhood information through:
+    1. Neighbor-averaged expression (NBR)
+    2. Azimuthal Gabor Filters (AGF) for directional gradients
+
+    Unlike deep learning methods, BANKSY uses explicit mathematical feature
+    construction, making it more interpretable and reproducible. This method
+    requires the `pybanksy` package.
+    """
+    require("banksy", ctx, feature="BANKSY spatial domain identification")
+    import asyncio
+    import concurrent.futures
+
+    from banksy.embed_banksy import generate_banksy_matrix
+    from banksy.initialize_banksy import initialize_banksy
+
+    try:
+        # Prepare data copy for BANKSY
+        adata_banksy = adata.copy()
+
+        # Validate and normalize spatial coordinates
+        # BANKSY expects coordinates in adata.obsm["spatial"]
+        spatial_key = get_spatial_key(adata_banksy)
+        if spatial_key is None:
+            raise ProcessingError(
+                "No spatial coordinates found. Expected in obsm['spatial'], "
+                "obsm['X_spatial'], or obsm['coordinates']."
+            )
+
+        # Copy coordinates to "spatial" if stored under a different key
+        if spatial_key != "spatial":
+            adata_banksy.obsm["spatial"] = adata_banksy.obsm[spatial_key]
+
+        # BANKSY coord_keys format: (x_col, y_col, obsm_key)
+        # x_col/y_col only used for plotting (disabled), obsm_key is the actual key
+        coord_keys = ("x", "y", "spatial")
+
+        # Run BANKSY in thread pool to avoid blocking
+        loop = asyncio.get_running_loop()
+        timeout_seconds = params.timeout or 600
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            # Step 1: Initialize BANKSY (compute spatial graphs)
+            def init_banksy():
+                return initialize_banksy(
+                    adata_banksy,
+                    coord_keys=coord_keys,
+                    num_neighbours=params.banksy_num_neighbours,
+                    max_m=params.banksy_max_m,
+                    plt_edge_hist=False,
+                    plt_nbr_weights=False,
+                    plt_theta=False,
+                )
+
+            banksy_dict = await asyncio.wait_for(
+                loop.run_in_executor(executor, init_banksy),
+                timeout=timeout_seconds,
+            )
+
+            # Step 2: Generate BANKSY matrix (feature augmentation)
+            def gen_matrix():
+                return generate_banksy_matrix(
+                    adata_banksy,
+                    banksy_dict,
+                    lambda_list=[params.banksy_lambda],
+                    max_m=params.banksy_max_m,
+                    verbose=False,
+                )
+
+            _, banksy_matrix = await asyncio.wait_for(
+                loop.run_in_executor(executor, gen_matrix),
+                timeout=timeout_seconds,
+            )
+
+            # Step 3: PCA on BANKSY matrix
+            def run_clustering():
+                sc.pp.pca(banksy_matrix, n_comps=params.banksy_pca_dims)
+                sc.pp.neighbors(
+                    banksy_matrix,
+                    use_rep="X_pca",
+                    n_neighbors=params.banksy_num_neighbours,
+                )
+                sc.tl.leiden(
+                    banksy_matrix,
+                    resolution=params.banksy_cluster_resolution,
+                    key_added="banksy_cluster",
+                )
+                return banksy_matrix
+
+            banksy_matrix = await asyncio.wait_for(
+                loop.run_in_executor(executor, run_clustering),
+                timeout=timeout_seconds,
+            )
+
+        # Extract domain labels
+        domain_labels = banksy_matrix.obs["banksy_cluster"].astype(str)
+
+        # Store BANKSY embeddings (PCA of augmented matrix)
+        embeddings_key = "X_banksy_pca"
+        adata.obsm[embeddings_key] = banksy_matrix.obsm["X_pca"]
+
+        # Compute statistics
+        n_clusters = len(domain_labels.unique())
+        original_features = adata.n_vars
+        banksy_features = banksy_matrix.n_vars
+
+        statistics = {
+            "method": "banksy",
+            "n_clusters": n_clusters,
+            "lambda": params.banksy_lambda,
+            "num_neighbours": params.banksy_num_neighbours,
+            "max_m": params.banksy_max_m,
+            "pca_dims": params.banksy_pca_dims,
+            "resolution": params.banksy_cluster_resolution,
+            "original_features": original_features,
+            "banksy_features": banksy_features,
+            "feature_expansion": f"{banksy_features / original_features:.1f}x",
+        }
+
+        return domain_labels, embeddings_key, statistics
+
+    except asyncio.TimeoutError as e:
+        raise ProcessingError(
+            f"BANKSY timeout after {params.timeout or 600} seconds"
+        ) from e
+    except Exception as e:
+        raise ProcessingError(f"BANKSY execution failed: {e}") from e

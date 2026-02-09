@@ -339,7 +339,8 @@ def patch_scipy_sparse_matrix_A() -> None:
     )
 
     # Define the .A property as an alias to .toarray()
-    def _toarray_property(self):  # type: ignore[no-untyped-def]
+    def _toarray_property(self: Any) -> Any:
+        """Return dense matrix representation (alias for .toarray())."""
         return self.toarray()
 
     # Patch all sparse matrix classes that previously had .A

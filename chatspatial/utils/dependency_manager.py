@@ -77,6 +77,11 @@ DEPENDENCY_REGISTRY: dict[str, DependencyInfo] = {
         "pip install GraphST",
         "Graph self-supervised contrastive learning for spatial domains",
     ),
+    "banksy": DependencyInfo(
+        "banksy",
+        "pip install pybanksy",
+        "Spatial domain identification using neighborhood feature augmentation",
+    ),
     "paste": DependencyInfo(
         "paste",
         "pip install paste-bio",

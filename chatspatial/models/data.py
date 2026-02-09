@@ -1267,9 +1267,11 @@ class DeconvolutionParameters(BaseModel):
 class SpatialDomainParameters(BaseModel):
     """Spatial domain identification parameters model"""
 
-    method: Literal["spagcn", "leiden", "louvain", "stagate", "graphst"] = Field(
-        default="spagcn",
-        description="'spagcn' uses histology image. 'stagate'/'graphst' for data without images.",
+    method: Literal["spagcn", "leiden", "louvain", "stagate", "graphst", "banksy"] = (
+        Field(
+            default="spagcn",
+            description="'spagcn' uses histology. 'banksy' uses spatial feature augmentation. 'stagate'/'graphst' use deep learning.",
+        )
     )
     n_domains: int = Field(
         default=7, gt=0, le=50, description="Number of spatial domains to identify."
@@ -1329,6 +1331,29 @@ class SpatialDomainParameters(BaseModel):
     graphst_random_seed: int = 42  # Random seed for GraphST
     graphst_n_clusters: Optional[int] = (
         None  # Number of clusters (if None, uses n_domains)
+    )
+
+    # BANKSY specific parameters
+    banksy_lambda: float = Field(
+        default=0.2,
+        ge=0.0,
+        le=1.0,
+        description="Spatial weight in BANKSY (0=expression only, 1=neighbors only).",
+    )
+    banksy_num_neighbours: int = Field(
+        default=15, gt=0, le=100, description="Number of neighbors for BANKSY."
+    )
+    banksy_max_m: int = Field(
+        default=1,
+        ge=0,
+        le=2,
+        description="Max azimuthal Gabor filter order (0=NBR only, 1=NBR+AGF).",
+    )
+    banksy_pca_dims: int = Field(
+        default=20, gt=0, le=100, description="PCA dimensions for BANKSY clustering."
+    )
+    banksy_cluster_resolution: float = Field(
+        default=0.5, gt=0.0, description="Leiden resolution for BANKSY clustering."
     )
 
     # Simple timeout configuration
