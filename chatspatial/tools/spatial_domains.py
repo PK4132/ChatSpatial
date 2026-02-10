@@ -73,46 +73,45 @@ async def identify_spatial_domains(
         if spatial_key is None:
             raise DataNotFoundError("No spatial coordinates found in the dataset")
 
-        # Prepare data for domain identification
-        # Use highly variable genes if requested and available
-        if params.use_highly_variable and "highly_variable" in adata.var.columns:
-            adata_subset = adata[:, adata.var["highly_variable"]].copy()
-        else:
-            adata_subset = adata.copy()
+        # =================================================================
+        # MEMORY OPTIMIZATION: Create working copy exactly once
+        # =================================================================
+        # Strategy:
+        # 1. Determine gene subset (HVG mask) BEFORE copying
+        # 2. Check data quality on original (no copy needed for read-only checks)
+        # 3. Create single working copy with final gene selection
+        # 4. Pass to methods WITHOUT additional copying (they receive independent data)
+        # =================================================================
 
-        # Check if data has been scaled (z-score normalized)
-        # Scaled data typically has negative values and is centered around 0
         from scipy.sparse import issparse
 
-        # Validate data preprocessing state
-        data_min = (
-            adata_subset.X.min()
-            if not issparse(adata_subset.X)
-            else adata_subset.X.data.min()
-        )
-        data_max = (
-            adata_subset.X.max()
-            if not issparse(adata_subset.X)
-            else adata_subset.X.data.max()
-        )
+        # Step 1: Determine gene subset (no copy yet)
+        use_hvg = params.use_highly_variable and "highly_variable" in adata.var.columns
+        hvg_mask = adata.var["highly_variable"] if use_hvg else None
 
-        # Check data preprocessing state
+        # Step 2: Check data quality on original adata (read-only)
+        # Sample a small portion for efficiency
+        sample_X = adata.X[:100, :100] if adata.shape[0] > 100 else adata.X
+        if issparse(sample_X):
+            data_min = sample_X.data.min() if sample_X.data.size > 0 else 0
+            data_max = sample_X.data.max() if sample_X.data.size > 0 else 0
+        else:
+            data_min = float(sample_X.min())
+            data_max = float(sample_X.max())
+
         has_negatives = data_min < 0
         has_large_values = data_max > 100
+        use_raw = False
 
-        # Provide informative warnings without enforcing
         if has_negatives:
             await ctx.warning(
                 f"Data contains negative values (min={data_min:.2f}). "
                 "This might indicate scaled/z-scored data. "
                 "SpaGCN typically works best with normalized, log-transformed data."
             )
-
-            # Use raw data if available for better results
-            # adata.raw stores original unscaled data (after normalization but before scaling)
+            # Will use raw data if available
             if adata.raw is not None:
-                gene_mask = adata.raw.var_names.isin(adata_subset.var_names)
-                adata_subset = adata.raw[:, gene_mask].to_adata()
+                use_raw = True
 
         elif has_large_values:
             await ctx.warning(
@@ -121,18 +120,33 @@ async def identify_spatial_domains(
                 "Consider normalizing and log-transforming for better results."
             )
 
-        # Ensure data is float type for SpaGCN compatibility
+        # Step 3: Create working copy EXACTLY ONCE with final gene selection
+        if use_raw:
+            # Use raw data (unscaled), subset to HVG if requested
+            if hvg_mask is not None:
+                # Get genes that are both HVG and in raw
+                hvg_genes = adata.var_names[hvg_mask]
+                raw_gene_mask = adata.raw.var_names.isin(hvg_genes)
+                adata_subset = adata.raw[:, raw_gene_mask].to_adata()
+            else:
+                adata_subset = adata.raw.to_adata()
+        elif hvg_mask is not None:
+            # Use current X with HVG subset
+            adata_subset = adata[:, hvg_mask].copy()
+        else:
+            # Use full data
+            adata_subset = adata.copy()
+
+        # Step 4: In-place data cleaning (no additional copy)
+        # Ensure float type for algorithm compatibility
         if adata_subset.X.dtype != np.float32 and adata_subset.X.dtype != np.float64:
             adata_subset.X = adata_subset.X.astype(np.float32)
 
-        # Check for problematic values that can cause SpaGCN to hang
-        # Handle both dense and sparse matrices
-        from scipy.sparse import issparse
-
+        # Handle NaN/Inf values in-place
         if issparse(adata_subset.X):
-            # For sparse matrices, check the data attribute
-            if np.any(np.isnan(adata_subset.X.data)) or np.any(
-                np.isinf(adata_subset.X.data)
+            if adata_subset.X.data.size > 0 and (
+                np.any(np.isnan(adata_subset.X.data))
+                or np.any(np.isinf(adata_subset.X.data))
             ):
                 await ctx.warning(
                     "Found NaN or infinite values in sparse data, replacing with 0"
@@ -141,7 +155,6 @@ async def identify_spatial_domains(
                     adata_subset.X.data, nan=0.0, posinf=0.0, neginf=0.0
                 )
         else:
-            # For dense matrices
             if np.any(np.isnan(adata_subset.X)) or np.any(np.isinf(adata_subset.X)):
                 await ctx.warning(
                     "Found NaN or infinite values in data, replacing with 0"
@@ -150,13 +163,8 @@ async def identify_spatial_domains(
                     adata_subset.X, nan=0.0, posinf=0.0, neginf=0.0
                 )
 
-        # Use pre-selected highly variable genes if available
-        if "highly_variable" in adata_subset.var.columns:
-            hvg_count = adata_subset.var["highly_variable"].sum()
-            if hvg_count > 0:
-                adata_subset = adata_subset[
-                    :, adata_subset.var["highly_variable"]
-                ].copy()
+        # NOTE: Removed redundant HVG check (lines 154-159 in original)
+        # HVG selection is now handled above in Step 3, avoiding duplicate copy
 
         # Identify domains based on method
         if params.method == "spagcn":
@@ -618,8 +626,9 @@ async def _identify_domains_stagate(
     import torch
 
     try:
-        # STAGATE_pyG works with preprocessed data
-        adata_stagate = adata.copy()
+        # MEMORY OPTIMIZATION: adata is already a working copy (adata_subset from caller)
+        # No need to copy again - methods receive independent data that can be modified
+        adata_stagate = adata
 
         # Calculate spatial graph
         # STAGATE_pyG uses smaller default radius (50 instead of 150)
@@ -755,8 +764,9 @@ async def _identify_domains_graphst(
     from GraphST.utils import clustering as graphst_clustering
 
     try:
-        # GraphST works with preprocessed data
-        adata_graphst = adata.copy()
+        # MEMORY OPTIMIZATION: adata is already a working copy (adata_subset from caller)
+        # No need to copy again - methods receive independent data that can be modified
+        adata_graphst = adata
 
         # Set device (support CUDA, MPS, and CPU)
         device_str = await resolve_device_async(
@@ -856,8 +866,9 @@ async def _identify_domains_banksy(
     from banksy.initialize_banksy import initialize_banksy
 
     try:
-        # Prepare data copy for BANKSY
-        adata_banksy = adata.copy()
+        # MEMORY OPTIMIZATION: adata is already a working copy (adata_subset from caller)
+        # No need to copy again - methods receive independent data that can be modified
+        adata_banksy = adata
 
         # Validate and normalize spatial coordinates
         # BANKSY expects coordinates in adata.obsm["spatial"]

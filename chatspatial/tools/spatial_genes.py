@@ -18,8 +18,6 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from ..spatial_mcp_adapter import ToolContext
 
-from collections import Counter
-
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
@@ -29,6 +27,7 @@ from ..models.data import SpatialVariableGenesParameters  # noqa: E402
 from ..utils import validate_var_column  # noqa: E402
 from ..utils.adata_utils import (  # noqa: E402
     get_raw_data_source,
+    make_unique_names,
     require_spatial_coords,
     to_dense,
 )
@@ -46,36 +45,8 @@ from ..utils.mcp_utils import suppress_output  # noqa: E402
 DEFAULT_TOP_GENES_LIMIT = 500
 
 
-def _ensure_unique_gene_names(gene_names: list[str]) -> list[str]:
-    """Ensure gene names are unique by adding suffixes to duplicates.
-
-    Required for R-based methods (SPARK-X) that use gene names as rownames.
-
-    Args:
-        gene_names: List of gene names (may contain duplicates)
-
-    Returns:
-        List of unique gene names with suffixes added to duplicates
-    """
-    if len(gene_names) == len(set(gene_names)):
-        return gene_names
-
-    gene_counts = Counter(gene_names)
-    unique_names = []
-    seen_counts: dict[str, int] = {}
-
-    for gene in gene_names:
-        if gene_counts[gene] > 1:
-            if gene not in seen_counts:
-                seen_counts[gene] = 0
-                unique_names.append(gene)
-            else:
-                seen_counts[gene] += 1
-                unique_names.append(f"{gene}_{seen_counts[gene]}")
-        else:
-            unique_names.append(gene)
-
-    return unique_names
+# Gene name deduplication is handled by make_unique_names from adata_utils
+# (single source of truth for name deduplication across the codebase)
 
 
 def _calculate_sparse_gene_stats(X) -> tuple[np.ndarray, np.ndarray]:
@@ -488,7 +459,8 @@ async def _identify_spatial_genes_sparkx(
     n_genes = len(gene_names)
 
     # Ensure gene names are unique (required for SPARK-X R rownames)
-    gene_names = _ensure_unique_gene_names(gene_names)
+    # Uses make_unique_names from adata_utils (single source of truth)
+    gene_names = make_unique_names(gene_names)
 
     # ==================== Gene Filtering Pipeline (ON SPARSE MATRIX) ====================
     # Following SPARK-X paper best practices + 2024 literature recommendations

@@ -935,6 +935,51 @@ def select_genes_for_analysis(
 # =============================================================================
 # Gene Name Utilities
 # =============================================================================
+def make_unique_names(names: list[str]) -> list[str]:
+    """
+    Make names unique by adding suffixes (-1, -2, etc.) to duplicates.
+
+    Uses the same suffix convention as scanpy/pandas for consistency across
+    the entire codebase. This is THE single source of truth for name deduplication.
+
+    Args:
+        names: List of names (may contain duplicates)
+
+    Returns:
+        List of unique names with suffixes added to duplicates.
+        First occurrence is unchanged, subsequent get -1, -2, etc.
+
+    Examples:
+        >>> make_unique_names(["A", "B", "A", "C", "A"])
+        ["A", "B", "A-1", "C", "A-2"]
+
+        >>> make_unique_names(["gene1", "gene2"])  # Already unique
+        ["gene1", "gene2"]
+    """
+    if len(names) == len(set(names)):
+        return names
+
+    from collections import Counter
+
+    name_counts = Counter(names)
+    unique_names = []
+    seen_counts: dict[str, int] = {}
+
+    for name in names:
+        if name_counts[name] > 1:
+            if name not in seen_counts:
+                seen_counts[name] = 0
+                unique_names.append(name)
+            else:
+                seen_counts[name] += 1
+                # Use "-" suffix to match scanpy convention
+                unique_names.append(f"{name}-{seen_counts[name]}")
+        else:
+            unique_names.append(name)
+
+    return unique_names
+
+
 def ensure_unique_var_names(
     adata: "ad.AnnData",
     label: str = "data",
