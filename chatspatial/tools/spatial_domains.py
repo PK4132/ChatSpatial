@@ -620,10 +620,26 @@ async def _identify_domains_stagate(
     clustered to define spatial domains. This method requires the `STAGATE_pyG`
     package.
     """
+    import torch
+
+    # Check PyTorch version compatibility with torch_sparse/torch_geometric
+    # torch_sparse wheels are only available up to PyTorch 2.8.0
+    # See: https://data.pyg.org/whl/
+    torch_version = tuple(int(x) for x in torch.__version__.split(".")[:2])
+    if torch_version > (2, 8):
+        raise ProcessingError(
+            f"STAGATE requires PyTorch <= 2.8.0, but found {torch.__version__}. "
+            f"torch_sparse/torch_geometric wheels are not available for PyTorch {torch.__version__}. "
+            f"Solutions:\n"
+            f"  1. Use 'leiden' or 'spagcn' method instead (no PyG dependency)\n"
+            f"  2. Downgrade PyTorch: pip install torch==2.8.0\n"
+            f"  3. Wait for PyG to support PyTorch {torch.__version__}\n"
+            f"See: https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html"
+        )
+
     STAGATE_pyG = require(
         "STAGATE_pyG", ctx, feature="STAGATE spatial domain identification"
     )
-    import torch
 
     try:
         # MEMORY OPTIMIZATION: adata is already a working copy (adata_subset from caller)
@@ -671,39 +687,37 @@ async def _identify_domains_stagate(
             import numpy as np
             import rpy2.robjects as robjects
             from rpy2.robjects import numpy2ri
-
-            # Activate numpy to R conversion
-            numpy2ri.activate()
+            from rpy2.robjects.conversion import localconverter
 
             # Set random seed
             random_seed = params.stagate_random_seed or 42
             np.random.seed(random_seed)
-            robjects.r["set.seed"](random_seed)
-
-            # Load mclust library
-            robjects.r.library("mclust")
 
             # Get embedding data and convert to float64 (required for R)
             embedding_data = adata_stagate.obsm[embeddings_key].astype(np.float64)
 
-            # Assign data to R environment (correct way to pass data)
-            robjects.r.assign("stagate_embedding", embedding_data)
+            # Use context manager for numpy-R conversion (new rpy2 API)
+            with localconverter(robjects.default_converter + numpy2ri.converter):
+                robjects.r["set.seed"](random_seed)
 
-            # Call Mclust directly via R code
-            robjects.r(
-                f"mclust_result <- Mclust(stagate_embedding, G={n_clusters_target})"
-            )
+                # Load mclust library
+                robjects.r.library("mclust")
 
-            # Extract classification results
-            mclust_labels = np.array(robjects.r("mclust_result$classification"))
+                # Assign data to R environment
+                robjects.r.assign("stagate_embedding", embedding_data)
+
+                # Call Mclust directly via R code
+                robjects.r(
+                    f"mclust_result <- Mclust(stagate_embedding, G={n_clusters_target})"
+                )
+
+                # Extract classification results
+                mclust_labels = np.array(robjects.r("mclust_result$classification"))
 
             # Store in adata - convert to categorical in single operation
             adata_stagate.obs["mclust"] = pd.Categorical(mclust_labels.astype(int))
             domain_labels = adata_stagate.obs["mclust"].astype(str)
             clustering_method = "mclust"
-
-            # Deactivate numpy2ri to avoid conflicts
-            numpy2ri.deactivate()
 
         except ImportError as e:
             raise ProcessingError(
@@ -800,20 +814,72 @@ async def _identify_domains_graphst(
         embeddings_key = "emb"  # GraphST stores embeddings in adata.obsm['emb']
 
         # Perform clustering on GraphST embeddings
+        # OPTIMIZATION: Use binary search instead of GraphST's linear search (290 iterations)
+        # GraphST's default search_res uses increment=0.01 from 3.0 to 0.1, which is very slow
 
-        # Run clustering in thread pool
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        from sklearn.decomposition import PCA
 
-            def run_clustering():
+        def run_clustering_optimized():
+            # PCA on embeddings (same as GraphST)
+            pca = PCA(n_components=20, random_state=42)
+            embedding = pca.fit_transform(adata_graphst.obsm["emb"].copy())
+            adata_graphst.obsm["emb_pca"] = embedding
+
+            if params.graphst_clustering_method == "mclust":
+                # Use GraphST's mclust (requires R)
                 graphst_clustering(
                     adata_graphst,
                     n_clusters=n_clusters,
                     radius=params.graphst_radius if params.graphst_refinement else None,
-                    method=params.graphst_clustering_method,
+                    method="mclust",
                     refinement=params.graphst_refinement,
                 )
+            else:
+                # BINARY SEARCH for resolution (replaces GraphST's linear search)
+                # This reduces iterations from 290 to ~10-15
+                sc.pp.neighbors(adata_graphst, n_neighbors=50, use_rep="emb_pca")
 
-            await loop.run_in_executor(executor, run_clustering)
+                low, high = 0.1, 3.0
+                best_res, best_diff = 1.0, float("inf")
+                max_iterations = 20  # Binary search converges quickly
+
+                for _ in range(max_iterations):
+                    mid = (low + high) / 2
+                    sc.tl.leiden(adata_graphst, resolution=mid, random_state=0)
+                    current_clusters = len(adata_graphst.obs["leiden"].unique())
+
+                    diff = abs(current_clusters - n_clusters)
+                    if diff < best_diff:
+                        best_diff = diff
+                        best_res = mid
+
+                    if current_clusters == n_clusters:
+                        break
+                    elif current_clusters > n_clusters:
+                        high = mid
+                    else:
+                        low = mid
+
+                    # Early termination if we're close enough
+                    if high - low < 0.01:
+                        break
+
+                # Final clustering with best resolution
+                sc.tl.leiden(adata_graphst, resolution=best_res, random_state=0)
+                adata_graphst.obs["domain"] = adata_graphst.obs["leiden"]
+
+                # Apply refinement if requested
+                if params.graphst_refinement:
+                    from GraphST.utils import refine_label
+
+                    new_type = refine_label(
+                        adata_graphst, radius=params.graphst_radius, key="domain"
+                    )
+                    adata_graphst.obs["domain"] = new_type
+
+        # Run clustering in thread pool
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            await loop.run_in_executor(executor, run_clustering_optimized)
 
         # Get domain labels
         domain_labels = adata_graphst.obs["domain"].astype(str)
