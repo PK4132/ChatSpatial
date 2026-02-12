@@ -52,42 +52,44 @@ def _load_xenium_zarr(data_path: str) -> Any:
     cells_zarr = os.path.join(data_path, "cells.zarr.zip")
 
     # Load cell_feature_matrix.zarr
-    # Note: zarr.open() returns AnyArray | Group, we cast to Group for type safety
-    matrix_store = ZipStore(matrix_zarr, mode="r")
-    matrix_root = cast("Group", zarr.open(matrix_store, mode="r"))
-    cf = cast("Group", matrix_root["cell_features"])
+    # Use context manager to ensure ZipStore file handles are released
+    with ZipStore(matrix_zarr, mode="r") as matrix_store:
+        matrix_root = cast("Group", zarr.open(matrix_store, mode="r"))
+        cf = cast("Group", matrix_root["cell_features"])
 
-    # Get sparse matrix components (CSC format)
-    # cf["data"], cf["indices"], cf["indptr"] are zarr Arrays
-    data = np.asarray(cast("Array", cf["data"])[:])
-    indices = np.asarray(cast("Array", cf["indices"])[:])
-    indptr = np.asarray(cast("Array", cf["indptr"])[:])
+        # Get sparse matrix components (CSC format)
+        # All data is fully materialized via [:] so store can close after
+        data = np.asarray(cast("Array", cf["data"])[:])
+        indices = np.asarray(cast("Array", cf["indices"])[:])
+        indptr = np.asarray(cast("Array", cf["indptr"])[:])
 
-    # attrs values are JSON type; Xenium format guarantees these are integers
-    n_cells = cast(int, cf.attrs["number_cells"])
-    n_features = cast(int, cf.attrs["number_features"])
+        # attrs values are JSON type; Xenium format guarantees these are integers
+        n_cells = cast(int, cf.attrs["number_cells"])
+        n_features = cast(int, cf.attrs["number_features"])
+
+        # Get feature names from zarr attrs (JSON type -> list[str])
+        # Xenium format guarantees these are string lists
+        feature_keys = cast(list[str], cf.attrs.get("feature_keys", []))
+        feature_ids_raw = cast(list[str], cf.attrs.get("feature_ids", []))
+        feature_names: list[str] = list(feature_keys)
+        feature_ids: list[str] = list(feature_ids_raw)
 
     # Create CSC matrix then convert to CSR (cells x genes)
     X_csc = sp.csc_matrix((data, indices, indptr), shape=(n_cells, n_features))
     X = X_csc.tocsr()
 
-    # Get feature names from zarr attrs (JSON type -> list[str])
-    # Xenium format guarantees these are string lists
-    feature_keys = cast(list[str], cf.attrs.get("feature_keys", []))
-    feature_ids_raw = cast(list[str], cf.attrs.get("feature_ids", []))
-    feature_names: list[str] = list(feature_keys)
-    feature_ids: list[str] = list(feature_ids_raw)
-
     # Load cells.zarr for spatial coordinates
-    cells_store = ZipStore(cells_zarr, mode="r")
-    cells_root = cast("Group", zarr.open(cells_store, mode="r"))
+    with ZipStore(cells_zarr, mode="r") as cells_store:
+        cells_root = cast("Group", zarr.open(cells_store, mode="r"))
 
-    # cells_root["cell_summary"] and cells_root["cell_id"] are zarr Arrays
-    cell_summary = np.asarray(cast("Array", cells_root["cell_summary"])[:])
-    cell_id = np.asarray(cast("Array", cells_root["cell_id"])[:])
-    cell_summary_arr = cast("Array", cells_root["cell_summary"])
-    column_names_raw = cast(list[str], cell_summary_arr.attrs.get("column_names", []))
-    column_names: list[str] = list(column_names_raw)
+        # All data is fully materialized via [:] so store can close after
+        cell_summary = np.asarray(cast("Array", cells_root["cell_summary"])[:])
+        cell_id = np.asarray(cast("Array", cells_root["cell_id"])[:])
+        cell_summary_arr = cast("Array", cells_root["cell_summary"])
+        column_names_raw = cast(
+            list[str], cell_summary_arr.attrs.get("column_names", [])
+        )
+        column_names: list[str] = list(column_names_raw)
 
     # Create AnnData
     obs_names = [str(cid[0]) for cid in cell_id]

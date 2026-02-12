@@ -5,15 +5,18 @@ Tools for MCP server: error handling decorator and output suppression.
 
 Error Handling Design:
 ======================
-User-understandable errors (no traceback needed):
-- ParameterError: Invalid parameter values
-- DataError, DataNotFoundError, DataCompatibilityError: Data issues
-- DependencyError: Missing packages
-- ValueError: Legacy/compatibility (same semantic as ParameterError)
+All tool errors are raised as exceptions, which FastMCP converts to
+``CallToolResult(isError=True)`` protocol responses automatically.
 
-Code/algorithm errors (traceback needed for debugging):
-- ProcessingError: Algorithm failures
-- All other exceptions: Unknown errors
+The ``mcp_tool_error_handler`` decorator enriches error messages before
+they reach FastMCP:
+
+User-understandable errors (clean message, no traceback):
+- ParameterError, DataError, DataNotFoundError, DataCompatibilityError
+- DependencyError, ValueError (legacy)
+
+Code/algorithm errors (message + traceback for debugging):
+- ProcessingError, all other exceptions
 """
 
 import io
@@ -22,9 +25,6 @@ import traceback
 import warnings
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from functools import wraps
-from typing import Union, get_args, get_origin, get_type_hints
-
-from pydantic import BaseModel
 
 from .exceptions import (
     DataCompatibilityError,
@@ -76,84 +76,33 @@ def suppress_output():
 # =============================================================================
 # MCP Tool Error Handler
 # =============================================================================
-def _get_return_type_category(func) -> str:
-    """
-    Determine return type category using proper type inspection.
-
-    Called once per decorated function at decoration time (not per call).
-
-    Returns one of: "basemodel", "str", "simple", "unknown"
-    """
-    try:
-        hints = get_type_hints(func)
-        return_type = hints.get("return")
-
-        if return_type is None:
-            return "unknown"
-
-        # Handle Union types (including Optional which is Union[X, None])
-        origin = get_origin(return_type)
-        if origin is Union:
-            types = [t for t in get_args(return_type) if t is not type(None)]
-        else:
-            types = [return_type]
-
-        # Check for BaseModel subclasses
-        for t in types:
-            if isinstance(t, type) and issubclass(t, BaseModel):
-                return "basemodel"
-
-        # Check for str
-        if str in types:
-            return "str"
-
-        return "simple"
-
-    except (TypeError, NameError):
-        # TypeError: get_type_hints fails on some types
-        # NameError: Forward references not resolved
-        return "unknown"
-
-
 def mcp_tool_error_handler(include_traceback: bool = True):
     """
-    Decorator for MCP tools to handle errors gracefully.
+    Decorator for MCP tools that enriches error messages before re-raising.
 
-    Errors are returned in the result object (not raised as exceptions),
-    allowing LLMs to see and potentially handle them.
+    All exceptions are re-raised for FastMCP to convert into
+    ``CallToolResult(isError=True)`` protocol responses. The decorator
+    only adds traceback detail to non-user errors for debugging.
+
+    Args:
+        include_traceback: Append traceback to non-user error messages.
     """
 
     def decorator(func):
-        return_type_category = _get_return_type_category(func)
-
         @wraps(func)
         async def wrapper(*args, **kwargs):
             try:
                 return await func(*args, **kwargs)
-
+            except USER_ERRORS:
+                # User errors already have clear messages — re-raise as-is
+                raise
             except Exception as e:
-                error_msg = str(e)
-
-                if return_type_category == "basemodel":
-                    # Re-raise for FastMCP to handle
-                    raise
-
-                elif return_type_category == "str":
-                    return f"Error: {error_msg}"
-
-                else:
-                    # Return error dict for simple types
-                    content = [{"type": "text", "text": f"Error: {error_msg}"}]
-                    # Only include traceback for non-user errors
-                    # User errors (ParameterError, DataError, etc.) have self-explanatory messages
-                    if include_traceback and not isinstance(e, USER_ERRORS):
-                        content.append(
-                            {
-                                "type": "text",
-                                "text": f"Traceback:\n{traceback.format_exc()}",
-                            }
-                        )
-                    return {"content": content, "isError": True}
+                if include_traceback:
+                    tb = traceback.format_exc()
+                    # Enrich message in-place — preserves exception type
+                    # and any custom attributes regardless of constructor
+                    e.args = (f"{e}\n\nTraceback:\n{tb}",)
+                raise
 
         return wrapper
 

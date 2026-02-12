@@ -271,7 +271,8 @@ async def _annotate_with_singler(
 
     # Process results
     cell_types = list(best_labels)
-    unique_types = list(set(cell_types))
+    # Preserve deterministic cell-type order based on first appearance.
+    unique_types = list(dict.fromkeys(cell_types))
     counts = pd.Series(cell_types).value_counts().to_dict()
 
     # Calculate confidence scores (see docstring for transformation formulas)
@@ -1058,6 +1059,8 @@ async def _annotate_with_mllmcelltype(
                 use_cache=use_cache,
                 base_urls=base_urls,
             )
+    except ParameterError:
+        raise
     except Exception as e:
         raise ProcessingError(f"mLLMCellType annotation failed: {e}") from e
 
@@ -1888,7 +1891,8 @@ async def _annotate_with_sctype(
     adata.obs[output_key] = pd.Categorical(per_cell_types)
     adata.obs[confidence_key] = per_cell_confidence
 
-    unique_cell_types = list(set(per_cell_types))
+    # Preserve deterministic cell-type order based on first appearance.
+    unique_cell_types = list(dict.fromkeys(per_cell_types))
 
     # Cache results (as tuple for compatibility)
     if params.sctype_use_cache and cache_key:

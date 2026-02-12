@@ -21,7 +21,6 @@ from ..utils.compute import (
     ensure_spatial_neighbors,
     ensure_umap,
 )
-from ..utils.mcp_utils import mcp_tool_error_handler
 from ..utils.results_export import export_analysis_result
 
 
@@ -147,7 +146,6 @@ class EmbeddingResult(BaseModel):
     pca_variance_ratio: Optional[float] = None
 
 
-@mcp_tool_error_handler()
 async def compute_embeddings(
     data_id: str,
     ctx: ToolContext,

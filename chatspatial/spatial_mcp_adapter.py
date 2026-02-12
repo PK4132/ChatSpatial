@@ -5,6 +5,7 @@ This module provides a clean abstraction layer between MCP protocol requirements
 and ChatSpatial's spatial analysis functionality.
 """
 
+import itertools
 import logging
 from dataclasses import dataclass, field
 from typing import Any, Optional
@@ -190,7 +191,7 @@ class DefaultSpatialDataManager:
 
     def __init__(self):
         self.data_store: dict[str, Any] = {}
-        self._next_id = 1
+        self._id_counter = itertools.count(1)
 
     async def load_dataset(
         self, path: str, data_type: str, name: Optional[str] = None
@@ -206,9 +207,8 @@ class DefaultSpatialDataManager:
             path, cast(SpatialPlatform, data_type), name
         )
 
-        # Generate ID
-        data_id = f"data_{self._next_id}"
-        self._next_id += 1
+        # Generate ID — single expression, structurally atomic
+        data_id = f"data_{next(self._id_counter)}"
 
         # Store data
         self.data_store[data_id] = dataset_info
@@ -287,35 +287,36 @@ class DefaultSpatialDataManager:
 
     async def create_dataset(
         self,
-        data_id: str,
         adata: Any,
+        prefix: str = "data",
         name: Optional[str] = None,
         metadata: Optional[dict[str, Any]] = None,
-    ) -> None:
-        """Create a new dataset with specified ID.
+    ) -> str:
+        """Create a new dataset with an auto-generated unique ID.
 
-        Use this when creating derived datasets (e.g., integration results,
-        subset data).
+        ID generation follows the same ``{prefix}_{counter}`` pattern as
+        ``load_dataset`` to keep identifiers short, unique, and collision-free.
 
         Args:
-            data_id: Unique identifier for the new dataset
             adata: AnnData object to store
+            prefix: ID prefix (e.g. ``"integrated"``, ``"subset"``)
             name: Optional display name for the dataset
-            metadata: Optional additional metadata dict
+            metadata: Optional additional metadata dict (reserved keys
+                ``adata``, ``name``, ``results`` are silently dropped)
 
-        Raises:
-            ParameterError: If dataset with same ID already exists
+        Returns:
+            The generated dataset ID
         """
-        if data_id in self.data_store:
-            raise ParameterError(
-                f"Dataset {data_id} already exists. Use update_adata() to update."
-            )
+        data_id = f"{prefix}_{next(self._id_counter)}"
         dataset_info: dict[str, Any] = {"adata": adata}
         if name:
             dataset_info["name"] = name
         if metadata:
-            dataset_info.update(metadata)
+            _RESERVED_KEYS = {"adata", "name", "results"}
+            safe = {k: v for k, v in metadata.items() if k not in _RESERVED_KEYS}
+            dataset_info.update(safe)
         self.data_store[data_id] = dataset_info
+        return data_id
 
 
 @dataclass
@@ -428,26 +429,28 @@ class ToolContext:
 
     async def add_dataset(
         self,
-        data_id: str,
         adata: Any,
+        prefix: str = "data",
         name: Optional[str] = None,
         metadata: Optional[dict[str, Any]] = None,
-    ) -> None:
+    ) -> str:
         """Add a new dataset to the data store.
 
         Use this when creating new datasets (e.g., integration results,
         subset data, or derived datasets).
 
         Args:
-            data_id: Unique identifier for the new dataset
             adata: AnnData object to store
+            prefix: ID prefix (e.g. ``"integrated"``, ``"subset"``)
             name: Optional display name for the dataset
             metadata: Optional additional metadata dict
 
-        Raises:
-            ValueError: If dataset with same ID already exists
+        Returns:
+            The generated dataset ID
         """
-        await self._data_manager.create_dataset(data_id, adata, name, metadata)
+        return await self._data_manager.create_dataset(
+            adata, prefix, name, metadata
+        )
 
     async def info(self, msg: str) -> None:
         """Log info message to MCP context if available."""
