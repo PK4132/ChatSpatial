@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from ...spatial_mcp_adapter import ToolContext
 
 from ...utils.dependency_manager import is_available, require
-from ...utils.device_utils import get_device
+from ...utils.device_utils import get_accelerator, get_device
 from ...utils.exceptions import DataError, ProcessingError
 from ...utils.image_utils import non_interactive_backend
 from ...utils.mcp_utils import suppress_output
@@ -119,6 +119,7 @@ def deconvolve(
 
     try:
         device = get_device(prefer_gpu=use_gpu)
+        accelerator = get_accelerator(prefer_gpu=use_gpu)
 
         # Data already copied in prepare_deconvolution
         ref = data.reference
@@ -153,7 +154,7 @@ def deconvolve(
                 epochs=ref_model_epochs,
                 lr=ref_model_lr,
                 train_size=ref_model_train_size,
-                device=device,
+                accelerator=accelerator,
                 early_stopping=early_stopping,
                 early_stopping_patience=early_stopping_patience,
                 validation_size=validation_size,
@@ -191,7 +192,7 @@ def deconvolve(
                 epochs=n_epochs,
                 lr=cell2location_lr,
                 train_size=cell2location_train_size,
-                device=device,
+                accelerator=accelerator,
                 early_stopping=early_stopping,
                 early_stopping_patience=early_stopping_patience,
                 validation_size=validation_size,
@@ -255,18 +256,23 @@ def _build_train_kwargs(
     epochs: int,
     lr: float,
     train_size: float,
-    device: str,
+    accelerator: str,
     early_stopping: bool,
     early_stopping_patience: int,
     validation_size: float,
     use_aggressive: bool,
 ) -> dict[str, Any]:
-    """Build training kwargs for scvi-tools models."""
+    """Build training kwargs for scvi-tools models.
+
+    Args:
+        accelerator: Lightning accelerator from get_accelerator()
+            ("gpu" or "cpu")
+    """
     kwargs: dict[str, Any]  # Heterogeneous value types
     if use_aggressive:
         kwargs = {"max_epochs": epochs, "lr": lr}
-        if device == "cuda":
-            kwargs["accelerator"] = "gpu"
+        if accelerator == "gpu":
+            kwargs["accelerator"] = accelerator
         if early_stopping:
             kwargs["early_stopping"] = True
             kwargs["early_stopping_patience"] = early_stopping_patience
@@ -281,8 +287,8 @@ def _build_train_kwargs(
             "lr": lr,
             "train_size": train_size,
         }
-        if device == "cuda":
-            kwargs["accelerator"] = "gpu"
+        if accelerator == "gpu":
+            kwargs["accelerator"] = accelerator
     return kwargs
 
 

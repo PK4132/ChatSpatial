@@ -39,7 +39,7 @@ from ..utils.dependency_manager import (
     validate_r_environment,
     validate_scvi_tools,
 )
-from ..utils.device_utils import cuda_available
+from ..utils.device_utils import get_device
 from ..utils.exceptions import (
     DataError,
     DataNotFoundError,
@@ -414,11 +414,10 @@ async def _annotate_with_tangram(
                 "No cluster label found. Provide cluster_label parameter."
             )
 
-    # Check GPU availability for device selection
-    device = params.tangram_device
-    if device != "cpu" and not cuda_available():
-        await ctx.warning("GPU requested but not available - falling back to CPU")
-        device = "cpu"
+    # Device selection (supports CUDA, MPS, and CPU)
+    device = get_device(prefer_gpu=params.tangram_use_gpu)
+    if params.tangram_use_gpu and device == "cpu":
+        await ctx.warning("GPU requested but not available - using CPU")
 
     # Run Tangram mapping with enhanced parameters
     mapping_args: dict[str, str | int | float | None] = {
@@ -1395,7 +1394,7 @@ async def annotate_cell_types(
     parameters_dict = {}
     if params.method == "tangram":
         parameters_dict = {
-            "device": params.tangram_device,
+            "use_gpu": params.tangram_use_gpu,
             "n_epochs": params.n_epochs,
             "learning_rate": params.tangram_learning_rate,
         }

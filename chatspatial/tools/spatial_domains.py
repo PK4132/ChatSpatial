@@ -659,7 +659,7 @@ async def _identify_domains_stagate(
 
         # Set device (support CUDA, MPS, and CPU)
         device_str = await resolve_device_async(
-            prefer_gpu=params.stagate_use_gpu, ctx=ctx, allow_mps=True
+            prefer_gpu=params.stagate_use_gpu, ctx=ctx
         )
         device = torch.device(device_str)
 
@@ -753,7 +753,7 @@ async def _identify_domains_graphst(
 
         # Set device (support CUDA, MPS, and CPU)
         device_str = await resolve_device_async(
-            prefer_gpu=params.graphst_use_gpu, ctx=ctx, allow_mps=True
+            prefer_gpu=params.graphst_use_gpu, ctx=ctx
         )
         device = torch.device(device_str)
 

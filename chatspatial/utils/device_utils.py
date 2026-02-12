@@ -12,17 +12,20 @@ Design Principles:
 5. Single Source of Truth: All GPU/MPS configuration in one place
 
 Usage:
-    # Simple device selection
-    device = get_device(use_gpu=True)
+    # Simple device selection (direct PyTorch)
+    device = get_device(prefer_gpu=True)
 
     # With warning when GPU unavailable
-    device = get_device(use_gpu=params.use_gpu)
+    device = get_device(prefer_gpu=params.use_gpu)
     if params.use_gpu and device == "cpu":
         await ctx.warning("GPU requested but not available")
 
     # Convert to torch.device when needed
     import torch
-    device = torch.device(get_device(use_gpu=True, allow_mps=True))
+    device = torch.device(get_device(prefer_gpu=True))
+
+    # For scvi-tools / PyTorch Lightning methods
+    accelerator = get_accelerator(prefer_gpu=True)  # "gpu" or "cpu"
 """
 
 import os
@@ -110,33 +113,34 @@ def mps_available() -> bool:
 
 def get_device(
     prefer_gpu: bool = False,
-    allow_mps: bool = False,
+    allow_mps: bool = True,
 ) -> str:
     """Select compute device based on preference and availability.
 
-    This is THE single source of truth for device selection across ChatSpatial.
-    Returns a device string that can be used directly or converted to torch.device.
+    This is THE single source of truth for direct PyTorch device selection.
+    Returns a device string that can be used directly or converted to
+    torch.device.
+
+    For scvi-tools / PyTorch Lightning methods, use get_accelerator() instead.
 
     Args:
-        prefer_gpu: If True, try to use GPU (CUDA first, then MPS if allowed)
-        allow_mps: If True, allow MPS as fallback when CUDA unavailable
+        prefer_gpu: If True, try to use GPU (CUDA first, then MPS)
+        allow_mps: If True, allow MPS as fallback when CUDA unavailable.
+            Most PyTorch methods support MPS; set False to opt out.
 
     Returns:
         Device string: "cuda:0", "mps", or "cpu"
 
     Examples:
         # Basic usage
-        device = get_device(use_gpu=True)  # "cuda:0" or "cpu"
-
-        # With MPS support (Apple Silicon)
-        device = get_device(use_gpu=True, allow_mps=True)  # "cuda:0", "mps", or "cpu"
+        device = get_device(prefer_gpu=True)  # "cuda:0", "mps", or "cpu"
 
         # Convert to torch.device
         import torch
         device = torch.device(get_device(prefer_gpu=True))
 
         # With warning when requested but unavailable
-        device = get_device(params.use_gpu)
+        device = get_device(prefer_gpu=params.use_gpu)
         if params.use_gpu and device == "cpu":
             await ctx.warning("GPU requested but not available - using CPU")
     """
@@ -150,6 +154,29 @@ def get_device(
     return "cpu"
 
 
+def get_accelerator(prefer_gpu: bool = False) -> str:
+    """Select PyTorch Lightning accelerator for scvi-tools methods.
+
+    Lightning's accelerator="gpu" auto-detects CUDA vs MPS.
+    Use this for Cell2location, DestVI, Stereoscope, scVI, VeloVI.
+
+    For direct PyTorch methods, use get_device() instead.
+
+    Args:
+        prefer_gpu: If True, return "gpu" when any GPU is available
+
+    Returns:
+        Accelerator string: "gpu" or "cpu"
+    """
+    if prefer_gpu:
+        if cuda_available():
+            return "gpu"
+        if mps_available():
+            _configure_mps()
+            return "gpu"
+    return "cpu"
+
+
 # =============================================================================
 # Async Helper with Context Warning
 # =============================================================================
@@ -158,7 +185,7 @@ def get_device(
 async def resolve_device_async(
     prefer_gpu: bool,
     ctx: "ToolContext",
-    allow_mps: bool = False,
+    allow_mps: bool = True,
     warn_on_fallback: bool = True,
 ) -> str:
     """Select device with optional warning when GPU unavailable.

@@ -12,6 +12,7 @@ from typing import Any
 import pandas as pd
 
 from ...utils.adata_utils import ensure_categorical
+from ...utils.device_utils import get_accelerator
 from ...utils.exceptions import ProcessingError
 from .base import PreparedDeconvolutionData, create_deconvolution_stats
 
@@ -55,18 +56,18 @@ def deconvolve(
             spatial_epochs = n_epochs - rna_epochs
 
         plan_kwargs = {"lr": learning_rate}
-        accelerator = "gpu" if use_gpu else "cpu"
+        accelerator = get_accelerator(prefer_gpu=use_gpu)
 
         # ===== Stage 1: Train RNAStereoscope =====
         RNAStereoscope.setup_anndata(ref_data, labels_key=data.cell_type_key)
         rna_model = RNAStereoscope(ref_data)
 
-        train_kwargs = {
+        train_kwargs: dict[str, Any] = {
             "max_epochs": rna_epochs,
             "batch_size": batch_size,
             "plan_kwargs": plan_kwargs,
         }
-        if use_gpu:
+        if accelerator == "gpu":
             train_kwargs["accelerator"] = accelerator
         rna_model.train(**train_kwargs)
 
@@ -89,7 +90,7 @@ def deconvolve(
             proportions,
             data.common_genes,
             method="Stereoscope",
-            device="gpu" if use_gpu else "cpu",
+            device=accelerator,
             n_epochs=n_epochs,
             rna_epochs=rna_epochs,
             spatial_epochs=spatial_epochs,

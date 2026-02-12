@@ -48,6 +48,7 @@ from .dependency_manager import (
 )
 from .device_utils import (
     cuda_available,
+    get_accelerator,
     get_device,
     get_ot_backend,
     mps_available,
@@ -119,6 +120,7 @@ __all__ = [
     "cuda_available",
     "mps_available",
     "get_device",
+    "get_accelerator",
     "resolve_device_async",
     "get_ot_backend",
     # Compatibility utilities

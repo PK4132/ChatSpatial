@@ -12,6 +12,7 @@ import scanpy as sc
 from ..models.analysis import IntegrationResult
 from ..models.data import IntegrationParameters
 from ..utils.dependency_manager import require
+from ..utils.device_utils import get_accelerator
 from ..utils.exceptions import (
     DataError,
     DataNotFoundError,
@@ -731,8 +732,7 @@ def integrate_with_scvi(
             n_epochs = 100
 
     # Train model
-    # Note: scvi-tools 1.x uses accelerator instead of use_gpu
-    accelerator = "gpu" if use_gpu else "cpu"
+    accelerator = get_accelerator(prefer_gpu=use_gpu)
     model.train(max_epochs=n_epochs, early_stopping=True, accelerator=accelerator)
 
     # Get latent representation

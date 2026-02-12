@@ -660,7 +660,7 @@ class AnnotationParameters(BaseModel):
     tangram_density_prior: Literal["rna_count_based", "uniform"] = (
         "rna_count_based"  # Density prior for mapping
     )
-    tangram_device: str = "cpu"  # Device for computation ('cpu' or 'cuda:0')
+    tangram_use_gpu: bool = False  # Whether to use GPU/MPS acceleration
     tangram_learning_rate: float = 0.1  # Learning rate for optimization
     tangram_compute_validation: bool = False  # Whether to compute validation metrics
     tangram_project_genes: bool = False  # Whether to project gene expression

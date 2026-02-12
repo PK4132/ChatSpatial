@@ -11,6 +11,7 @@ from typing import Any
 import pandas as pd
 
 from ...utils.dependency_manager import is_available
+from ...utils.device_utils import get_accelerator
 from ...utils.exceptions import DataError, DependencyError, ProcessingError
 from .base import PreparedDeconvolutionData, create_deconvolution_stats
 
@@ -69,7 +70,7 @@ def deconvolve(
         destvi_epochs = max(200, n_epochs // 10)
 
         # Device setting
-        accelerator = "gpu" if use_gpu else "cpu"
+        accelerator = get_accelerator(prefer_gpu=use_gpu)
         plan_kwargs = {"lr": learning_rate}
 
         # ===== Stage 1: Train CondSCVI on reference =====
@@ -123,7 +124,7 @@ def deconvolve(
             proportions,
             data.common_genes,
             method="DestVI",
-            device="gpu" if use_gpu else "cpu",
+            device=accelerator,
             n_epochs=n_epochs,
             condscvi_epochs=condscvi_epochs,
             destvi_epochs=destvi_epochs,

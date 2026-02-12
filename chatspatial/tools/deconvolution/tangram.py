@@ -10,6 +10,7 @@ from typing import Any
 
 import pandas as pd
 
+from ...utils.device_utils import get_device
 from ...utils.exceptions import DependencyError, ProcessingError
 from .base import PreparedDeconvolutionData, create_deconvolution_stats
 
@@ -60,8 +61,8 @@ def deconvolve(
         # Preprocess with tangram (this sets up required annotations)
         tg.pp_adatas(ref_data, spatial_data, genes=training_genes)
 
-        # Set device
-        device = "cuda:0" if use_gpu else "cpu"
+        # Set device (supports CUDA, MPS, and CPU)
+        device = get_device(prefer_gpu=use_gpu)
 
         # Map cells to space
         if mode == "clusters":

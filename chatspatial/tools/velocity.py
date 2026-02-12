@@ -26,6 +26,7 @@ from ..utils.adata_utils import (
     validate_adata,
 )
 from ..utils.dependency_manager import require
+from ..utils.device_utils import get_accelerator
 from ..utils.exceptions import (
     DataError,
     DataNotFoundError,
@@ -267,10 +268,10 @@ async def analyze_velocity_with_velovi(
         velovi_model = VELOVI(adata_prepared, n_hidden=n_hidden, n_latent=n_latent)
 
         # Model training
-        if use_gpu:
-            velovi_model.train(max_epochs=n_epochs, accelerator="gpu")
-        else:
-            velovi_model.train(max_epochs=n_epochs)
+        accelerator = get_accelerator(prefer_gpu=use_gpu)
+        velovi_model.train(
+            max_epochs=n_epochs, accelerator=accelerator
+        )
 
         # Result extraction
         latent_time = velovi_model.get_latent_time(n_samples=25)
