@@ -159,9 +159,9 @@ def test_check_r_packages_returns_only_missing(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_validate_scvi_tools_component_guard(monkeypatch: pytest.MonkeyPatch):
-    fake_scvi = SimpleNamespace(model=SimpleNamespace(), external=SimpleNamespace())
+    _install_fake_rpy2(monkeypatch)
+    fake_scvi = sys.modules["scvi"]
     monkeypatch.setattr(dm, "require", lambda *_args, **_kwargs: fake_scvi)
 
     with pytest.raises(ImportError, match="SCANVI"):
         dm.validate_scvi_tools(components=["SCANVI"])
-
