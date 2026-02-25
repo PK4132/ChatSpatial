@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -253,3 +254,258 @@ def test_convert_custom_markers_normalizes_and_filters(monkeypatch: pytest.Monke
     assert out["gs_positive"]["T"] == ["CD3D", "CD3E"]
     assert out["gs_negative"]["T"] == ["MALAT1"]
     assert out["gs_positive"]["B"] == ["MS4A1"]
+
+
+def test_load_sctype_functions_runs_install_and_load_scripts(monkeypatch: pytest.MonkeyPatch):
+    calls: list[str] = []
+
+    class _Lock:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _LCtx:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _R:
+        def __call__(self, script: str):
+            calls.append(script)
+            return None
+
+    fake_conversion = ModuleType("conversion")
+    fake_conversion.localconverter = lambda _converter: _LCtx()
+    fake_robjects_mod = ModuleType("rpy2.robjects")
+    fake_robjects_mod.conversion = fake_conversion
+    monkeypatch.setitem(__import__("sys").modules, "rpy2.robjects", fake_robjects_mod)
+
+    robjects = SimpleNamespace(r=_R())
+    openrlib = SimpleNamespace(rlock=_Lock())
+    monkeypatch.setattr(
+        ann,
+        "validate_r_environment",
+        lambda _ctx: (robjects, None, None, None, None, object(), openrlib, None),
+    )
+
+    ann._load_sctype_functions(DummyCtx())
+
+    assert any("required_packages" in script for script in calls)
+    assert any("gene_sets_prepare.R" in script for script in calls)
+
+
+def test_prepare_sctype_genesets_uses_custom_markers_short_circuit(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    sentinel = {"gs_positive": {"T": ["CD3D"]}, "gs_negative": {"T": []}}
+    monkeypatch.setattr(ann, "_convert_custom_markers_to_gs", lambda *_a, **_k: sentinel)
+
+    out = ann._prepare_sctype_genesets(
+        AnnotationParameters(
+            method="sctype",
+            sctype_custom_markers={"T": {"positive": ["CD3D"], "negative": []}},
+        ),
+        DummyCtx(),
+    )
+    assert out is sentinel
+
+
+def test_prepare_sctype_genesets_loads_database_and_returns_gs_list(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    assigns: dict[str, object] = {}
+    executed: list[str] = []
+
+    class _Conv:
+        def __add__(self, _other):
+            return self
+
+    class _Lock:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _LCtx:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _R:
+        def assign(self, key: str, value):
+            assigns[key] = value
+
+        def __call__(self, code: str):
+            executed.append(code)
+            return None
+
+        def __getitem__(self, name: str):
+            if name == "gs_list":
+                return {"ok": True}
+            raise KeyError(name)
+
+    fake_conversion = ModuleType("conversion")
+    fake_conversion.localconverter = lambda _converter: _LCtx()
+    fake_robjects_mod = ModuleType("rpy2.robjects")
+    fake_robjects_mod.conversion = fake_conversion
+    monkeypatch.setitem(__import__("sys").modules, "rpy2.robjects", fake_robjects_mod)
+
+    robjects = SimpleNamespace(r=_R())
+    openrlib = SimpleNamespace(rlock=_Lock())
+    monkeypatch.setattr(
+        ann,
+        "validate_r_environment",
+        lambda _ctx: (robjects, None, None, None, None, _Conv(), openrlib, None),
+    )
+
+    out = ann._prepare_sctype_genesets(
+        AnnotationParameters(method="sctype", sctype_tissue="Brain", sctype_db_="db.xlsx"),
+        DummyCtx(),
+    )
+
+    assert out == {"ok": True}
+    assert assigns["db_path"] == "db.xlsx"
+    assert assigns["tissue_type"] == "Brain"
+    assert any("gene_sets_prepare" in code for code in executed)
+
+
+def test_run_sctype_scoring_converts_r_matrix_to_dataframe(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    params = AnnotationParameters(method="sctype", sctype_tissue="Brain", sctype_scaled=False)
+    assigned: dict[str, object] = {}
+
+    class _Conv:
+        def __add__(self, _other):
+            return self
+
+    class _Lock:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _LCtx:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _R:
+        def assign(self, key: str, value):
+            assigned[key] = value
+
+        def __call__(self, code: str):
+            if code == "rownames(es_max)":
+                return ["T", "B"]
+            if code == "colnames(es_max)":
+                return ["cell_1", "cell_2"]
+            return None
+
+        def __getitem__(self, name: str):
+            if name == "es_max":
+                return np.array([[1.0, 0.2], [0.1, 0.9]])
+            raise KeyError(name)
+
+    fake_conversion = ModuleType("conversion")
+    fake_conversion.localconverter = lambda _converter: _LCtx()
+    fake_robjects_mod = ModuleType("rpy2.robjects")
+    fake_robjects_mod.conversion = fake_conversion
+    monkeypatch.setitem(__import__("sys").modules, "rpy2.robjects", fake_robjects_mod)
+
+    robjects = SimpleNamespace(r=_R())
+    converter = _Conv()
+    openrlib = SimpleNamespace(rlock=_Lock())
+    monkeypatch.setattr(
+        ann,
+        "validate_r_environment",
+        lambda _ctx: (
+            robjects,
+            SimpleNamespace(converter=converter),
+            SimpleNamespace(converter=converter),
+            None,
+            None,
+            converter,
+            openrlib,
+            SimpleNamespace(converter=converter),
+        ),
+    )
+
+    out = ann._run_sctype_scoring(adata, gs_list={"ok": True}, params=params, ctx=DummyCtx())
+
+    assert list(out.index) == ["T", "B"]
+    assert list(out.columns) == ["cell_1", "cell_2"]
+    assert assigned["gs_list"] == {"ok": True}
+
+
+def test_load_cached_sctype_results_returns_memory_cache_hit(monkeypatch: pytest.MonkeyPatch):
+    expected = (["T"], {"T": 1}, {"T": 0.9}, None)
+    monkeypatch.setattr(ann, "_SCTYPE_CACHE", {"hit": expected})
+    out = ann._load_cached_sctype_results("hit", DummyCtx())
+    assert out == expected
+
+
+def test_load_cached_sctype_results_returns_none_on_corrupted_json(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(ann, "_SCTYPE_CACHE_DIR", tmp_path)
+    monkeypatch.setattr(ann, "_SCTYPE_CACHE", {})
+    (tmp_path / "bad.json").write_text("{not valid json", encoding="utf-8")
+
+    out = ann._load_cached_sctype_results("bad", DummyCtx())
+    assert out is None
+
+
+@pytest.mark.asyncio
+async def test_cache_sctype_results_failure_is_non_fatal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    blocked = tmp_path / "not_a_dir"
+    blocked.write_text("file", encoding="utf-8")
+    monkeypatch.setattr(ann, "_SCTYPE_CACHE_DIR", blocked)
+    monkeypatch.setattr(ann, "_SCTYPE_CACHE", {})
+
+    await ann._cache_sctype_results("k", (["T"], {"T": 1}, {"T": 0.9}, None), DummyCtx())
+    assert ann._SCTYPE_CACHE == {}
+
+
+@pytest.mark.asyncio
+async def test_annotate_with_sctype_requires_tissue_or_custom_markers(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(ann, "validate_r_environment", lambda *_a, **_k: object())
+
+    with pytest.raises(ann.ParameterError, match="Either sctype_tissue or sctype_custom_markers"):
+        await ann._annotate_with_sctype(
+            minimal_spatial_adata.copy(),
+            AnnotationParameters(method="sctype", sctype_tissue=None, sctype_custom_markers=None),
+            DummyCtx(),
+            "cell_type_sctype",
+            "confidence_sctype",
+        )
+
+
+@pytest.mark.asyncio
+async def test_annotate_with_sctype_rejects_invalid_tissue(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(ann, "validate_r_environment", lambda *_a, **_k: object())
+
+    with pytest.raises(ann.ParameterError, match="not supported"):
+        await ann._annotate_with_sctype(
+            minimal_spatial_adata.copy(),
+            AnnotationParameters(method="sctype", sctype_tissue="InvalidTissue"),
+            DummyCtx(),
+            "cell_type_sctype",
+            "confidence_sctype",
+        )
