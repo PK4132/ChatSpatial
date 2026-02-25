@@ -212,10 +212,16 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "-v"
+addopts = "-v -m 'not slow' --strict-markers"
 # Fix pytest-asyncio warning
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "unit: Unit tests for pure functions",
+    "integration: Multi-component integration tests",
+    "e2e: End-to-end workflow tests through public tool interfaces",
+    "slow: Heavy dependency or long-running tests (excluded by default)",
+]
 # Suppress known upstream dependency version warnings
 filterwarnings = [
     "ignore:.*jinja2.*:UserWarning",

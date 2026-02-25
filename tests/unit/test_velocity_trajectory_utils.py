@@ -1,0 +1,611 @@
+"""Unit tests for velocity/trajectory utility contracts."""
+
+from __future__ import annotations
+
+from types import ModuleType, SimpleNamespace
+import warnings
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from chatspatial.tools import trajectory as traj
+from chatspatial.tools import velocity as vel
+from chatspatial.utils.exceptions import (
+    DataError,
+    DataNotFoundError,
+    ParameterError,
+    ProcessingError,
+)
+
+
+def test_validate_velovi_data_contracts(minimal_spatial_adata):
+    adata = SimpleNamespace(layers={})
+    with pytest.raises(DataNotFoundError, match="Missing required layers"):
+        vel._validate_velovi_data(adata)
+
+    adata.layers["Ms"] = np.ones((10, 4))
+    adata.layers["Mu"] = np.ones((10, 5))
+    with pytest.raises(DataError, match="Shape mismatch"):
+        vel._validate_velovi_data(adata)
+
+    adata.layers["Mu"] = np.ones((10, 4))
+    assert vel._validate_velovi_data(adata) is True
+
+
+def test_preprocess_for_velocity_maps_validation_error(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    fake_scv = ModuleType("scvelo")
+    fake_scv.pp = SimpleNamespace(
+        filter_and_normalize=lambda *_args, **_kwargs: None,
+        moments=lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setitem(__import__("sys").modules, "scvelo", fake_scv)
+
+    def _raise_validate(*_args, **_kwargs):
+        raise DataNotFoundError("velocity layers missing")
+
+    monkeypatch.setattr(vel, "validate_adata", _raise_validate)
+    with pytest.raises(DataError, match="Invalid velocity data"):
+        vel.preprocess_for_velocity(adata)
+
+
+def test_compute_rna_velocity_dynamical_calls_expected_steps(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.layers["Ms"] = np.ones((adata.n_obs, adata.n_vars))
+    adata.layers["Mu"] = np.ones((adata.n_obs, adata.n_vars))
+    called: list[str] = []
+
+    fake_scv = ModuleType("scvelo")
+    fake_scv.tl = SimpleNamespace(
+        recover_dynamics=lambda *_args, **_kwargs: called.append("recover"),
+        velocity=lambda *_args, **kwargs: called.append(f"velocity:{kwargs['mode']}"),
+        latent_time=lambda *_args, **_kwargs: called.append("latent_time"),
+        velocity_graph=lambda *_args, **_kwargs: called.append("graph"),
+    )
+    monkeypatch.setitem(__import__("sys").modules, "scvelo", fake_scv)
+
+    out = vel.compute_rna_velocity(adata, mode="dynamical")
+    assert out is adata
+    assert called == ["recover", "velocity:dynamical", "latent_time", "graph"]
+
+
+def test_compute_rna_velocity_preprocess_fallback(minimal_spatial_adata, monkeypatch):
+    adata = minimal_spatial_adata.copy()
+    called: dict[str, bool] = {}
+
+    monkeypatch.setattr(
+        vel,
+        "preprocess_for_velocity",
+        lambda _adata, params=None: called.setdefault("preprocess", True) and _adata,
+    )
+
+    fake_scv = ModuleType("scvelo")
+    fake_scv.tl = SimpleNamespace(
+        velocity=lambda *_args, **_kwargs: None,
+        velocity_graph=lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setitem(__import__("sys").modules, "scvelo", fake_scv)
+
+    vel.compute_rna_velocity(adata, mode="stochastic")
+    assert called["preprocess"] is True
+
+
+def test_prepare_gam_model_for_visualization_errors_and_success(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = SimpleNamespace(
+        obs=pd.DataFrame({"latent_time": np.linspace(0, 1, 6)}),
+        obsm={},
+        var_names=["gene_0", "gene_1"],
+    )
+
+    monkeypatch.setattr(traj, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(traj, "validate_obs_column", lambda *_args, **_kwargs: None)
+
+    fake_cellrank_models = ModuleType("cellrank.models")
+    fake_cellrank_models.GAM = lambda ad: ("GAM", len(ad.obs))
+    monkeypatch.setitem(__import__("sys").modules, "cellrank.models", fake_cellrank_models)
+
+    with pytest.raises(DataNotFoundError, match="Fate probabilities"):
+        traj.prepare_gam_model_for_visualization(adata, genes=["gene_0"])
+
+    class _LineageNoNames:
+        names = None
+
+    adata.obsm["lineages_fwd"] = _LineageNoNames()
+    with pytest.raises(DataError, match="must be a CellRank Lineage object"):
+        traj.prepare_gam_model_for_visualization(adata, genes=["gene_0"])
+
+    class _Lineage:
+        names = ["state_a", "state_b"]
+
+    adata.obsm["lineages_fwd"] = _Lineage()
+    with pytest.raises(DataNotFoundError, match="Genes not found"):
+        traj.prepare_gam_model_for_visualization(adata, genes=["MISSING_GENE"])
+
+    model, lineages = traj.prepare_gam_model_for_visualization(adata, genes=["gene_0"])
+    assert model[0] == "GAM"
+    assert lineages == ["state_a", "state_b"]
+
+
+def test_infer_pseudotime_palantir_root_validation(minimal_spatial_adata, monkeypatch):
+    adata = minimal_spatial_adata.copy()
+    adata.obsm["X_pca"] = np.ones((adata.n_obs, 5))
+    monkeypatch.setattr(traj, "ensure_pca", lambda *_args, **_kwargs: None)
+
+    class _PR:
+        pseudotime = pd.Series(np.linspace(0, 1, adata.n_obs), index=adata.obs_names)
+        branch_probs = np.ones((adata.n_obs, 2))
+
+    fake_palantir = ModuleType("palantir")
+    fake_palantir.utils = SimpleNamespace(
+        run_diffusion_maps=lambda *_args, **_kwargs: {"EigenVectors": adata.obsm["X_pca"]}
+    )
+    fake_palantir.core = SimpleNamespace(run_palantir=lambda *_args, **_kwargs: _PR())
+    monkeypatch.setitem(__import__("sys").modules, "palantir", fake_palantir)
+
+    with pytest.raises(ParameterError, match="Root cell 'missing' not found"):
+        traj.infer_pseudotime_palantir(adata, root_cells=["missing"])
+
+
+def test_compute_dpt_trajectory_root_validation_and_error_wrap(
+    minimal_spatial_adata, monkeypatch
+):
+    adata = minimal_spatial_adata.copy()
+    monkeypatch.setattr(traj, "ensure_pca", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(traj, "ensure_neighbors", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(traj, "ensure_diffmap", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(ParameterError, match="Root cell 'missing' not found"):
+        traj.compute_dpt_trajectory(adata, root_cells=["missing"])
+
+    fake_scanpy = ModuleType("scanpy")
+    fake_scanpy.tl = SimpleNamespace(dpt=lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("fail")))
+    monkeypatch.setitem(__import__("sys").modules, "scanpy", fake_scanpy)
+
+    with pytest.raises(ProcessingError, match="DPT computation failed"):
+        traj.compute_dpt_trajectory(adata, root_cells=None)
+
+
+class _VelCtx:
+    def __init__(self, adata):
+        self._adata = adata
+
+    async def get_adata(self, _data_id: str):
+        return self._adata
+
+
+@pytest.mark.asyncio
+async def test_analyze_rna_velocity_missing_layers_raises_data_not_found(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    monkeypatch.setattr(vel, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        vel,
+        "validate_adata",
+        lambda *_a, **_k: (_ for _ in ()).throw(DataNotFoundError("spliced missing")),
+    )
+    monkeypatch.setitem(__import__("sys").modules, "scvelo", ModuleType("scvelo"))
+
+    with pytest.raises(DataNotFoundError, match="Missing velocity data"):
+        await vel.analyze_rna_velocity("d1", _VelCtx(adata))
+
+
+@pytest.mark.asyncio
+async def test_analyze_rna_velocity_scvelo_wraps_compute_errors(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.layers["spliced"] = np.ones((adata.n_obs, adata.n_vars))
+    adata.layers["unspliced"] = np.ones((adata.n_obs, adata.n_vars))
+
+    monkeypatch.setattr(vel, "require", lambda *_a, **_k: None)
+    monkeypatch.setitem(__import__("sys").modules, "scvelo", ModuleType("scvelo"))
+    monkeypatch.setattr(vel, "validate_adata", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        vel,
+        "compute_rna_velocity",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("cv boom")),
+    )
+
+    with pytest.raises(ProcessingError, match="scVelo RNA velocity analysis failed"):
+        await vel.analyze_rna_velocity("d2", _VelCtx(adata))
+
+
+@pytest.mark.asyncio
+async def test_analyze_rna_velocity_velovi_success_stores_metadata(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.layers["spliced"] = np.ones((adata.n_obs, adata.n_vars))
+    adata.layers["unspliced"] = np.ones((adata.n_obs, adata.n_vars))
+
+    captured = {}
+
+    monkeypatch.setattr(vel, "require", lambda *_a, **_k: None)
+    monkeypatch.setitem(__import__("sys").modules, "scvelo", ModuleType("scvelo"))
+    monkeypatch.setattr(vel, "validate_adata", lambda *_a, **_k: None)
+    async def _fake_velovi(*_a, **_k):
+        return {
+            "velocity_computed": True,
+            "velocity_shape": (adata.n_obs, adata.n_vars),
+        }
+
+    monkeypatch.setattr(vel, "analyze_velocity_with_velovi", _fake_velovi)
+    monkeypatch.setattr(
+        vel,
+        "store_analysis_metadata",
+        lambda _adata, **kwargs: captured.update(kwargs),
+    )
+    monkeypatch.setattr(vel, "export_analysis_result", lambda *_a, **_k: [])
+
+    out = await vel.analyze_rna_velocity(
+        "d3",
+        _VelCtx(adata),
+        vel.RNAVelocityParameters(method="velovi"),
+    )
+
+    assert out.velocity_computed is True
+    assert out.mode == "velovi"
+    assert captured["analysis_name"] == "velocity_velovi"
+    assert captured["statistics"]["velocity_computed"] is True
+
+
+@pytest.mark.asyncio
+async def test_analyze_trajectory_cellrank_requires_velocity_data(
+    minimal_spatial_adata,
+):
+    adata = minimal_spatial_adata.copy()
+
+    with pytest.raises(ProcessingError, match="CellRank requires velocity data"):
+        await traj.analyze_trajectory(
+            "t1",
+            _VelCtx(adata),
+            traj.TrajectoryParameters(method="cellrank"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_analyze_trajectory_palantir_success_records_metadata(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    captured = {}
+
+    def _fake_palantir(_adata, **_kwargs):
+        _adata.obs["palantir_pseudotime"] = np.linspace(0, 1, _adata.n_obs)
+        _adata.obsm["palantir_branch_probs"] = np.ones((_adata.n_obs, 2), dtype=float)
+        return _adata
+
+    monkeypatch.setattr(traj, "infer_pseudotime_palantir", _fake_palantir)
+    monkeypatch.setattr(
+        "chatspatial.utils.adata_utils.store_analysis_metadata",
+        lambda _adata, **kwargs: captured.update(kwargs),
+    )
+    monkeypatch.setattr(
+        "chatspatial.utils.results_export.export_analysis_result",
+        lambda *_a, **_k: [],
+    )
+
+    out = await traj.analyze_trajectory(
+        "t2",
+        _VelCtx(adata),
+        traj.TrajectoryParameters(method="palantir"),
+    )
+
+    assert out.pseudotime_computed is True
+    assert out.method == "palantir"
+    assert out.pseudotime_key == "palantir_pseudotime"
+    assert captured["analysis_name"] == "trajectory_palantir"
+    assert captured["results_keys"]["obsm"] == ["palantir_branch_probs"]
+
+
+@pytest.mark.asyncio
+async def test_analyze_trajectory_dpt_wraps_internal_errors(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+
+    monkeypatch.setattr(
+        traj,
+        "compute_dpt_trajectory",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("dpt boom")),
+    )
+
+    with pytest.raises(ProcessingError, match="DPT analysis failed"):
+        await traj.analyze_trajectory(
+            "t3",
+            _VelCtx(adata),
+            traj.TrajectoryParameters(method="dpt"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_analyze_trajectory_unknown_method_raises_parameter_error(
+    minimal_spatial_adata,
+):
+    adata = minimal_spatial_adata.copy()
+    params = traj.TrajectoryParameters(method="dpt").model_copy(
+        update={"method": "unknown"}
+    )
+
+    with pytest.raises(ParameterError, match="Unknown trajectory method"):
+        await traj.analyze_trajectory("t4", _VelCtx(adata), params)
+
+
+def _install_fake_cellrank(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    n_obs: int,
+    terminal_categories: list[str] | None = None,
+    fail_macrostates: bool = False,
+):
+    class _Kernel:
+        def __init__(self, *_a, **_k):
+            self.computed = False
+
+        def compute_transition_matrix(self):
+            self.computed = True
+            return self
+
+        def __mul__(self, _other):
+            return self
+
+        def __rmul__(self, _other):
+            return self
+
+        def __add__(self, _other):
+            return self
+
+    class _Memberships:
+        def __init__(self, n: int):
+            self._x = np.linspace(0.1, 0.9, n, dtype=float).reshape(n, 1)
+
+        def __getitem__(self, idx):
+            return SimpleNamespace(X=self._x[idx])
+
+    class _FateProbabilities(np.ndarray):
+        def __new__(cls, n: int):
+            arr = np.linspace(0.2, 0.8, n, dtype=float).reshape(n, 1)
+            return arr.view(cls)
+
+        def __getitem__(self, key):
+            if isinstance(key, str):
+                return SimpleNamespace(X=np.asarray(self))
+            return super().__getitem__(key)
+
+    class _GPCCA:
+        def __init__(self, _kernel):
+            self.terminal_states = None
+            self.fate_probabilities = None
+            self.macrostates = pd.Series(
+                pd.Categorical(["M0"] * n_obs, categories=["M0"])
+            )
+            self.macrostates_memberships = _Memberships(n_obs)
+
+        def compute_eigendecomposition(self):
+            return None
+
+        def compute_macrostates(self, n_states: int):
+            if fail_macrostates:
+                raise RuntimeError("macro failed")
+            self.n_states = n_states
+
+        def predict_terminal_states(self, method: str = "stability"):
+            _ = method
+            cats = terminal_categories or []
+            if cats:
+                values = [cats[0]] * n_obs
+                self.terminal_states = pd.Series(
+                    pd.Categorical(values, categories=cats)
+                )
+            else:
+                self.terminal_states = pd.Series(pd.Categorical([], categories=[]))
+
+        def compute_fate_probabilities(self):
+            self.fate_probabilities = _FateProbabilities(n_obs)
+
+    fake_cr = ModuleType("cellrank")
+    fake_cr.kernels = SimpleNamespace(
+        VelocityKernel=_Kernel,
+        ConnectivityKernel=_Kernel,
+        PrecomputedKernel=_Kernel,
+    )
+    fake_cr.estimators = SimpleNamespace(GPCCA=_GPCCA)
+    monkeypatch.setitem(__import__("sys").modules, "cellrank", fake_cr)
+
+
+def test_infer_spatial_trajectory_cellrank_velovi_path_transfers_results(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.uns["velocity_method"] = "velovi"
+    reconstructed = SimpleNamespace(
+        obs=pd.DataFrame(index=adata.obs_names.copy()),
+        obsm={},
+        uns={},
+    )
+    cleanup_called = {"v": False}
+
+    monkeypatch.setattr(
+        traj,
+        "ensure_cellrank_compat",
+        lambda: lambda: cleanup_called.__setitem__("v", True),
+    )
+    monkeypatch.setattr(traj, "get_spatial_key", lambda _a: "spatial")
+    monkeypatch.setattr(traj, "has_velovi_essential_data", lambda _a: True)
+    monkeypatch.setattr(traj, "reconstruct_velovi_adata", lambda _a: reconstructed)
+
+    _install_fake_cellrank(
+        monkeypatch,
+        n_obs=adata.n_obs,
+        terminal_categories=["T0"],
+        fail_macrostates=False,
+    )
+
+    out = traj.infer_spatial_trajectory_cellrank(adata, spatial_weight=0.5, n_states=3)
+    assert out is adata
+    assert "pseudotime" in adata.obs
+    assert "terminal_states" in adata.obs
+    assert "macrostates" in adata.obs
+    assert "fate_probabilities" in adata.obsm
+    assert cleanup_called["v"] is True
+
+
+def test_infer_spatial_trajectory_cellrank_wraps_macrostate_errors_and_cleans_up(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    cleanup_called = {"v": False}
+
+    monkeypatch.setattr(
+        traj,
+        "ensure_cellrank_compat",
+        lambda: lambda: cleanup_called.__setitem__("v", True),
+    )
+    monkeypatch.setattr(traj, "get_spatial_key", lambda _a: None)
+    _install_fake_cellrank(
+        monkeypatch,
+        n_obs=adata.n_obs,
+        terminal_categories=["T0"],
+        fail_macrostates=True,
+    )
+
+    with pytest.raises(ProcessingError, match="CellRank macrostate computation failed"):
+        traj.infer_spatial_trajectory_cellrank(adata, spatial_weight=0.0, n_states=9)
+
+    assert cleanup_called["v"] is True
+
+
+def test_infer_spatial_trajectory_cellrank_falls_back_to_macrostate_pseudotime(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+
+    monkeypatch.setattr(traj, "ensure_cellrank_compat", lambda: (lambda: None))
+    monkeypatch.setattr(traj, "get_spatial_key", lambda _a: None)
+    _install_fake_cellrank(
+        monkeypatch,
+        n_obs=adata.n_obs,
+        terminal_categories=[],
+        fail_macrostates=False,
+    )
+
+    out = traj.infer_spatial_trajectory_cellrank(adata, spatial_weight=0.0, n_states=4)
+    assert out is adata
+    assert "pseudotime" in adata.obs
+    assert "macrostates" in adata.obs
+
+
+@pytest.mark.asyncio
+async def test_analyze_velocity_with_velovi_success_handles_zero_latent_time(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.layers["spliced"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata.layers["unspliced"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata_prepared = adata.copy()
+    adata_prepared.layers["Ms"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata_prepared.layers["Mu"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    called = {"setup": False, "train": False, "stored": False}
+
+    class _FakeVELOVI:
+        @staticmethod
+        def setup_anndata(_adata, spliced_layer: str, unspliced_layer: str):
+            assert spliced_layer == "Ms"
+            assert unspliced_layer == "Mu"
+            called["setup"] = True
+
+        def __init__(self, _adata, n_hidden: int, n_latent: int):
+            assert n_hidden == 32
+            assert n_latent == 5
+
+        def train(self, max_epochs: int, accelerator: str):
+            assert max_epochs == 2
+            assert accelerator == "cpu"
+            called["train"] = True
+
+        def get_latent_time(self, n_samples: int):
+            assert n_samples == 25
+            return np.zeros((adata.n_obs, adata.n_vars), dtype=float)
+
+        def get_velocity(self, n_samples: int, velo_statistic: str):
+            assert n_samples == 25
+            assert velo_statistic == "mean"
+            return np.ones((adata.n_obs, adata.n_vars), dtype=float)
+
+        def get_latent_representation(self):
+            return np.ones((adata.n_obs, 3), dtype=float)
+
+    fake_scvi_external = ModuleType("scvi.external")
+    fake_scvi_external.VELOVI = _FakeVELOVI
+    monkeypatch.setitem(__import__("sys").modules, "scvi.external", fake_scvi_external)
+
+    monkeypatch.setattr(vel, "require", lambda *_a, **_k: None)
+
+    async def _fake_prepare(*_a, **_k):
+        return adata_prepared
+
+    monkeypatch.setattr(vel, "_prepare_velovi_data", _fake_prepare)
+    monkeypatch.setattr(vel, "get_accelerator", lambda prefer_gpu=False: "cpu")
+    monkeypatch.setattr(
+        vel,
+        "store_velovi_essential_data",
+        lambda *_a, **_k: called.__setitem__("stored", True),
+    )
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        result = await vel.analyze_velocity_with_velovi(
+            adata, n_epochs=2, n_hidden=32, n_latent=5, use_gpu=False, ctx=None
+        )
+    assert result["velocity_computed"] is True
+    assert result["velocity_shape"] == (adata.n_obs, adata.n_vars)
+    assert called == {"setup": True, "train": True, "stored": True}
+    assert "velocity_velovi_norm" in adata.obs
+    assert "X_velovi_latent" in adata.obsm
+    assert not any("divide by zero" in str(w.message) for w in caught)
+
+
+@pytest.mark.asyncio
+async def test_analyze_velocity_with_velovi_wraps_model_failures(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.layers["spliced"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata.layers["unspliced"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata_prepared = adata.copy()
+    adata_prepared.layers["Ms"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata_prepared.layers["Mu"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+
+    class _FailVELOVI:
+        @staticmethod
+        def setup_anndata(*_a, **_k):
+            return None
+
+        def __init__(self, *_a, **_k):
+            return None
+
+        def train(self, *_a, **_k):
+            raise RuntimeError("train failed")
+
+    fake_scvi_external = ModuleType("scvi.external")
+    fake_scvi_external.VELOVI = _FailVELOVI
+    monkeypatch.setitem(__import__("sys").modules, "scvi.external", fake_scvi_external)
+
+    monkeypatch.setattr(vel, "require", lambda *_a, **_k: None)
+
+    async def _fake_prepare(*_a, **_k):
+        return adata_prepared
+
+    monkeypatch.setattr(vel, "_prepare_velovi_data", _fake_prepare)
+    monkeypatch.setattr(vel, "get_accelerator", lambda prefer_gpu=False: "cpu")
+
+    with pytest.raises(ProcessingError, match="VELOVI velocity analysis failed"):
+        await vel.analyze_velocity_with_velovi(adata, n_epochs=1, ctx=None)

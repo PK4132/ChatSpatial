@@ -231,6 +231,7 @@ class SpatialVariableGenesResult(BaseAnalysisResult):
         Access complete statistics via:
         - adata.var['spatialde_pval'], adata.var['spatialde_qval'] (SpatialDE)
         - adata.var['sparkx_pval'], adata.var['sparkx_qval'] (SPARK-X)
+        - adata.var['flashs_pval'], adata.var['flashs_qval'] (FlashS)
     """
 
     data_id: str
@@ -266,6 +267,10 @@ class SpatialVariableGenesResult(BaseAnalysisResult):
         exclude=True,
     )
     sparkx_results: Optional[dict[str, Any]] = Field(
+        default=None,
+        exclude=True,
+    )
+    flashs_results: Optional[dict[str, Any]] = Field(
         default=None,
         exclude=True,
     )

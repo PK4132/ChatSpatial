@@ -1,0 +1,418 @@
+"""Unit tests for differential expression tool contracts."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import numpy as np
+import pandas as pd
+import pytest
+from anndata import AnnData
+
+from chatspatial.models.analysis import DifferentialExpressionResult
+from chatspatial.models.data import DifferentialExpressionParameters
+from chatspatial.tools import differential as differential_mod
+from chatspatial.tools.differential import _run_pydeseq2, differential_expression
+from chatspatial.utils.exceptions import DataError, DataNotFoundError, ParameterError
+
+
+class DummyCtx:
+    def __init__(self, adata: AnnData):
+        self._adata = adata
+        self.warnings: list[str] = []
+        self.infos: list[str] = []
+
+    async def get_adata(self, _data_id: str) -> AnnData:
+        return self._adata
+
+    async def warning(self, msg: str) -> None:
+        self.warnings.append(msg)
+
+    async def info(self, msg: str) -> None:
+        self.infos.append(msg)
+
+
+def _make_de_adata() -> AnnData:
+    X = np.array(
+        [
+            [20, 1, 0],
+            [18, 2, 0],
+            [21, 1, 0],
+            [19, 3, 0],
+            [17, 2, 0],
+            [1, 15, 0],
+            [2, 14, 0],
+            [1, 16, 0],
+            [2, 13, 0],
+            [1, 12, 0],
+            [10, 10, 0],
+            [11, 9, 0],
+        ],
+        dtype=np.float32,
+    )
+    adata = AnnData(X=X)
+    adata.var_names = ["gene_0", "gene_1", "gene_2"]
+    adata.obs_names = [f"cell_{i}" for i in range(adata.n_obs)]
+    adata.obs["cluster"] = ["A"] * 5 + ["B"] * 5 + ["tiny"] * 2
+    # Preserve raw for log2FC path
+    adata.raw = adata.copy()
+    return adata
+
+
+def _fake_rank_genes_groups_factory(names_by_group: dict[str, list[str]]):
+    def _fake_rank_genes_groups(adata, groupby, method, n_genes, reference, groups=None):
+        del groupby, method, reference, groups
+        fields = [(g, "U64") for g in names_by_group.keys()]
+        out = np.zeros((n_genes,), dtype=fields)
+        pvals = np.zeros((n_genes,), dtype=[(g, "f8") for g in names_by_group.keys()])
+        for g, genes in names_by_group.items():
+            padded = list(genes) + [genes[-1]] * max(0, n_genes - len(genes))
+            out[g] = np.array(padded[:n_genes], dtype="U64")
+            pvals[g] = np.linspace(0.001, 0.05, n_genes)
+        adata.uns["rank_genes_groups"] = {"names": out, "pvals_adj": pvals}
+
+    return _fake_rank_genes_groups
+
+
+@pytest.mark.asyncio
+async def test_differential_expression_dispatches_pydeseq2(monkeypatch: pytest.MonkeyPatch):
+    adata = _make_de_adata()
+    ctx = DummyCtx(adata)
+
+    expected = DifferentialExpressionResult(
+        data_id="d1",
+        comparison="A vs B",
+        n_genes=1,
+        top_genes=["gene_0"],
+        statistics={"method": "pydeseq2"},
+    )
+
+    async def _fake_run(_data_id, _ctx, _params):
+        return expected
+
+    monkeypatch.setattr(differential_mod, "_run_pydeseq2", _fake_run)
+
+    params = DifferentialExpressionParameters(
+        group_key="cluster",
+        method="pydeseq2",
+        sample_key="sample",
+    )
+    result = await differential_expression("d1", ctx, params)
+
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_run_pydeseq2_requires_sample_key():
+    adata = _make_de_adata()
+    ctx = DummyCtx(adata)
+    params = DifferentialExpressionParameters(
+        group_key="cluster",
+        method="pydeseq2",
+        sample_key=None,
+    )
+
+    with pytest.raises(ParameterError, match="sample_key is required"):
+        await _run_pydeseq2("d2", ctx, params)
+
+
+@pytest.mark.asyncio
+async def test_differential_all_groups_skips_tiny_groups(monkeypatch: pytest.MonkeyPatch):
+    adata = _make_de_adata()
+    ctx = DummyCtx(adata)
+
+    monkeypatch.setattr(
+        differential_mod.sc.tl,
+        "rank_genes_groups",
+        _fake_rank_genes_groups_factory(
+            {
+                "A": ["gene_0", "gene_1", "gene_2"],
+                "B": ["gene_1", "gene_0", "gene_2"],
+            }
+        ),
+    )
+    monkeypatch.setattr(differential_mod, "store_analysis_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(differential_mod, "export_analysis_result", lambda *a, **k: None)
+
+    params = DifferentialExpressionParameters(
+        group_key="cluster",
+        group1=None,
+        method="wilcoxon",
+        n_top_genes=3,
+        min_cells=3,
+    )
+    result = await differential_expression("d3", ctx, params)
+
+    assert result.comparison == "All groups in cluster"
+    assert result.n_genes == 3
+    assert result.top_genes == ["gene_0", "gene_1", "gene_2"]
+    assert any("Skipped 1 group(s)" in msg for msg in ctx.warnings)
+
+
+@pytest.mark.asyncio
+async def test_differential_specific_group_requires_raw_source(monkeypatch: pytest.MonkeyPatch):
+    adata = _make_de_adata()
+    ctx = DummyCtx(adata)
+
+    monkeypatch.setattr(
+        differential_mod.sc.tl,
+        "rank_genes_groups",
+        _fake_rank_genes_groups_factory({"A": ["gene_0", "gene_1"]}),
+    )
+    monkeypatch.setattr(
+        differential_mod,
+        "get_raw_data_source",
+        lambda *_a, **_k: SimpleNamespace(source="X", X=adata.X, var_names=adata.var_names),
+    )
+
+    params = DifferentialExpressionParameters(
+        group_key="cluster",
+        group1="A",
+        group2="B",
+        method="wilcoxon",
+        n_top_genes=2,
+    )
+
+    with pytest.raises(DataNotFoundError, match="Raw count data"):
+        await differential_expression("d4", ctx, params)
+
+
+@pytest.mark.asyncio
+async def test_differential_specific_group_warns_on_missing_genes(monkeypatch: pytest.MonkeyPatch):
+    adata = _make_de_adata()
+    ctx = DummyCtx(adata)
+
+    monkeypatch.setattr(
+        differential_mod.sc.tl,
+        "rank_genes_groups",
+        _fake_rank_genes_groups_factory({"A": ["gene_0", "missing_gene"]}),
+    )
+    monkeypatch.setattr(
+        differential_mod,
+        "get_raw_data_source",
+        lambda *_a, **_k: SimpleNamespace(source="raw", X=adata.raw.X, var_names=adata.raw.var_names),
+    )
+    monkeypatch.setattr(differential_mod, "store_analysis_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(differential_mod, "export_analysis_result", lambda *a, **k: None)
+
+    params = DifferentialExpressionParameters(
+        group_key="cluster",
+        group1="A",
+        group2="B",
+        method="wilcoxon",
+        n_top_genes=2,
+    )
+    result = await differential_expression("d5", ctx, params)
+
+    assert result.comparison == "A vs B"
+    assert result.top_genes == ["gene_0", "missing_gene"]
+    assert result.statistics["mean_log2fc"] is not None
+    assert any("genes not found in raw data" in msg for msg in ctx.warnings)
+
+
+def _install_fake_pydeseq2(monkeypatch: pytest.MonkeyPatch, results_df, captured: dict[str, object]):
+    from types import ModuleType
+
+    class _DDS:
+        def __init__(self, counts, metadata, design_factors):
+            captured["counts_shape"] = tuple(counts.shape)
+            captured["metadata_shape"] = tuple(metadata.shape)
+            captured["design_factors"] = design_factors
+
+        def deseq2(self):
+            captured["deseq2_called"] = True
+
+    class _Stats:
+        def __init__(self, dds, contrast):
+            del dds
+            captured["contrast"] = contrast
+            self.results_df = results_df.copy()
+
+        def summary(self):
+            captured["summary_called"] = True
+
+    m_pkg = ModuleType("pydeseq2")
+    m_dds = ModuleType("pydeseq2.dds")
+    m_ds = ModuleType("pydeseq2.ds")
+    m_dds.DeseqDataSet = _DDS
+    m_ds.DeseqStats = _Stats
+
+    monkeypatch.setitem(__import__("sys").modules, "pydeseq2", m_pkg)
+    monkeypatch.setitem(__import__("sys").modules, "pydeseq2.dds", m_dds)
+    monkeypatch.setitem(__import__("sys").modules, "pydeseq2.ds", m_ds)
+
+
+
+def _make_pydeseq2_adata() -> AnnData:
+    # 8 cells, 3 genes, two conditions across two biological samples
+    X = np.array(
+        [
+            [20, 2, 1],
+            [18, 1, 1],
+            [2, 21, 1],
+            [1, 19, 1],
+            [22, 3, 1],
+            [17, 2, 1],
+            [3, 20, 1],
+            [2, 18, 1],
+        ],
+        dtype=np.int64,
+    )
+    adata = AnnData(X=X)
+    adata.var_names = ["gene_0", "gene_1", "gene_2"]
+    adata.obs_names = [f"c{i}" for i in range(adata.n_obs)]
+    adata.obs["cluster"] = ["A", "A", "B", "B", "A", "A", "B", "B"]
+    adata.obs["sample"] = ["s1", "s1", "s1", "s1", "s2", "s2", "s2", "s2"]
+    return adata
+
+
+@pytest.mark.asyncio
+async def test_run_pydeseq2_success_auto_group_selection_and_persistence(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = _make_pydeseq2_adata()
+    ctx = DummyCtx(adata)
+    captured: dict[str, object] = {}
+
+    results_df = (
+        pd.DataFrame(
+            {
+                "padj": [0.01, 0.2],
+                "log2FoldChange": [1.3, -0.4],
+            },
+            index=["gene_0", "gene_1"],
+        )
+    )
+
+    _install_fake_pydeseq2(monkeypatch, results_df, captured)
+
+    monkeypatch.setattr(differential_mod, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        differential_mod,
+        "get_raw_data_source",
+        lambda *_a, **_k: SimpleNamespace(X=adata.X, var_names=adata.var_names),
+    )
+    monkeypatch.setattr(differential_mod, "check_is_integer_counts", lambda _x: (True, None, None))
+    monkeypatch.setattr(differential_mod, "store_analysis_metadata", lambda _adata, **kwargs: captured.update(kwargs))
+    monkeypatch.setattr(differential_mod, "export_analysis_result", lambda *_a, **_k: None)
+
+    params = DifferentialExpressionParameters(
+        group_key="cluster",
+        method="pydeseq2",
+        sample_key="sample",
+        group1=None,
+        group2=None,
+        n_top_genes=5,
+    )
+
+    out = await _run_pydeseq2("d6", ctx, params)
+
+    assert out.comparison == "A vs B"
+    assert out.n_genes == 2
+    assert out.top_genes == ["gene_0", "gene_1"]
+    assert out.statistics["n_pseudobulk_samples"] == 4
+    assert any("No group specified" in msg for msg in ctx.infos)
+    assert captured["analysis_name"] == "differential_expression"
+    assert captured["method"] == "pydeseq2"
+    assert captured["statistics"]["n_pseudobulk_samples"] == 4
+    assert captured["contrast"] == ["condition", "A", "B"]
+
+
+@pytest.mark.asyncio
+async def test_run_pydeseq2_warns_for_non_integer_counts(monkeypatch: pytest.MonkeyPatch):
+    adata = _make_pydeseq2_adata()
+    ctx = DummyCtx(adata)
+    captured: dict[str, object] = {}
+
+    results_df = (
+        pd.DataFrame(
+            {"padj": [0.04], "log2FoldChange": [0.8]}, index=["gene_0"]
+        )
+    )
+    _install_fake_pydeseq2(monkeypatch, results_df, captured)
+
+    monkeypatch.setattr(differential_mod, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        differential_mod,
+        "get_raw_data_source",
+        lambda *_a, **_k: SimpleNamespace(X=adata.X.astype(float), var_names=adata.var_names),
+    )
+    monkeypatch.setattr(differential_mod, "check_is_integer_counts", lambda _x: (False, None, None))
+    monkeypatch.setattr(differential_mod, "store_analysis_metadata", lambda _adata, **kwargs: captured.update(kwargs))
+    monkeypatch.setattr(differential_mod, "export_analysis_result", lambda *_a, **_k: None)
+
+    params = DifferentialExpressionParameters(
+        group_key="cluster",
+        method="pydeseq2",
+        sample_key="sample",
+        group1="A",
+        group2="B",
+    )
+
+    out = await _run_pydeseq2("d7", ctx, params)
+
+    assert out.comparison == "A vs B"
+    assert any("requires raw integer counts" in msg for msg in ctx.warnings)
+
+
+@pytest.mark.asyncio
+async def test_run_pydeseq2_rejects_insufficient_total_pseudobulk_samples(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = _make_pydeseq2_adata()
+    adata.obs["sample"] = "s1"  # only two pseudobulk samples: s1_A, s1_B
+    ctx = DummyCtx(adata)
+
+    monkeypatch.setattr(differential_mod, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        differential_mod,
+        "get_raw_data_source",
+        lambda *_a, **_k: SimpleNamespace(X=adata.X, var_names=adata.var_names),
+    )
+    monkeypatch.setattr(differential_mod, "check_is_integer_counts", lambda _x: (True, None, None))
+
+    params = DifferentialExpressionParameters(
+        group_key="cluster",
+        method="pydeseq2",
+        sample_key="sample",
+        group1="A",
+        group2="B",
+    )
+
+    with pytest.raises(DataError, match="Found only 2 total pseudobulk samples"):
+        await _run_pydeseq2("d8", ctx, params)
+
+
+@pytest.mark.asyncio
+async def test_run_pydeseq2_rejects_condition_with_single_sample(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    # 4 pseudobulk groups total, but B has only one biological sample
+    X = np.array(
+        [[10, 1, 0], [1, 10, 0], [11, 1, 0], [12, 1, 0]], dtype=np.int64
+    )
+    adata = AnnData(X=X)
+    adata.var_names = ["gene_0", "gene_1", "gene_2"]
+    adata.obs_names = ["c1", "c2", "c3", "c4"]
+    adata.obs["cluster"] = ["A", "B", "A", "A"]
+    adata.obs["sample"] = ["s1", "s1", "s2", "s3"]
+    ctx = DummyCtx(adata)
+
+    monkeypatch.setattr(differential_mod, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        differential_mod,
+        "get_raw_data_source",
+        lambda *_a, **_k: SimpleNamespace(X=adata.X, var_names=adata.var_names),
+    )
+    monkeypatch.setattr(differential_mod, "check_is_integer_counts", lambda _x: (True, None, None))
+
+    params = DifferentialExpressionParameters(
+        group_key="cluster",
+        method="pydeseq2",
+        sample_key="sample",
+        group1="A",
+        group2="B",
+    )
+
+    with pytest.raises(DataError, match="at least 2 samples per condition"):
+        await _run_pydeseq2("d9", ctx, params)

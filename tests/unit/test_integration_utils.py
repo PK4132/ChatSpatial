@@ -1,0 +1,460 @@
+"""Unit tests for integration tool utility contracts and regressions."""
+
+from __future__ import annotations
+
+from types import ModuleType, SimpleNamespace
+
+import numpy as np
+import pytest
+from anndata import AnnData
+
+from chatspatial.tools.integration import (
+    align_spatial_coordinates,
+    integrate_multiple_samples,
+    integrate_with_scvi,
+)
+from chatspatial.utils.exceptions import DataError, ParameterError, ProcessingError
+
+
+def _install_fake_scvi(monkeypatch: pytest.MonkeyPatch, calls: dict[str, object]) -> None:
+    class FakeSCVI:
+        @staticmethod
+        def setup_anndata(combined, batch_key, layer):
+            calls["setup"] = {
+                "batch_key": batch_key,
+                "layer": layer,
+                "n_obs": combined.n_obs,
+            }
+
+        def __init__(self, combined, **kwargs):
+            calls["init"] = {"kwargs": kwargs, "n_obs": combined.n_obs}
+            self._combined = combined
+
+        def train(self, **kwargs):
+            calls["train"] = kwargs
+
+        def get_latent_representation(self):
+            return np.zeros((self._combined.n_obs, 3), dtype=np.float32)
+
+    fake_scvi = ModuleType("scvi")
+    fake_scvi.model = SimpleNamespace(SCVI=FakeSCVI)
+
+    monkeypatch.setattr("chatspatial.tools.integration.require", lambda *_args, **_kwargs: None)
+    monkeypatch.setitem(__import__("sys").modules, "scvi", fake_scvi)
+
+
+def test_align_spatial_coordinates_preserves_row_mapping_for_interleaved_batches(
+    minimal_spatial_adata,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(np.arange(adata.n_obs) % 2 == 0, "A", "B")
+
+    ref_mask = adata.obs["batch"] == "A"
+    b_mask = adata.obs["batch"] == "B"
+    ref_coords = adata.obsm["spatial"][ref_mask.to_numpy()]
+    b_coords = adata.obsm["spatial"][b_mask.to_numpy()]
+
+    mean = ref_coords.mean(axis=0)
+    std = ref_coords.std(axis=0)
+    expected = np.zeros_like(adata.obsm["spatial"], dtype=float)
+    expected[ref_mask.to_numpy()] = (ref_coords - mean) / std
+    expected[b_mask.to_numpy()] = (b_coords - mean) / std
+
+    out = align_spatial_coordinates(adata, batch_key="batch", reference_batch="A")
+
+    np.testing.assert_allclose(out.obsm["spatial_aligned"], expected, atol=1e-8)
+
+
+@pytest.mark.integration
+def test_integrate_multiple_samples_scvi_metadata_uses_x_scvi_key(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2")
+    adata.var["highly_variable"] = True
+
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.validate_adata_basics",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.integrate_with_scvi",
+        lambda combined, **_kwargs: combined,
+    )
+    monkeypatch.setattr("scanpy.tl.umap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.store_analysis_metadata",
+        lambda _adata, **kwargs: captured.update(kwargs),
+    )
+
+    out = integrate_multiple_samples(adata, method="scvi")
+
+    assert out is adata
+    assert captured["analysis_name"] == "integration_scvi"
+    assert captured["results_keys"] == {"obsm": ["X_scvi"]}
+
+
+def test_integrate_with_scvi_rejects_unpreprocessed_values(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2")
+    adata.X = np.full(adata.X.shape, 80.0, dtype=np.float32)
+
+    _install_fake_scvi(monkeypatch, calls={})
+
+    with pytest.raises(DataError, match="preprocessed"):
+        integrate_with_scvi(adata, batch_key="batch")
+
+
+def test_integrate_with_scvi_requires_batch_key(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+
+    _install_fake_scvi(monkeypatch, calls={})
+
+    with pytest.raises(ParameterError, match="Batch key 'batch'"):
+        integrate_with_scvi(adata, batch_key="batch")
+
+
+def test_integrate_with_scvi_requires_multiple_batches(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = "single"
+
+    _install_fake_scvi(monkeypatch, calls={})
+
+    with pytest.raises(DataError, match="at least 2 batches"):
+        integrate_with_scvi(adata, batch_key="batch")
+
+
+def test_integrate_with_scvi_happy_path_sets_latent_and_neighbors(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2")
+    adata.X = np.clip(adata.X.astype(np.float32) / 10.0, 0, 10)
+
+    calls: dict[str, object] = {}
+    _install_fake_scvi(monkeypatch, calls)
+
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.get_accelerator",
+        lambda prefer_gpu=False: "cpu",
+    )
+    monkeypatch.setattr(
+        "scanpy.pp.neighbors",
+        lambda _adata, use_rep: calls.update({"neighbors": {"use_rep": use_rep}}),
+    )
+
+    out = integrate_with_scvi(adata, batch_key="batch", n_epochs=7, use_gpu=False)
+
+    assert out is adata
+    assert out.obsm["X_scvi"].shape == (adata.n_obs, 3)
+    assert calls["setup"]["batch_key"] == "batch"
+    assert calls["train"]["max_epochs"] == 7
+    assert calls["train"]["accelerator"] == "cpu"
+    assert calls["neighbors"]["use_rep"] == "X_scvi"
+
+
+def test_integrate_multiple_samples_autofills_missing_batch_labels_with_concat(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata1 = minimal_spatial_adata.copy()
+    adata2 = minimal_spatial_adata.copy()
+    adata2.obs_names = [f"b_{i}" for i in range(adata2.n_obs)]
+    adata1.var_names = [f"a_{g}" for g in adata1.var_names]
+    adata2.var_names = [f"b_{g}" for g in adata2.var_names]
+
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.validate_adata_basics",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.integrate_with_scvi",
+        lambda combined, **_kwargs: combined,
+    )
+    monkeypatch.setattr("scanpy.tl.umap", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.store_analysis_metadata",
+        lambda _adata, **kwargs: captured.update(kwargs),
+    )
+
+    out = integrate_multiple_samples([adata1, adata2], method="scvi", batch_key="batch")
+
+    assert out.n_obs == adata1.n_obs + adata2.n_obs
+    assert set(out.obs["batch"].astype(str).unique()) == {"sample_0", "sample_1"}
+    assert captured["analysis_name"] == "integration_scvi"
+
+
+def test_integrate_multiple_samples_requires_at_least_two_datasets(minimal_spatial_adata):
+    with pytest.raises(ParameterError, match="at least 2 datasets"):
+        integrate_multiple_samples([minimal_spatial_adata.copy()], method="harmony")
+
+
+def test_integrate_multiple_samples_requires_batch_key_for_merged_adata(minimal_spatial_adata):
+    adata = minimal_spatial_adata.copy()
+    if "batch" in adata.obs:
+        del adata.obs["batch"]
+
+    with pytest.raises(ParameterError, match="missing batch information key 'batch'"):
+        integrate_multiple_samples(adata, method="harmony", batch_key="batch")
+
+
+def test_integrate_with_scvi_auto_epochs_for_small_dataset(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2")
+    adata.X = np.clip(adata.X.astype(np.float32) / 10.0, 0, 10)
+
+    calls: dict[str, object] = {}
+    _install_fake_scvi(monkeypatch, calls)
+
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.get_accelerator",
+        lambda prefer_gpu=False: "cpu",
+    )
+    monkeypatch.setattr("scanpy.pp.neighbors", lambda *_args, **_kwargs: None)
+
+    out = integrate_with_scvi(adata, batch_key="batch", n_epochs=None, use_gpu=False)
+
+    assert out is adata
+    assert calls["train"]["max_epochs"] == 400
+
+
+@pytest.mark.asyncio
+async def test_integrate_samples_scvi_exports_and_adds_dataset(monkeypatch: pytest.MonkeyPatch):
+    from chatspatial.models.data import IntegrationParameters
+    from chatspatial.tools.integration import integrate_samples
+
+    adata = AnnData(np.ones((12, 8), dtype=np.float32))
+    adata.obs["batch"] = ["a"] * 6 + ["b"] * 6
+    adata.obsm["spatial"] = np.ones((12, 2), dtype=float)
+
+    class _Ctx:
+        def __init__(self):
+            self.added: list[tuple[str, AnnData]] = []
+
+        async def get_adata(self, data_id: str):
+            del data_id
+            return adata
+
+        async def add_dataset(self, ds: AnnData, prefix: str = "data"):
+            data_id = f"{prefix}_1"
+            self.added.append((data_id, ds))
+            return data_id
+
+    ctx = _Ctx()
+    exported: list[tuple[str, str]] = []
+
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.integrate_multiple_samples",
+        lambda adatas, **kwargs: adatas[0],
+    )
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.align_spatial_coordinates",
+        lambda combined_adata, **kwargs: (combined_adata.obsm.__setitem__("spatial_aligned", combined_adata.obsm["spatial"]), combined_adata)[1],
+    )
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.export_analysis_result",
+        lambda adata_obj, dataset_id, analysis_name: exported.append((dataset_id, analysis_name)),
+    )
+
+    params = IntegrationParameters(method="scvi", align_spatial=True, batch_key="batch")
+    result = await integrate_samples(["d1", "d2"], ctx, params)
+
+    assert result.data_id == "integrated_1"
+    assert result.integration_method == "scvi"
+    assert len(ctx.added) == 1
+    assert exported == [
+        ("integrated_1", "integration_scvi"),
+        ("integrated_1", "spatial_alignment"),
+    ]
+
+
+def _install_classical_integration_mocks(
+    monkeypatch: pytest.MonkeyPatch,
+    captured: dict[str, object],
+) -> None:
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.validate_adata_basics",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "scanpy.pp.highly_variable_genes",
+        lambda adata, **_kwargs: adata.var.__setitem__("highly_variable", True),
+    )
+    monkeypatch.setattr("scanpy.pp.scale", lambda *_args, **_kwargs: None)
+
+    def _fake_pca(adata, n_comps, svd_solver, zero_center=False):
+        del svd_solver, zero_center
+        adata.obsm["X_pca"] = np.zeros((adata.n_obs, n_comps), dtype=np.float32)
+
+    monkeypatch.setattr("scanpy.tl.pca", _fake_pca)
+    monkeypatch.setattr("scanpy.tl.umap", lambda *_args, **_kwargs: None)
+
+    def _fake_neighbors(adata, **kwargs):
+        captured.setdefault("neighbors", []).append(kwargs)
+        adata.uns["neighbors_called"] = True
+
+    monkeypatch.setattr("scanpy.pp.neighbors", _fake_neighbors)
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.store_analysis_metadata",
+        lambda _adata, **kwargs: captured.update(kwargs),
+    )
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.require",
+        lambda *_args, **_kwargs: None,
+    )
+
+
+
+def test_integrate_multiple_samples_harmony_uses_transposed_output_when_needed(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2")
+    adata.var["highly_variable"] = True
+    adata.X = np.clip(adata.X.astype(np.float32) / 10.0, 0, 10)
+
+    captured: dict[str, object] = {}
+    _install_classical_integration_mocks(monkeypatch, captured)
+
+    fake_harmonypy = ModuleType("harmonypy")
+    # Old harmonypy shape: (n_pcs, n_cells) -> should be transposed by code
+    fake_harmonypy.run_harmony = lambda **_kwargs: SimpleNamespace(
+        Z_corr=np.full((3, adata.n_obs), 1.0, dtype=np.float32)
+    )
+    monkeypatch.setitem(__import__("sys").modules, "harmonypy", fake_harmonypy)
+
+    out = integrate_multiple_samples(adata, method="harmony", batch_key="batch", n_pcs=3)
+
+    assert out.n_obs == adata.n_obs
+    assert out.obsm["X_pca_harmony"].shape == (adata.n_obs, 3)
+    assert captured["analysis_name"] == "integration_harmony"
+    assert captured["results_keys"] == {"obsm": ["X_pca_harmony"]}
+    assert captured["neighbors"][0]["use_rep"] == "X_pca_harmony"
+
+
+
+def test_integrate_multiple_samples_bbknn_dispatches_module_call(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2")
+    adata.var["highly_variable"] = True
+    adata.X = np.clip(adata.X.astype(np.float32) / 10.0, 0, 10)
+
+    captured: dict[str, object] = {}
+    _install_classical_integration_mocks(monkeypatch, captured)
+
+    fake_bbknn = ModuleType("bbknn")
+    fake_bbknn.bbknn = lambda adata, batch_key, neighbors_within_batch: captured.update(
+        {
+            "bbknn": {
+                "batch_key": batch_key,
+                "neighbors_within_batch": neighbors_within_batch,
+                "n_obs": adata.n_obs,
+            }
+        }
+    )
+    monkeypatch.setitem(__import__("sys").modules, "bbknn", fake_bbknn)
+
+    out = integrate_multiple_samples(adata, method="bbknn", batch_key="batch", n_pcs=3)
+
+    assert out.n_obs == adata.n_obs
+    assert captured["bbknn"] == {
+        "batch_key": "batch",
+        "neighbors_within_batch": 3,
+        "n_obs": adata.n_obs,
+    }
+    assert captured["analysis_name"] == "integration_bbknn"
+    assert captured["results_keys"] == {}
+
+
+
+def test_integrate_multiple_samples_scanorama_wrapper_path_uses_x_scanorama(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2")
+    adata.var["highly_variable"] = True
+    adata.X = np.clip(adata.X.astype(np.float32) / 10.0, 0, 10)
+
+    captured: dict[str, object] = {}
+    _install_classical_integration_mocks(monkeypatch, captured)
+
+    monkeypatch.setattr(
+        "scanpy.external.pp.scanorama_integrate",
+        lambda combined, key, basis, adjusted_basis: combined.obsm.__setitem__(
+            adjusted_basis, np.zeros((combined.n_obs, 2), dtype=np.float32)
+        ),
+    )
+
+    out = integrate_multiple_samples(adata, method="scanorama", batch_key="batch", n_pcs=3)
+
+    assert out.n_obs == adata.n_obs
+    assert "X_scanorama" in out.obsm
+    assert captured["analysis_name"] == "integration_scanorama"
+    assert captured["results_keys"] == {"obsm": ["X_scanorama"]}
+    assert captured["neighbors"][0]["use_rep"] == "X_scanorama"
+
+
+
+def test_integrate_multiple_samples_unknown_method_falls_back_to_default_neighbors(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2")
+    adata.var["highly_variable"] = True
+    adata.X = np.clip(adata.X.astype(np.float32) / 10.0, 0, 10)
+
+    captured: dict[str, object] = {}
+    _install_classical_integration_mocks(monkeypatch, captured)
+
+    out = integrate_multiple_samples(adata, method="not_real", batch_key="batch", n_pcs=3)
+
+    assert out.n_obs == adata.n_obs
+    assert captured["analysis_name"] == "integration_not_real"
+    assert captured["results_keys"] == {"obsm": ["X_pca"]}
+    # default neighbors call should not force use_rep
+    assert captured["neighbors"][0] == {}
+
+
+
+def test_integrate_multiple_samples_wraps_harmony_errors(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2")
+    adata.var["highly_variable"] = True
+    adata.X = np.clip(adata.X.astype(np.float32) / 10.0, 0, 10)
+
+    captured: dict[str, object] = {}
+    _install_classical_integration_mocks(monkeypatch, captured)
+
+    fake_harmonypy = ModuleType("harmonypy")
+    fake_harmonypy.run_harmony = lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("hboom"))
+    monkeypatch.setitem(__import__("sys").modules, "harmonypy", fake_harmonypy)
+
+    with pytest.raises(ProcessingError, match="Harmony integration failed"):
+        integrate_multiple_samples(adata, method="harmony", batch_key="batch", n_pcs=3)

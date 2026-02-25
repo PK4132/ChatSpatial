@@ -1,0 +1,1 @@
+"""ChatSpatial test suite."""

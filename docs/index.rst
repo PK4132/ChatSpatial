@@ -82,6 +82,12 @@ Reference
 
         MCP client configuration
 
+    .. grid-item-card:: Data Management
+        :link: advanced/data-management
+        :link-type: doc
+
+        External dataset registry and fetch workflow
+
 ----
 
 Support
@@ -109,6 +115,7 @@ Support
 
    advanced/methods-reference
    advanced/configuration
+   advanced/data-management
 
 .. toctree::
    :maxdepth: 1

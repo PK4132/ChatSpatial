@@ -1,0 +1,187 @@
+"""Unit contracts for embedding computation tool."""
+
+from __future__ import annotations
+
+import numpy as np
+import pytest
+
+from chatspatial.tools import embeddings as emb
+
+
+class DummyCtx:
+    def __init__(self, adata):
+        self._adata = adata
+        self.warnings: list[str] = []
+
+    async def get_adata(self, _data_id: str):
+        return self._adata
+
+    async def warning(self, msg: str):
+        self.warnings.append(msg)
+
+
+@pytest.mark.asyncio
+async def test_compute_embeddings_happy_path_leiden_with_metadata_export(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    ctx = DummyCtx(adata)
+    calls: dict[str, object] = {}
+
+    monkeypatch.setattr(emb, "ensure_pca", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(emb, "ensure_neighbors", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(emb, "ensure_umap", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(emb, "ensure_diffmap", lambda *_args, **_kwargs: True)
+    monkeypatch.setattr(emb, "ensure_spatial_neighbors", lambda *_args, **_kwargs: True)
+
+    def _ensure_leiden(adata_obj, *, key_added, **_kwargs):
+        adata_obj.obs[key_added] = ["0"] * (adata_obj.n_obs // 2) + ["1"] * (
+            adata_obj.n_obs - adata_obj.n_obs // 2
+        )
+        return True
+
+    monkeypatch.setattr(emb, "ensure_leiden", _ensure_leiden)
+    monkeypatch.setattr(emb, "ensure_louvain", lambda *_args, **_kwargs: False)
+
+    def _store(*_args, **kwargs):
+        calls["metadata"] = kwargs
+
+    def _export(_adata, data_id, name):
+        calls["export"] = (data_id, name)
+
+    monkeypatch.setattr(emb, "store_analysis_metadata", _store)
+    monkeypatch.setattr(emb, "export_analysis_result", _export)
+
+    adata.uns["pca"] = {"variance_ratio": np.array([0.4, 0.2])}
+    params = emb.EmbeddingParameters(
+        compute_diffmap=True,
+        clustering_method="leiden",
+        clustering_key="cluster_x",
+    )
+
+    out = await emb.compute_embeddings("d1", ctx, params)
+
+    assert out.data_id == "d1"
+    assert "PCA" in out.computed
+    assert "neighbors" in out.computed
+    assert "UMAP" in out.computed
+    assert "diffusion map" in out.computed
+    assert "spatial neighbors" in out.computed
+    assert out.n_clusters == 2
+    assert out.pca_variance_ratio == pytest.approx(0.6)
+    assert calls["export"] == ("d1", "embeddings_leiden")
+    assert calls["metadata"]["analysis_name"] == "embeddings_leiden"
+    assert calls["metadata"]["statistics"]["n_clusters"] == 2
+
+
+@pytest.mark.asyncio
+async def test_compute_embeddings_louvain_and_skip_paths(minimal_spatial_adata, monkeypatch):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["louvain_key"] = ["0"] * adata.n_obs
+    ctx = DummyCtx(adata)
+
+    monkeypatch.setattr(emb, "ensure_pca", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_neighbors", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_umap", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_diffmap", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_spatial_neighbors", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_leiden", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_louvain", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "store_analysis_metadata", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(emb, "export_analysis_result", lambda *_args, **_kwargs: None)
+
+    out = await emb.compute_embeddings(
+        "d2",
+        ctx,
+        emb.EmbeddingParameters(
+            clustering_method="louvain",
+            clustering_key="louvain_key",
+            compute_diffmap=True,
+        ),
+    )
+
+    assert out.computed == []
+    assert any("PCA (already exists)" in s for s in out.skipped)
+    assert any("neighbors (already exists)" in s for s in out.skipped)
+    assert any("UMAP (already exists)" in s for s in out.skipped)
+    assert any("diffusion map (already exists)" in s for s in out.skipped)
+    assert any("spatial neighbors (already exists)" in s for s in out.skipped)
+    assert any("louvain_key (already exists)" in s for s in out.skipped)
+    assert out.n_clusters == 1
+
+
+@pytest.mark.asyncio
+async def test_compute_embeddings_force_removes_existing_artifacts(
+    minimal_spatial_adata, monkeypatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obsm["X_pca"] = np.ones((adata.n_obs, 2))
+    adata.uns["pca"] = {"variance_ratio": np.array([1.0])}
+    adata.uns["neighbors"] = {"params": {}}
+    adata.obsp["connectivities"] = np.eye(adata.n_obs)
+    adata.obsp["distances"] = np.eye(adata.n_obs)
+    adata.obsm["X_umap"] = np.ones((adata.n_obs, 2))
+    adata.obs["leiden"] = ["0"] * adata.n_obs
+    adata.obsm["X_diffmap"] = np.ones((adata.n_obs, 2))
+    adata.obsp["spatial_connectivities"] = np.eye(adata.n_obs)
+    adata.obsp["spatial_distances"] = np.eye(adata.n_obs)
+
+    ctx = DummyCtx(adata)
+    monkeypatch.setattr(emb, "ensure_pca", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_neighbors", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_umap", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_diffmap", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_spatial_neighbors", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_leiden", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_louvain", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "store_analysis_metadata", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(emb, "export_analysis_result", lambda *_args, **_kwargs: None)
+
+    await emb.compute_embeddings(
+        "d3",
+        ctx,
+        emb.EmbeddingParameters(
+            force=True,
+            clustering_key="leiden",
+            compute_diffmap=True,
+            compute_spatial_neighbors=True,
+        ),
+    )
+
+    assert "X_pca" not in adata.obsm
+    assert "pca" not in adata.uns
+    assert "neighbors" not in adata.uns
+    assert "connectivities" not in adata.obsp
+    assert "distances" not in adata.obsp
+    assert "X_umap" not in adata.obsm
+    assert "leiden" not in adata.obs
+    assert "X_diffmap" not in adata.obsm
+    assert "spatial_connectivities" not in adata.obsp
+    assert "spatial_distances" not in adata.obsp
+
+
+@pytest.mark.asyncio
+async def test_compute_embeddings_spatial_neighbor_error_is_non_fatal(
+    minimal_spatial_adata, monkeypatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["leiden"] = ["0"] * adata.n_obs
+    ctx = DummyCtx(adata)
+
+    monkeypatch.setattr(emb, "ensure_pca", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_neighbors", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_umap", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_diffmap", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_leiden", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "ensure_louvain", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(emb, "store_analysis_metadata", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(emb, "export_analysis_result", lambda *_args, **_kwargs: None)
+
+    def _spatial_fail(*_args, **_kwargs):
+        raise ValueError("no spatial coordinates")
+
+    monkeypatch.setattr(emb, "ensure_spatial_neighbors", _spatial_fail)
+
+    out = await emb.compute_embeddings("d4", ctx, emb.EmbeddingParameters())
+    assert any("spatial neighbors (error: no spatial coordinates)" in s for s in out.skipped)
+    assert any("Could not compute spatial neighbors" in w for w in ctx.warnings)

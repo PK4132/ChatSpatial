@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "datasets": [
+    {
+      "id": "example_spatial_demo",
+      "description": "Example remote dataset entry. Replace with your validated URLs.",
+      "url": "https://example.com/path/to/dataset.h5ad",
+      "filename": "dataset.h5ad",
+      "sha256": "",
+      "extract": false,
+      "enabled": false
+    }
+  ]
+}

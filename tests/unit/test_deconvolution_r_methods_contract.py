@@ -1,0 +1,138 @@
+"""Lightweight contracts for R-based deconvolution modules via mocked rpy2."""
+
+from __future__ import annotations
+
+from contextlib import contextmanager
+from types import ModuleType, SimpleNamespace
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from chatspatial.tools.deconvolution import card as card_module
+from chatspatial.tools.deconvolution import rctd as rctd_module
+from chatspatial.tools.deconvolution import spotlight as spotlight_module
+from chatspatial.tools.deconvolution.base import PreparedDeconvolutionData
+from chatspatial.utils.exceptions import ParameterError, ProcessingError
+
+
+class DummyCtx:
+    async def warning(self, _msg: str):
+        return None
+
+
+def _prepared_data(minimal_spatial_adata) -> PreparedDeconvolutionData:
+    spatial = minimal_spatial_adata.copy()
+    reference = minimal_spatial_adata.copy()
+    reference.obs["cell_type"] = ["A"] * (reference.n_obs // 2) + ["B"] * (
+        reference.n_obs - reference.n_obs // 2
+    )
+    return PreparedDeconvolutionData(
+        spatial=spatial,
+        reference=reference,
+        cell_type_key="cell_type",
+        cell_types=["A", "B"],
+        common_genes=list(spatial.var_names),
+        spatial_coords=spatial.obsm["spatial"],
+        ctx=DummyCtx(),
+    )
+
+
+def _install_fake_r_modules(monkeypatch: pytest.MonkeyPatch, ro_r):
+    modules = __import__("sys").modules
+
+    class _Converter:
+        def __add__(self, _other):
+            return self
+
+    @contextmanager
+    def _localconverter(_conv):
+        yield
+
+    ro_mod = ModuleType("rpy2.robjects")
+    ro_mod.globalenv = {}
+    ro_mod.default_converter = _Converter()
+    ro_mod.StrVector = lambda x: list(x)
+    ro_mod.r = ro_r
+    ro_mod.conversion = SimpleNamespace(py2rpy=lambda x: x, rpy2py=lambda x: x)
+
+    pandas2ri_mod = ModuleType("rpy2.robjects.pandas2ri")
+    pandas2ri_mod.converter = _Converter()
+    numpy2ri_mod = ModuleType("rpy2.robjects.numpy2ri")
+    numpy2ri_mod.converter = _Converter()
+
+    conversion_mod = ModuleType("rpy2.robjects.conversion")
+    conversion_mod.localconverter = _localconverter
+
+    rpy2_mod = ModuleType("rpy2")
+
+    monkeypatch.setitem(modules, "rpy2", rpy2_mod)
+    monkeypatch.setitem(modules, "rpy2.robjects", ro_mod)
+    monkeypatch.setitem(modules, "rpy2.robjects.pandas2ri", pandas2ri_mod)
+    monkeypatch.setitem(modules, "rpy2.robjects.numpy2ri", numpy2ri_mod)
+    monkeypatch.setitem(modules, "rpy2.robjects.conversion", conversion_mod)
+    monkeypatch.setitem(modules, "anndata2ri", ModuleType("anndata2ri"))
+
+
+def test_rctd_mode_multi_parameter_guard_before_heavy_execution(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    data = _prepared_data(minimal_spatial_adata)
+    _install_fake_r_modules(monkeypatch, ro_r=lambda _code: None)
+    monkeypatch.setattr(rctd_module, "validate_r_package", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(ParameterError, match="MAX_MULTI_TYPES"):
+        rctd_module.deconvolve(data, mode="multi", max_multi_types=2)
+
+
+def test_rctd_extract_results_full_mode_with_fake_r(monkeypatch: pytest.MonkeyPatch):
+    def _ro_r(code: str):
+        if code.strip() == "as.matrix(weights_matrix)":
+            return np.array([[0.7, 0.3], [0.2, 0.8]])
+        if code.strip() == "cell_type_names":
+            return ["A", "B"]
+        if code.strip() == "spot_names":
+            return ["s1", "s2"]
+        return None
+
+    _install_fake_r_modules(monkeypatch, ro_r=_ro_r)
+    out = rctd_module._extract_rctd_results("full")
+    assert list(out.index) == ["s1", "s2"]
+    assert list(out.columns) == ["A", "B"]
+    assert out.shape == (2, 2)
+
+
+def test_spotlight_wraps_runtime_errors_as_processing_error(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    data = _prepared_data(minimal_spatial_adata)
+
+    def _ro_r(code: str):
+        if "library(SPOTlight)" in code:
+            raise RuntimeError("R init failed")
+        return None
+
+    _install_fake_r_modules(monkeypatch, ro_r=_ro_r)
+    monkeypatch.setattr(
+        spotlight_module, "validate_r_package", lambda *_args, **_kwargs: None
+    )
+
+    with pytest.raises(ProcessingError, match="SPOTlight deconvolution failed"):
+        spotlight_module.deconvolve(data)
+
+
+def test_card_wraps_runtime_errors_as_processing_error(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    data = _prepared_data(minimal_spatial_adata)
+
+    def _ro_r(code: str):
+        if "library(CARD)" in code:
+            raise RuntimeError("CARD load failed")
+        return None
+
+    _install_fake_r_modules(monkeypatch, ro_r=_ro_r)
+    monkeypatch.setattr(card_module, "validate_r_package", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(ProcessingError, match="CARD deconvolution failed"):
+        card_module.deconvolve(data)

@@ -147,6 +147,11 @@ DEPENDENCY_REGISTRY: dict[str, DependencyInfo] = {
         "pip install SpatialDE",
         "SpatialDE Gaussian process spatial gene detection",
     ),
+    "flashs": DependencyInfo(
+        "flashs",
+        "pip install flashs",
+        "FlashS ultra-fast Python-native spatial gene detection",
+    ),
     # CNV
     "infercnvpy": DependencyInfo(
         "infercnvpy", "pip install infercnvpy", "Copy number variation inference"

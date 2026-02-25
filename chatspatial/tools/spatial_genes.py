@@ -7,6 +7,7 @@ for identifying genes with spatial expression patterns.
 
 Methods Overview:
     - SPARK-X (default): Non-parametric statistical method, best accuracy, requires R
+    - FlashS: Python-native randomized-kernel method, ultra-fast for large datasets
     - SpatialDE: Gaussian process-based kernel method, statistically rigorous
 
 The module integrates these tools into the ChatSpatial MCP framework, handling data preparation,
@@ -86,10 +87,12 @@ async def identify_spatial_genes(
 
     Method Selection Guide:
         - SPARK-X (default): Best for accuracy, handles large datasets efficiently
+        - FlashS: Best for pure-Python fast analysis without R dependency
         - SpatialDE: Best for statistical rigor in publication-ready analyses
 
     Data Requirements:
         - SPARK-X: Works with raw counts or normalized data
+        - FlashS: Works with sparse/dense counts or normalized data
         - SpatialDE: Works with raw count data
 
     Args:
@@ -108,6 +111,7 @@ async def identify_spatial_genes(
         ImportError: If required method dependencies not installed
 
     Performance Notes:
+        - FlashS: ~1-3 min for 3000 spots × 20000 genes (depends on n_features)
         - SPARK-X: ~2-5 min for 3000 spots × 20000 genes
         - SpatialDE: ~15-30 min (scales with spot count squared)
     """
@@ -122,9 +126,11 @@ async def identify_spatial_genes(
         return await _identify_spatial_genes_spatialde(data_id, adata, params, ctx)
     elif params.method == "sparkx":
         return await _identify_spatial_genes_sparkx(data_id, adata, params, ctx)
+    elif params.method == "flashs":
+        return await _identify_spatial_genes_flashs(data_id, adata, params, ctx)
     else:
         raise ParameterError(
-            f"Unsupported method: {params.method}. Available methods: spatialde, sparkx"
+            f"Unsupported method: {params.method}. Available methods: spatialde, sparkx, flashs"
         )
 
 
@@ -270,7 +276,7 @@ async def _identify_spatial_genes_spatialde(
             f"WARNING:Running SpatialDE on {n_genes} genes × {n_spots} spots may take {estimated_time}-{estimated_time*2} minutes.\n"
             f"   • Official benchmark: ~10 min for 14,000 genes\n"
             f"   • Tip: Use n_top_genes=1000-3000 to test fewer genes\n"
-            f"   • Or use method='sparkx' for faster analysis (2-5 min)"
+            f"   • Or use method='flashs'/'sparkx' for faster analysis (typically 1-5 min)"
         )
 
     # Calculate total counts per spot for regress_out
@@ -363,6 +369,158 @@ async def _identify_spatial_genes_spatialde(
     )
 
     return result
+
+
+async def _identify_spatial_genes_flashs(
+    data_id: str,
+    adata: Any,
+    params: SpatialVariableGenesParameters,
+    ctx: "ToolContext",
+) -> SpatialVariableGenesResult:
+    """
+    Identify spatial variable genes using FlashS.
+
+    FlashS is a Python-native, randomized-kernel method for spatial gene testing.
+    It is designed for speed on sparse count matrices while preserving
+    per-gene statistical outputs and FDR control.
+    """
+    del ctx  # Signature parity with other methods; no warnings currently emitted.
+
+    require("flashs")
+    from flashs import FlashS
+
+    # Prefer adata-compatible gene dimensions to keep writeback and result keys aligned.
+    raw_result = get_raw_data_source(adata, prefer_complete_genes=False)
+    X = raw_result.X
+    gene_names = [str(gene) for gene in raw_result.var_names]
+
+    coords = require_spatial_coords(adata, spatial_key=params.spatial_key)[:, :2]
+
+    model = FlashS(
+        n_features=params.flashs_n_features,
+        n_scales=params.flashs_n_scales,
+        min_expressed=params.flashs_min_expressed,
+        adjustment=params.flashs_adjustment,
+        random_state=params.flashs_random_state,
+    )
+    flashs_result = model.fit_test(coords, X, gene_names=gene_names)
+
+    # Store full gene-level outputs in adata.var for downstream tools.
+    results_key = f"flashs_results_{data_id}"
+
+    adata_var_names = np.asarray(adata.var_names.astype(str))
+    input_gene_names = np.asarray(gene_names, dtype=str)
+    is_positionally_aligned = (
+        len(input_gene_names) == len(adata_var_names)
+        and np.array_equal(input_gene_names, adata_var_names)
+    )
+
+    def _assign_flashs_column(
+        column_name: str,
+        values: np.ndarray,
+        fill_value: float | int | bool,
+        cast_type: Any | None = None,
+    ) -> None:
+        if is_positionally_aligned:
+            adata.var[column_name] = values
+            if cast_type is not None:
+                adata.var[column_name] = adata.var[column_name].astype(cast_type)
+            return
+
+        series = pd.Series(values, index=gene_names, name=column_name).reindex(
+            adata.var_names, fill_value=fill_value
+        )
+        if cast_type is not None:
+            series = series.astype(cast_type)
+        adata.var[column_name] = series
+
+    _assign_flashs_column("flashs_pval", flashs_result.pvalues, fill_value=1.0)
+    _assign_flashs_column("flashs_qval", flashs_result.qvalues, fill_value=1.0)
+    _assign_flashs_column(
+        "flashs_statistic", flashs_result.statistics, fill_value=0.0
+    )
+    _assign_flashs_column(
+        "flashs_effect_size", flashs_result.effect_size, fill_value=0.0
+    )
+    _assign_flashs_column(
+        "flashs_pval_binary", flashs_result.pvalues_binary, fill_value=1.0
+    )
+    _assign_flashs_column(
+        "flashs_pval_rank", flashs_result.pvalues_rank, fill_value=1.0
+    )
+    _assign_flashs_column(
+        "flashs_n_expressed", flashs_result.n_expressed, fill_value=0, cast_type=int
+    )
+    tested_mask = (
+        flashs_result.tested_mask
+        if flashs_result.tested_mask is not None
+        else np.ones(len(gene_names), dtype=bool)
+    )
+    _assign_flashs_column(
+        "flashs_tested", tested_mask, fill_value=False, cast_type=bool
+    )
+
+    # Compute ranked significant genes for concise MCP response.
+    result_df = pd.DataFrame(
+        {
+            "gene": gene_names,
+            "qval": flashs_result.qvalues,
+            "tested": tested_mask,
+        }
+    ).sort_values("qval")
+    significant_genes_all = result_df[
+        (result_df["tested"]) & (result_df["qval"] < 0.05)
+    ]["gene"].tolist()
+
+    limit = params.n_top_genes or DEFAULT_TOP_GENES_LIMIT
+    significant_genes = significant_genes_all[:limit]
+
+    from ..utils.adata_utils import store_analysis_metadata
+    from ..utils.results_export import export_analysis_result
+
+    store_analysis_metadata(
+        adata,
+        analysis_name="spatial_genes_flashs",
+        method="flashs",
+        parameters={
+            "n_features": params.flashs_n_features,
+            "n_scales": params.flashs_n_scales,
+            "min_expressed": params.flashs_min_expressed,
+            "adjustment": params.flashs_adjustment,
+            "random_state": params.flashs_random_state,
+        },
+        results_keys={
+            "var": [
+                "flashs_pval",
+                "flashs_qval",
+                "flashs_statistic",
+                "flashs_effect_size",
+                "flashs_pval_binary",
+                "flashs_pval_rank",
+                "flashs_n_expressed",
+                "flashs_tested",
+            ],
+            "obs": [],
+            "obsm": [],
+            "uns": [],
+        },
+        statistics={
+            "n_genes_analyzed": int(flashs_result.n_tested),
+            "n_significant_genes": int(flashs_result.n_significant),
+            "n_genes_input": len(gene_names),
+        },
+    )
+
+    export_analysis_result(adata, data_id, "spatial_genes_flashs")
+
+    return SpatialVariableGenesResult(
+        data_id=data_id,
+        method="flashs",
+        n_genes_analyzed=int(flashs_result.n_tested),
+        n_significant_genes=int(flashs_result.n_significant),
+        spatial_genes=significant_genes,
+        results_key=results_key,
+    )
 
 
 async def _identify_spatial_genes_sparkx(

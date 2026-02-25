@@ -1,0 +1,143 @@
+"""Integration contract tests for core analysis endpoints in server layer."""
+
+from __future__ import annotations
+
+import sys
+from types import SimpleNamespace
+
+import pytest
+
+from chatspatial.models.analysis import EnrichmentResult, IntegrationResult, SpatialStatisticsResult
+from chatspatial.models.data import EnrichmentParameters, IntegrationParameters, SpatialStatisticsParameters
+from chatspatial.server import (
+    analyze_enrichment,
+    analyze_spatial_statistics,
+    data_manager,
+    integrate_samples,
+)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_analyze_spatial_statistics_saves_result_with_expected_key(
+    reset_data_manager, monkeypatch: pytest.MonkeyPatch
+):
+    calls: dict[str, object] = {}
+
+    async def fake_analyze(data_id, ctx, params):
+        calls["data_id"] = data_id
+        calls["ctx"] = ctx
+        calls["params"] = params
+        return SpatialStatisticsResult(
+            data_id=data_id,
+            analysis_type="moran",
+            n_features_analyzed=3,
+            n_significant=1,
+            top_features=["gene_0"],
+            summary_metrics={"moran_i_mean": 0.42},
+            results_key="spatial_stats_moran",
+        )
+
+    fake_module = SimpleNamespace(analyze_spatial_statistics=fake_analyze)
+    monkeypatch.setitem(sys.modules, "chatspatial.tools.spatial_statistics", fake_module)
+
+    saved: dict[str, object] = {}
+
+    async def fake_save_result(data_id: str, result_type: str, result):
+        saved["data_id"] = data_id
+        saved["result_type"] = result_type
+        saved["result"] = result
+
+    monkeypatch.setattr(data_manager, "save_result", fake_save_result)
+
+    params = SpatialStatisticsParameters(analysis_type="moran", genes=["gene_0"])
+    result = await analyze_spatial_statistics("d1", params=params)
+
+    assert isinstance(result, SpatialStatisticsResult)
+    assert calls["data_id"] == "d1"
+    assert isinstance(calls["params"], SpatialStatisticsParameters)
+    assert saved["data_id"] == "d1"
+    assert saved["result_type"] == "spatial_statistics"
+    assert saved["result"] is result
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_integrate_samples_saves_result_under_integrated_dataset_id(
+    reset_data_manager, monkeypatch: pytest.MonkeyPatch
+):
+    calls: dict[str, object] = {}
+
+    async def fake_integrate(data_ids, ctx, params):
+        calls["data_ids"] = data_ids
+        calls["ctx"] = ctx
+        calls["params"] = params
+        return IntegrationResult(
+            data_id="integrated_7",
+            n_samples=len(data_ids),
+            integration_method=params.method,
+        )
+
+    fake_module = SimpleNamespace(integrate_samples=fake_integrate)
+    monkeypatch.setitem(sys.modules, "chatspatial.tools.integration", fake_module)
+
+    saved: dict[str, object] = {}
+
+    async def fake_save_result(data_id: str, result_type: str, result):
+        saved["data_id"] = data_id
+        saved["result_type"] = result_type
+        saved["result"] = result
+
+    monkeypatch.setattr(data_manager, "save_result", fake_save_result)
+
+    params = IntegrationParameters(method="harmony")
+    result = await integrate_samples(["d1", "d2"], params=params)
+
+    assert isinstance(result, IntegrationResult)
+    assert calls["data_ids"] == ["d1", "d2"]
+    assert isinstance(calls["params"], IntegrationParameters)
+    assert saved["data_id"] == "integrated_7"
+    assert saved["result_type"] == "integration"
+    assert saved["result"] is result
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_analyze_enrichment_saves_result_with_expected_key(
+    reset_data_manager, monkeypatch: pytest.MonkeyPatch
+):
+    calls: dict[str, object] = {}
+
+    async def fake_enrichment(data_id, ctx, params):
+        calls["data_id"] = data_id
+        calls["ctx"] = ctx
+        calls["params"] = params
+        return EnrichmentResult(
+            method="pathway_ora",
+            n_gene_sets=4,
+            n_significant=2,
+            top_gene_sets=["GO_A", "GO_B"],
+            top_depleted_sets=["GO_C"],
+        )
+
+    fake_module = SimpleNamespace(analyze_enrichment=fake_enrichment)
+    monkeypatch.setitem(sys.modules, "chatspatial.tools.enrichment", fake_module)
+
+    saved: dict[str, object] = {}
+
+    async def fake_save_result(data_id: str, result_type: str, result):
+        saved["data_id"] = data_id
+        saved["result_type"] = result_type
+        saved["result"] = result
+
+    monkeypatch.setattr(data_manager, "save_result", fake_save_result)
+
+    params = EnrichmentParameters(species="human", method="pathway_ora")
+    result = await analyze_enrichment("d5", params=params)
+
+    assert isinstance(result, EnrichmentResult)
+    assert calls["data_id"] == "d5"
+    assert isinstance(calls["params"], EnrichmentParameters)
+    assert saved["data_id"] == "d5"
+    assert saved["result_type"] == "enrichment"
+    assert saved["result"] is result

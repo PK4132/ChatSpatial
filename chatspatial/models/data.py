@@ -1365,9 +1365,9 @@ class SpatialVariableGenesParameters(BaseModel):
     """Spatial variable genes identification parameters model"""
 
     # Method selection
-    method: Literal["spatialde", "sparkx"] = Field(
+    method: Literal["spatialde", "sparkx", "flashs"] = Field(
         default="sparkx",
-        description="'sparkx' is faster and recommended. 'spatialde' uses Gaussian process.",
+        description="'sparkx' is fast and robust. 'flashs' is Python-native and very fast. 'spatialde' uses Gaussian process.",
     )
 
     # Common parameters for all methods
@@ -1401,6 +1401,36 @@ class SpatialVariableGenesParameters(BaseModel):
     )
     sparkx_option: Literal["single", "mixture"] = "mixture"
     sparkx_verbose: bool = False
+
+    # FlashS-specific parameters
+    flashs_n_features: int = Field(
+        default=500,
+        gt=0,
+        le=4096,
+        description="Number of random Fourier features (FlashS only).",
+    )
+    flashs_n_scales: int = Field(
+        default=7,
+        gt=0,
+        le=64,
+        description="Number of bandwidth scales for multi-scale testing (FlashS only).",
+    )
+    flashs_min_expressed: int = Field(
+        default=5,
+        ge=0,
+        le=10000,
+        description="Minimum expressing spots to test a gene (FlashS only).",
+    )
+    flashs_adjustment: Literal[
+        "bh", "bonferroni", "holm", "by", "storey", "none"
+    ] = Field(
+        default="bh",
+        description="Multiple testing correction method (FlashS only).",
+    )
+    flashs_random_state: Optional[int] = Field(
+        default=0,
+        description="Random seed for reproducibility (FlashS only).",
+    )
 
     # Gene filtering parameters
     filter_mt_genes: bool = (

@@ -806,7 +806,7 @@ async def find_spatial_genes(
 
     Args:
         data_id: Dataset ID
-        params: method='sparkx' (default, fast) or 'spatialde' (Gaussian process)
+        params: method='sparkx' (default), 'flashs' (Python-native fast), or 'spatialde' (Gaussian process)
 
     Returns:
         SpatialVariableGenesResult with ranked genes and statistics

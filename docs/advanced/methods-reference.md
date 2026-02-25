@@ -125,7 +125,7 @@ Identify spatially variable genes.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `method` | `sparkx` | `sparkx`, `spatialde` |
+| `method` | `sparkx` | `sparkx`, `flashs`, `spatialde` |
 | `n_top_genes` | None | Top genes to return (None = all significant) |
 
 ---
