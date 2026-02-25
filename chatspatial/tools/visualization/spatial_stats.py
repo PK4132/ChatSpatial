@@ -32,6 +32,7 @@ from .core import (
     auto_spot_size,
     create_figure_from_params,
     get_categorical_columns,
+    safe_tight_layout,
     setup_multi_panel_figure,
 )
 
@@ -165,7 +166,7 @@ async def _create_neighborhood_enrichment_visualization(
         title=params.title or f"Neighborhood Enrichment ({cluster_key})",
     )
 
-    plt.tight_layout()
+    safe_tight_layout()
     return fig
 
 
@@ -251,7 +252,7 @@ async def _create_ripley_visualization(
     if params.title:
         ax.set_title(params.title)
 
-    plt.tight_layout()
+    safe_tight_layout()
     return fig
 
 
@@ -372,7 +373,7 @@ def _create_moran_visualization(
         color="gray",
     )
 
-    plt.tight_layout()
+    safe_tight_layout()
     return fig
 
 
@@ -419,7 +420,7 @@ async def _create_centrality_visualization(
     if params.title:
         fig.suptitle(params.title)
 
-    plt.tight_layout()
+    safe_tight_layout()
     return fig
 
 
@@ -539,5 +540,5 @@ async def _create_getis_ord_visualization(
             ax.set_aspect("equal")
             ax.invert_yaxis()
 
-    plt.tight_layout(rect=(0, 0, 1, 0.95))
+    safe_tight_layout(rect=(0, 0, 1, 0.95))
     return fig

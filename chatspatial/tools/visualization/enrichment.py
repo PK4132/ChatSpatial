@@ -27,6 +27,7 @@ from .core import (
     get_categorical_columns,
     plot_spatial_feature,
     resolve_figure_size,
+    safe_tight_layout,
     setup_multi_panel_figure,
 )
 
@@ -273,7 +274,7 @@ def _create_enrichment_violin(
         for label in ax.get_xticklabels():
             label.set_horizontalalignment("right")
 
-    plt.tight_layout()
+    safe_tight_layout()
     return fig
 
 
@@ -335,7 +336,7 @@ async def _create_enrichment_spatial(
             cbar = plt.colorbar(ax.collections[0], ax=ax)
             cbar.set_label("Enrichment Score", fontsize=12)
 
-    plt.tight_layout()
+    safe_tight_layout()
     return fig
 
 
@@ -544,7 +545,7 @@ def _create_gsea_barplot(
             ofname=None,
         )
         fig = ax.get_figure()
-        plt.tight_layout()
+        safe_tight_layout()
         return fig
     except Exception as e:
         raise ProcessingError(
@@ -594,7 +595,7 @@ def _create_gsea_dotplot(
             ofname=None,
         )
         fig = ax.get_figure()
-        plt.tight_layout()
+        safe_tight_layout()
         return fig
     except Exception as e:
         raise ProcessingError(

@@ -7,6 +7,7 @@ This module contains:
 - Common visualization helpers
 """
 
+import warnings
 from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
 import anndata as ad
@@ -205,6 +206,25 @@ def setup_multi_panel_figure(
         axes[i].axis("off")
 
     return fig, axes
+
+
+def safe_tight_layout(fig: Optional[plt.Figure] = None, **kwargs: Any) -> None:
+    """Apply tight_layout while ignoring known matplotlib compatibility warnings.
+
+    Some composite figures (e.g. mixed axes/colorbar layouts) are not fully
+    compatible with tight_layout, which triggers a noisy UserWarning in tests.
+    We suppress only that specific warning and keep all other warnings/errors.
+    """
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message=".*Axes that are not compatible with tight_layout.*",
+            category=UserWarning,
+        )
+        if fig is not None:
+            fig.tight_layout(**kwargs)
+        else:
+            plt.tight_layout(**kwargs)
 
 
 def add_colorbar(

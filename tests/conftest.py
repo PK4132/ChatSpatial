@@ -10,6 +10,11 @@ from typing import Any
 import numpy as np
 import pytest
 
+try:
+    import matplotlib.pyplot as plt
+except ImportError:  # pragma: no cover - matplotlib is an optional dependency
+    plt = None
+
 
 try:
     import anndata as ad
@@ -95,6 +100,14 @@ def e2e_trace(request: pytest.FixtureRequest):
 def rng() -> np.random.Generator:
     """Seeded RNG for reproducible test data."""
     return np.random.default_rng(42)
+
+
+@pytest.fixture(autouse=True)
+def close_matplotlib_figures():
+    """Prevent cross-test figure leakage in visualization-heavy test runs."""
+    yield
+    if plt is not None:
+        plt.close("all")
 
 
 @pytest.fixture

@@ -80,6 +80,13 @@ def test_setup_multi_panel_figure_supports_tight_layout_mode():
     plt.close(fig)
 
 
+def test_safe_tight_layout_supports_pyplot_and_figure_targets():
+    fig, _ = plt.subplots()
+    viz_core.safe_tight_layout()
+    viz_core.safe_tight_layout(fig=fig)
+    plt.close(fig)
+
+
 @pytest.mark.asyncio
 async def test_get_validated_features_supports_genes_obs_obsm_and_truncation(
     minimal_spatial_adata,
