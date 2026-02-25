@@ -166,3 +166,180 @@ async def test_create_multi_feature_plot_cleans_temp_column(minimal_spatial_adat
     assert fig is not None
     assert "_feature_viz_temp_99" not in adata.obs.columns
     plt.close(fig)
+
+
+@pytest.mark.asyncio
+async def test_create_feature_visualization_requires_spatial_coordinates(
+    minimal_spatial_adata,
+):
+    adata = minimal_spatial_adata.copy()
+    del adata.obsm["spatial"]
+
+    with pytest.raises(DataNotFoundError, match="Spatial coordinates not found"):
+        await viz_feature.create_feature_visualization(
+            adata,
+            VisualizationParameters(plot_type="feature", basis="spatial", feature="gene_0"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_feature_visualization_umap_missing_when_not_computable(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obsm.pop("X_umap", None)
+    monkeypatch.setattr(viz_feature, "ensure_umap", lambda _adata: False)
+
+    with pytest.raises(DataNotFoundError, match="UMAP embedding not found"):
+        await viz_feature.create_feature_visualization(
+            adata,
+            VisualizationParameters(plot_type="feature", basis="umap", feature="gene_0"),
+            context=DummyCtx(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_feature_visualization_requires_pca_embedding(minimal_spatial_adata):
+    with pytest.raises(DataNotFoundError, match="PCA embedding not found"):
+        await viz_feature.create_feature_visualization(
+            minimal_spatial_adata,
+            VisualizationParameters(plot_type="feature", basis="pca", feature="gene_0"),
+            context=DummyCtx(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_feature_visualization_routes_multi_feature_path(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    sentinel = object()
+
+    async def _validated(*_args, **_kwargs):
+        return ["gene_0", "gene_1"]
+
+    async def _multi(*_args, **_kwargs):
+        return sentinel
+
+    monkeypatch.setattr(viz_feature, "get_validated_features", _validated)
+    monkeypatch.setattr(viz_feature, "_create_multi_feature_plot", _multi)
+
+    out = await viz_feature.create_feature_visualization(
+        minimal_spatial_adata.copy(),
+        VisualizationParameters(
+            plot_type="feature",
+            basis="spatial",
+            feature=["gene_0", "gene_1"],
+        ),
+        context=DummyCtx(),
+    )
+    assert out is sentinel
+
+
+@pytest.mark.asyncio
+async def test_create_single_feature_plot_numeric_obs_branch_hides_axes(
+    minimal_spatial_adata,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["score"] = np.linspace(0, 1, adata.n_obs)
+    adata.obsm["X_pca"] = np.column_stack([np.arange(adata.n_obs), np.arange(adata.n_obs)])
+
+    fig = await viz_feature._create_single_feature_plot(
+        adata,
+        VisualizationParameters(
+            plot_type="feature",
+            basis="pca",
+            feature="score",
+            show_colorbar=False,
+            show_axes=False,
+        ),
+        "score",
+        "pca",
+        adata.obsm["X_pca"],
+    )
+    assert fig is not None
+    assert fig.axes[0].get_title() == "score (pca)"
+    assert not fig.axes[0].axison
+    plt.close(fig)
+
+
+@pytest.mark.asyncio
+async def test_create_multi_feature_plot_umap_handles_gene_and_numeric_obs(
+    minimal_spatial_adata,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obsm["X_umap"] = np.column_stack([np.arange(adata.n_obs), np.arange(adata.n_obs)])
+    adata.obs["score"] = np.linspace(0, 10, adata.n_obs)
+
+    fig = await viz_feature._create_multi_feature_plot(
+        adata,
+        VisualizationParameters(
+            plot_type="feature",
+            basis="umap",
+            feature=["gene_0", "score"],
+            show_colorbar=False,
+            show_axes=False,
+            color_scale="log",
+        ),
+        context=None,
+        features=["gene_0", "score"],
+        basis="umap",
+        coords=adata.obsm["X_umap"],
+    )
+
+    assert fig is not None
+    assert "_feature_viz_temp_99" not in adata.obs.columns
+    plt.close(fig)
+
+
+@pytest.mark.asyncio
+async def test_create_lr_pairs_visualization_requires_available_pairs(
+    minimal_spatial_adata,
+):
+    with pytest.raises(DataNotFoundError, match="None of the specified LR pairs found"):
+        await viz_feature._create_lr_pairs_visualization(
+            minimal_spatial_adata,
+            VisualizationParameters(plot_type="feature", basis="spatial"),
+            context=DummyCtx(),
+            lr_pairs=[("LIG", "REC")],
+            basis="spatial",
+            coords=minimal_spatial_adata.obsm["spatial"],
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_lr_pairs_visualization_limits_pairs_and_reports_titles(
+    minimal_spatial_adata,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obsm["X_umap"] = np.column_stack([np.arange(adata.n_obs), np.arange(adata.n_obs)])
+    ctx = DummyCtx()
+    lr_pairs = [
+        ("gene_0", "gene_1"),
+        ("gene_2", "gene_3"),
+        ("gene_4", "gene_5"),
+        ("gene_6", "gene_7"),
+        ("gene_8", "gene_9"),
+    ]
+
+    fig = await viz_feature._create_lr_pairs_visualization(
+        adata,
+        VisualizationParameters(
+            plot_type="feature",
+            basis="umap",
+            show_colorbar=False,
+            show_correlation_stats=False,
+            correlation_method="kendall",
+            color_scale="sqrt",
+        ),
+        context=ctx,
+        lr_pairs=lr_pairs,
+        basis="umap",
+        coords=adata.obsm["X_umap"],
+    )
+
+    titles = [ax.get_title() for ax in fig.axes]
+    assert any("Too many LR pairs" in msg for msg in ctx.infos)
+    assert any("Visualizing 4 LR pairs" in msg for msg in ctx.infos)
+    assert any(" vs " in title for title in titles)
+    assert "_lr_viz_temp_99" not in adata.obs.columns
+    plt.close(fig)

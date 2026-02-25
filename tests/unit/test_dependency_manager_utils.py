@@ -165,3 +165,82 @@ def test_validate_scvi_tools_component_guard(monkeypatch: pytest.MonkeyPatch):
 
     with pytest.raises(ImportError, match="SCANVI"):
         dm.validate_scvi_tools(components=["SCANVI"])
+
+
+def test_try_import_and_check_spec_cover_available_and_missing_paths():
+    dm._try_import.cache_clear()
+    dm._check_spec.cache_clear()
+    try:
+        assert dm._try_import("json") is not None
+        assert dm._try_import("definitely_missing_module_xyz") is None
+        assert dm._check_spec("json")
+        assert not dm._check_spec("definitely_missing_module_xyz")
+    finally:
+        dm._try_import.cache_clear()
+        dm._check_spec.cache_clear()
+
+
+def test_get_and_require_return_loaded_module(monkeypatch: pytest.MonkeyPatch):
+    module = object()
+    monkeypatch.setattr(dm, "_try_import", lambda _module_name: module)
+
+    assert dm.get("flashs") is module
+    assert dm.require("flashs") is module
+
+
+def test_validate_r_environment_success_returns_expected_tuple(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(dm, "is_available", lambda _name: True)
+    _install_fake_rpy2(monkeypatch)
+
+    modules = dm.validate_r_environment(required_packages=["base"])
+
+    assert len(modules) == 8
+    assert getattr(modules[0], "__name__", "") == "rpy2.robjects"
+    assert getattr(modules[-1], "__name__", "") == "anndata2ri"
+
+
+def test_validate_r_environment_wraps_unexpected_runtime_errors(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(dm, "is_available", lambda _name: True)
+    _install_fake_rpy2(monkeypatch)
+    fake_ro = sys.modules["rpy2.robjects"]
+    fake_ro.r = lambda _expr: (_ for _ in ()).throw(RuntimeError("R crashed"))
+
+    with pytest.raises(ImportError, match="R environment setup failed: R crashed"):
+        dm.validate_r_environment()
+
+
+def test_validate_r_package_requires_rpy2(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(dm, "is_available", lambda _name: False)
+    with pytest.raises(ImportError, match="rpy2 is required"):
+        dm.validate_r_package("stats")
+
+
+def test_validate_scvi_tools_supports_known_components(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _install_fake_rpy2(monkeypatch)
+    fake_scvi = sys.modules["scvi"]
+    fake_scvi.model.SCANVI = object()
+    fake_scvi.model.CustomModel = object()
+    fake_scvi.external.CellAssign = object()
+    fake_scvi.external.DestVI = object()
+    fake_scvi.external.Stereoscope = object()
+    monkeypatch.setitem(sys.modules, "cell2location", ModuleType("cell2location"))
+    monkeypatch.setattr(dm, "require", lambda *_args, **_kwargs: fake_scvi)
+
+    resolved = dm.validate_scvi_tools(
+        components=[
+            "CellAssign",
+            "Cell2location",
+            "SCANVI",
+            "DestVI",
+            "Stereoscope",
+            "CustomModel",
+        ]
+    )
+
+    assert resolved is fake_scvi
