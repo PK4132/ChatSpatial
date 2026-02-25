@@ -658,6 +658,19 @@ def test_extract_result_summary_covers_remaining_analysis_branches():
     }
 
 
+def test_extract_result_summary_local_moran_empty_results_uses_zero_defaults():
+    summary = _extract_result_summary(
+        {"genes_analyzed": [], "results": {}},
+        "local_moran",
+    )
+    assert summary["n_features_analyzed"] == 0
+    assert summary["n_significant"] == 0
+    assert summary["summary_metrics"] == {
+        "mean_hotspots_per_gene": 0.0,
+        "mean_coldspots_per_gene": 0.0,
+    }
+
+
 def test_analyze_morans_i_handles_small_gene_set_without_duplicate_rank_lists(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):
@@ -897,6 +910,29 @@ def test_analyze_bivariate_moran_requires_gene_pairs_and_handles_zero_variance(
     assert out["bivariate_morans_i"]["gene_0_vs_gene_1"] == 0.0
 
 
+def test_analyze_bivariate_moran_wraps_internal_errors(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        ss,
+        "require_spatial_coords",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("coords missing")),
+    )
+
+    with pytest.raises(ProcessingError, match="Bivariate Moran's I failed: coords missing"):
+        ss._analyze_bivariate_moran(
+            adata,
+            SpatialStatisticsParameters(
+                analysis_type="bivariate_moran",
+                gene_pairs=[("gene_0", "gene_1")],
+                n_neighbors=4,
+            ),
+            DummyCtx(adata),
+        )
+
+
 def test_analyze_join_count_success_and_wraps_runtime_error(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):
@@ -1125,6 +1161,134 @@ def test_analyze_local_moran_success_with_fdr_and_persists_obs_uns(
     assert "gene_0_lisa_pvalue" in adata.obs.columns
     assert "local_moran" in adata.uns
     assert out["results"]["gene_0"]["fdr_corrected"] is True
+
+
+def test_analyze_local_moran_dense_connectivity_and_no_fdr_branch(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obsp["spatial_connectivities"] = np.eye(adata.n_obs, dtype=float)
+
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ss, "select_genes_for_analysis", lambda *_args, **_kwargs: ["gene_0"])
+
+    class _FakePySALWeights:
+        def __init__(self, neighbors, weights):
+            self.neighbors = neighbors
+            self.weights = weights
+
+    class _FakeMoranLocal:
+        def __init__(self, expr, w, permutations):
+            del expr, w, permutations
+            n = adata.n_obs
+            self.Is = np.linspace(0.1, 1.0, n)
+            self.p_sim = np.tile(np.array([0.01, 0.5]), int(np.ceil(n / 2)))[:n]
+            self.q = np.tile(np.array([1, 3, 4, 2]), int(np.ceil(n / 4)))[:n]
+
+    fake_esda_moran = ModuleType("esda.moran")
+    fake_esda_moran.Moran_Local = _FakeMoranLocal
+    fake_libpysal_weights = ModuleType("libpysal.weights")
+    fake_libpysal_weights.W = _FakePySALWeights
+    monkeypatch.setitem(__import__("sys").modules, "esda.moran", fake_esda_moran)
+    monkeypatch.setitem(__import__("sys").modules, "libpysal.weights", fake_libpysal_weights)
+
+    out = ss._analyze_local_moran(
+        adata,
+        SpatialStatisticsParameters(
+            analysis_type="local_moran",
+            genes=["gene_0"],
+            local_moran_permutations=25,
+            local_moran_alpha=0.05,
+            local_moran_fdr_correction=False,
+            n_neighbors=5,
+        ),
+        DummyCtx(adata),
+    )
+
+    assert out["results"]["gene_0"]["fdr_corrected"] is False
+    assert out["results"]["gene_0"]["n_significant"] > 0
+    assert "gene_0_lisa_cluster" in adata.obs.columns
+
+
+def test_analyze_local_moran_wraps_runtime_errors(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    from scipy.sparse import csr_matrix
+
+    adata = minimal_spatial_adata.copy()
+    adata.obsp["spatial_connectivities"] = csr_matrix(np.eye(adata.n_obs))
+
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ss, "select_genes_for_analysis", lambda *_args, **_kwargs: ["gene_0"])
+
+    class _FakePySALWeights:
+        def __init__(self, neighbors, weights):
+            self.neighbors = neighbors
+            self.weights = weights
+
+    class _BrokenMoranLocal:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("local moran boom")
+
+    fake_esda_moran = ModuleType("esda.moran")
+    fake_esda_moran.Moran_Local = _BrokenMoranLocal
+    fake_libpysal_weights = ModuleType("libpysal.weights")
+    fake_libpysal_weights.W = _FakePySALWeights
+    monkeypatch.setitem(__import__("sys").modules, "esda.moran", fake_esda_moran)
+    monkeypatch.setitem(__import__("sys").modules, "libpysal.weights", fake_libpysal_weights)
+
+    with pytest.raises(ProcessingError, match="Local Moran's I analysis failed: local moran boom"):
+        ss._analyze_local_moran(
+            adata,
+            SpatialStatisticsParameters(analysis_type="local_moran", genes=["gene_0"]),
+            DummyCtx(adata),
+        )
+
+
+def test_analyze_network_properties_wraps_internal_errors(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+
+    fake_nx = ModuleType("networkx")
+    fake_nx.from_scipy_sparse_array = (
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("graph build failed"))
+    )
+    monkeypatch.setitem(__import__("sys").modules, "networkx", fake_nx)
+
+    with pytest.raises(ProcessingError, match="Network properties analysis failed: graph build failed"):
+        ss._analyze_network_properties(
+            adata,
+            cluster_key="group",
+            params=SpatialStatisticsParameters(analysis_type="network_properties", n_neighbors=4),
+            ctx=DummyCtx(adata),
+        )
+
+
+def test_analyze_spatial_centrality_wraps_internal_errors(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["group"] = pd.Categorical(["a"] * 30 + ["b"] * 30)
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+
+    fake_nx = ModuleType("networkx")
+    fake_nx.from_scipy_sparse_array = lambda *_args, **_kwargs: object()
+    fake_nx.degree_centrality = (
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("centrality failed"))
+    )
+    fake_nx.closeness_centrality = lambda *_args, **_kwargs: {}
+    fake_nx.betweenness_centrality = lambda *_args, **_kwargs: {}
+    monkeypatch.setitem(__import__("sys").modules, "networkx", fake_nx)
+
+    with pytest.raises(ProcessingError, match="Spatial centrality analysis failed: centrality failed"):
+        ss._analyze_spatial_centrality(
+            adata,
+            cluster_key="group",
+            params=SpatialStatisticsParameters(analysis_type="spatial_centrality", n_neighbors=4),
+            ctx=DummyCtx(adata),
+        )
 
 
 @pytest.mark.asyncio
