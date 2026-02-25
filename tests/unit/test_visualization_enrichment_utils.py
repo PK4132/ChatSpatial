@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import sys
 from types import ModuleType
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -19,6 +21,14 @@ class DummyCtx:
 
     async def info(self, msg: str):
         self.infos.append(msg)
+
+
+class _FakeAxes:
+    def __init__(self):
+        self._fig, _ = plt.subplots()
+
+    def get_figure(self):
+        return self._fig
 
 
 def test_get_score_columns_fallback_suffix_search(minimal_spatial_adata):
@@ -178,3 +188,363 @@ def test_create_gsea_barplot_wraps_gseapy_errors(monkeypatch: pytest.MonkeyPatch
         )
 
     plt.close("all")
+
+
+def test_ensure_enrichmap_compatibility_adds_minimum_metadata(minimal_spatial_adata):
+    adata = minimal_spatial_adata.copy()
+    if "spatial" in adata.uns:
+        del adata.uns["spatial"]
+    if "library_id" in adata.obs.columns:
+        del adata.obs["library_id"]
+
+    viz_enrich._ensure_enrichmap_compatibility(adata)
+
+    assert "library_id" in adata.obs.columns
+    assert "spatial" in adata.uns
+    assert "sample_1" in adata.uns["spatial"]
+
+
+def test_get_score_columns_prefers_metadata(minimal_spatial_adata):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["A_score"] = 0.1
+    adata.obs["ssgsea_B"] = 0.2
+    adata.uns["enrichment_spatial_metadata"] = {
+        "parameters": {"results_keys": {"obs": ["A_score", "missing_score"]}}
+    }
+    adata.uns["enrichment_ssgsea_metadata"] = {
+        "parameters": {"results_keys": {"obs": ["ssgsea_B"]}}
+    }
+
+    out = viz_enrich._get_score_columns(adata)
+    assert out == ["A_score", "ssgsea_B"]
+
+
+@pytest.mark.asyncio
+async def test_create_enrichment_visualization_routes_spatial_prefix(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["A_score"] = 0.1
+    sentinel = object()
+
+    def _fake_enrichmap(*_args, **_kwargs):
+        return sentinel
+
+    monkeypatch.setattr(viz_enrich, "_create_enrichmap_spatial", _fake_enrichmap)
+
+    out = await viz_enrich._create_enrichment_visualization(
+        adata,
+        VisualizationParameters(plot_type="enrichment", subtype="spatial_score"),
+        context=DummyCtx(),
+    )
+    assert out is sentinel
+
+
+@pytest.mark.asyncio
+async def test_create_enrichment_visualization_default_routes_spatial_scatter(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["A_score"] = 0.1
+    sentinel = object()
+
+    async def _fake_spatial(*_args, **_kwargs):
+        return sentinel
+
+    monkeypatch.setattr(viz_enrich, "_create_enrichment_spatial", _fake_spatial)
+    out = await viz_enrich._create_enrichment_visualization(
+        adata,
+        VisualizationParameters(plot_type="enrichment", subtype="spatial"),
+        context=DummyCtx(),
+    )
+    assert out is sentinel
+
+
+@pytest.mark.asyncio
+async def test_create_pathway_enrichment_visualization_uses_alternate_result_keys(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.uns["pathway_enrichment"] = {"PathA": {"Adjusted P-value": 0.03}}
+    sentinel = object()
+
+    def _fake_barplot(*_args, **_kwargs):
+        return sentinel
+
+    monkeypatch.setattr(viz_enrich, "_create_gsea_barplot", _fake_barplot)
+    out = await viz_enrich.create_pathway_enrichment_visualization(
+        adata,
+        VisualizationParameters(plot_type="enrichment", subtype="barplot"),
+        context=DummyCtx(),
+    )
+    assert out is sentinel
+
+
+@pytest.mark.asyncio
+async def test_create_pathway_enrichment_visualization_unknown_subtype_error(
+    minimal_spatial_adata,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.uns["gsea_results"] = {"PathA": {"Adjusted P-value": 0.03}}
+    with pytest.raises(ParameterError, match="Unknown enrichment visualization type"):
+        await viz_enrich.create_pathway_enrichment_visualization(
+            adata,
+            VisualizationParameters(plot_type="enrichment", subtype="weird"),
+            context=DummyCtx(),
+        )
+
+
+def test_create_enrichment_violin_requires_cluster_key(minimal_spatial_adata):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["A_score"] = 0.3
+    with pytest.raises(ParameterError, match="requires 'cluster_key'"):
+        viz_enrich._create_enrichment_violin(
+            adata,
+            VisualizationParameters(plot_type="enrichment", subtype="violin"),
+            score_cols=["A_score"],
+        )
+
+
+def test_create_enrichment_violin_multifeature_layout(minimal_spatial_adata):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["A_score"] = np.linspace(0.0, 1.0, adata.n_obs)
+    adata.obs["B_score"] = np.linspace(1.0, 0.0, adata.n_obs)
+    fig = viz_enrich._create_enrichment_violin(
+        adata,
+        VisualizationParameters(
+            plot_type="enrichment",
+            subtype="violin",
+            cluster_key="group",
+            feature=["A_score", "B_score"],
+        ),
+        score_cols=["A_score", "B_score"],
+    )
+    assert len(fig.axes) == 2
+    fig.clf()
+
+
+@pytest.mark.asyncio
+async def test_create_enrichment_spatial_multifeature_and_single_feature_paths(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["A_score"] = np.linspace(0.0, 1.0, adata.n_obs)
+    adata.obs["B_score"] = np.linspace(1.0, 0.0, adata.n_obs)
+
+    seen: list[str] = []
+
+    def _fake_plot_spatial_feature(_adata, feature, ax, params):
+        seen.append(feature)
+        ax.scatter([0], [0], c=[1.0])
+
+    monkeypatch.setattr(viz_enrich, "plot_spatial_feature", _fake_plot_spatial_feature)
+
+    fig_multi = await viz_enrich._create_enrichment_spatial(
+        adata,
+        VisualizationParameters(
+            plot_type="enrichment",
+            subtype="spatial",
+            feature=["A_score", "B_score"],
+        ),
+        score_cols=["A_score", "B_score"],
+        context=None,
+    )
+    assert seen[:2] == ["A_score", "B_score"]
+    fig_multi.clf()
+
+    ctx = DummyCtx()
+    fig_single = await viz_enrich._create_enrichment_spatial(
+        adata,
+        VisualizationParameters(
+            plot_type="enrichment",
+            subtype="spatial",
+            feature="A",
+            show_colorbar=True,
+        ),
+        score_cols=["A_score", "B_score"],
+        context=ctx,
+    )
+    assert any("Using score column: A_score" in msg for msg in ctx.infos)
+    fig_single.clf()
+
+
+def test_create_enrichmap_spatial_routes_cross_and_wraps_errors(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    sentinel = object()
+
+    fake_em = ModuleType("enrichmap")
+    monkeypatch.setitem(sys.modules, "enrichmap", fake_em)
+
+    monkeypatch.setattr(
+        viz_enrich,
+        "_create_enrichmap_cross_correlation",
+        lambda *_a, **_k: sentinel,
+    )
+    out = viz_enrich._create_enrichmap_spatial(
+        adata,
+        VisualizationParameters(plot_type="enrichment", subtype="spatial_cross_correlation"),
+        score_cols=["A_score"],
+    )
+    assert out is sentinel
+
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("bad")
+
+    monkeypatch.setattr(viz_enrich, "_create_enrichmap_single_score", _boom)
+    with pytest.raises(ProcessingError, match="EnrichMap spatial_score visualization failed"):
+        viz_enrich._create_enrichmap_spatial(
+            adata,
+            VisualizationParameters(plot_type="enrichment", subtype="spatial_score", feature="A"),
+            score_cols=["A_score"],
+        )
+
+
+def test_create_enrichmap_cross_correlation_validation_and_success(minimal_spatial_adata):
+    adata = minimal_spatial_adata.copy()
+    params = VisualizationParameters(
+        plot_type="enrichment",
+        subtype="spatial_cross_correlation",
+        figure_size=(8, 5),
+        dpi=140,
+    )
+
+    with pytest.raises(DataNotFoundError, match="enrichment_gene_sets not found"):
+        viz_enrich._create_enrichmap_cross_correlation(adata, params, "sample_1", em=object())
+
+    adata.uns["enrichment_gene_sets"] = {"PathA": {"G1"}}
+    with pytest.raises(DataNotFoundError, match="Need at least 2 pathways"):
+        viz_enrich._create_enrichmap_cross_correlation(adata, params, "sample_1", em=object())
+
+    adata.uns["enrichment_gene_sets"] = {"PathA": {"G1"}, "PathB": {"G2"}}
+
+    class _PL:
+        @staticmethod
+        def cross_moran_scatter(*_args, **_kwargs):
+            plt.figure()
+
+    class _EM:
+        pl = _PL()
+
+    fig = viz_enrich._create_enrichmap_cross_correlation(adata, params, "sample_1", em=_EM())
+    assert tuple(fig.get_size_inches()) == pytest.approx((8.0, 5.0))
+    assert fig.get_dpi() == 140
+    fig.clf()
+
+
+def test_create_enrichmap_single_score_routes_all_supported_subtypes(
+    minimal_spatial_adata,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["A_score"] = np.linspace(0.0, 1.0, adata.n_obs)
+    calls: list[str] = []
+
+    class _PL:
+        @staticmethod
+        def morans_correlogram(*_args, **_kwargs):
+            calls.append("correlogram")
+            plt.figure()
+
+        @staticmethod
+        def variogram(*_args, **_kwargs):
+            calls.append("variogram")
+            plt.figure()
+
+        @staticmethod
+        def spatial_enrichmap(*_args, **_kwargs):
+            calls.append("spatial_score")
+            plt.figure()
+
+    class _EM:
+        pl = _PL()
+
+    for subtype in ["spatial_correlogram", "spatial_variogram", "spatial_score"]:
+        fig = viz_enrich._create_enrichmap_single_score(
+            adata,
+            VisualizationParameters(plot_type="enrichment", subtype=subtype, feature="A"),
+            library_id="sample_1",
+            em=_EM(),
+            context=None,
+        )
+        fig.clf()
+
+    assert calls == ["correlogram", "variogram", "spatial_score"]
+
+
+def test_create_gsea_enrichment_plot_validation_and_success(monkeypatch: pytest.MonkeyPatch):
+    with pytest.raises(DataNotFoundError, match="requires running enrichment scores"):
+        viz_enrich._create_gsea_enrichment_plot(
+            pd.DataFrame({"Term": ["PathA"]}),
+            VisualizationParameters(plot_type="enrichment", subtype="enrichment_plot"),
+        )
+
+    with pytest.raises(DataNotFoundError, match="requires 'RES'"):
+        viz_enrich._create_gsea_enrichment_plot(
+            {"PathA": {"NES": 1.0}},
+            VisualizationParameters(plot_type="enrichment", subtype="enrichment_plot"),
+        )
+
+    fake_gp = ModuleType("gseapy")
+    fake_gp.gseaplot = lambda **_kwargs: plt.figure(figsize=(6, 4))
+    monkeypatch.setitem(sys.modules, "gseapy", fake_gp)
+
+    fig = viz_enrich._create_gsea_enrichment_plot(
+        {"PathA": {"RES": [0.1, 0.2], "NES": 1.1, "pval": 0.02}},
+        VisualizationParameters(plot_type="enrichment", subtype="enrichment_plot"),
+    )
+    assert fig is not None
+    fig.clf()
+
+    with pytest.raises(ParameterError, match="Unsupported GSEA results format"):
+        viz_enrich._create_gsea_enrichment_plot(
+            ["bad"],
+            VisualizationParameters(plot_type="enrichment", subtype="enrichment_plot"),
+        )
+
+
+def test_create_gsea_dotplot_nested_and_error_wrap(monkeypatch: pytest.MonkeyPatch):
+    fake_gp = ModuleType("gseapy")
+    fake_gp.dotplot = lambda **_kwargs: _FakeAxes()
+    monkeypatch.setitem(sys.modules, "gseapy", fake_gp)
+
+    fig = viz_enrich._create_gsea_dotplot(
+        {
+            "ConditionA": {"PathA": {"Adjusted P-value": 0.01}},
+            "ConditionB": {"PathB": {"Adjusted P-value": 0.02}},
+        },
+        VisualizationParameters(plot_type="enrichment", subtype="dotplot"),
+    )
+    assert fig is not None
+    fig.clf()
+
+    def _boom(**_kwargs):
+        raise RuntimeError("dotplot failed")
+
+    fake_gp.dotplot = _boom
+    with pytest.raises(ProcessingError, match="gseapy.dotplot failed"):
+        viz_enrich._create_gsea_dotplot(
+            pd.DataFrame({"Term": ["PathA"], "Adjusted P-value": [0.1]}),
+            VisualizationParameters(plot_type="enrichment", subtype="dotplot"),
+        )
+
+
+def test_utility_branches_for_dataframe_conversion_and_feature_resolution():
+    assert viz_enrich._resolve_feature_list(None, pd.Index(["A"]), ["A_score"]) == []
+    assert viz_enrich._resolve_feature_list("A", pd.Index(["A"]), ["A_score"]) == ["A"]
+    assert viz_enrich._resolve_feature_list(["A", "B"], pd.Index(["A"]), ["A_score"]) == [
+        "A",
+        "B",
+    ]
+
+    with pytest.raises(ParameterError, match="Unsupported GSEA results format"):
+        viz_enrich._gsea_results_to_dataframe(["bad"])
+
+    df, x_col = viz_enrich._nested_dict_to_dataframe(
+        {
+            "A": {"Path1": {"pval": 0.1}},
+            "B": {"Path2": {"pval": 0.2}},
+        }
+    )
+    assert x_col == "Group"
+    assert set(df["Group"]) == {"A", "B"}
