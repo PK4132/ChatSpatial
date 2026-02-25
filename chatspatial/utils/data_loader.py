@@ -225,6 +225,10 @@ async def load_spatial_data(
                                 logger.warning(
                                     f"Could not load spatial information: {e}"
                                 )
+                    else:
+                        raise DataCompatibilityError(
+                            f"Directory {mtx_dir} is missing matrix.mtx or matrix.mtx.gz"
+                        )
                 else:
                     raise DataCompatibilityError(
                         f"Directory {data_path} does not have the expected 10x Visium structure"

@@ -14,7 +14,11 @@ import pandas as pd
 import pytest
 
 from chatspatial.utils import data_loader as dl
-from chatspatial.utils.exceptions import DataCompatibilityError, DataNotFoundError, ProcessingError
+from chatspatial.utils.exceptions import (
+    DataCompatibilityError,
+    DataNotFoundError,
+    ProcessingError,
+)
 
 
 class _FakeScanpy(ModuleType):
@@ -117,6 +121,123 @@ async def test_load_visium_mtx_directory_adds_spatial_coordinates(
 
 
 @pytest.mark.asyncio
+async def test_load_visium_mtx_directory_rejects_missing_matrix_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    visium_dir = tmp_path / "sample_mtx_missing_matrix"
+    visium_dir.mkdir(parents=True)
+
+    monkeypatch.setitem(sys.modules, "scanpy", _FakeScanpy())
+
+    with pytest.raises(
+        ProcessingError,
+        match="does not have the expected 10x Visium structure",
+    ):
+        await dl.load_spatial_data(str(visium_dir), "visium")
+
+
+@pytest.mark.asyncio
+async def test_load_visium_filtered_matrix_dir_requires_matrix_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    visium_dir = tmp_path / "sample_missing_mtx_file"
+    mtx_dir = visium_dir / "filtered_feature_bc_matrix"
+    mtx_dir.mkdir(parents=True)
+
+    monkeypatch.setitem(sys.modules, "scanpy", _FakeScanpy())
+
+    with pytest.raises(
+        ProcessingError,
+        match="missing matrix.mtx or matrix.mtx.gz",
+    ):
+        await dl.load_spatial_data(str(visium_dir), "visium")
+
+
+@pytest.mark.asyncio
+async def test_load_visium_mtx_directory_parses_header_positions_file(
+    minimal_spatial_adata,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    visium_dir = tmp_path / "sample_mtx_header"
+    mtx_dir = visium_dir / "filtered_feature_bc_matrix"
+    spatial_dir = visium_dir / "spatial"
+    mtx_dir.mkdir(parents=True)
+    spatial_dir.mkdir(parents=True)
+
+    (mtx_dir / "matrix.mtx").write_text("mtx")
+
+    adata = minimal_spatial_adata.copy()
+    adata.obs_names = [f"bc{i}" for i in range(adata.n_obs)]
+    adata.obsm.clear()
+    adata.uns.clear()
+
+    positions = pd.DataFrame(
+        {
+            "barcode": adata.obs_names,
+            "in_tissue": np.ones(adata.n_obs, dtype=int),
+            "array_row": np.arange(adata.n_obs),
+            "array_col": np.arange(adata.n_obs),
+            "pxl_row_in_fullres": np.linspace(0, 100, adata.n_obs),
+            "pxl_col_in_fullres": np.linspace(10, 110, adata.n_obs),
+        }
+    )
+    positions.to_csv(spatial_dir / "tissue_positions_list.csv", index=False)
+
+    fake_scanpy = _FakeScanpy()
+    fake_scanpy._read_10x_mtx_ret = adata
+    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
+
+    out = await dl.load_spatial_data(str(visium_dir), "visium")
+    assert out["adata"].obsm["spatial"].shape == (adata.n_obs, 2)
+
+
+@pytest.mark.asyncio
+async def test_load_visium_mtx_directory_warns_when_spatial_alignment_fails(
+    minimal_spatial_adata,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    visium_dir = tmp_path / "sample_mtx_bad_spatial"
+    mtx_dir = visium_dir / "filtered_feature_bc_matrix"
+    spatial_dir = visium_dir / "spatial"
+    mtx_dir.mkdir(parents=True)
+    spatial_dir.mkdir(parents=True)
+
+    (mtx_dir / "matrix.mtx").write_text("mtx")
+
+    adata = minimal_spatial_adata.copy()
+    adata.obs_names = [f"obs{i}" for i in range(adata.n_obs)]
+    adata.obsm.clear()
+    adata.uns.clear()
+
+    positions = pd.DataFrame(
+        {
+            "barcode": [f"other{i}" for i in range(adata.n_obs)],
+            "in_tissue": np.ones(adata.n_obs, dtype=int),
+            "array_row": np.arange(adata.n_obs),
+            "array_col": np.arange(adata.n_obs),
+            "pxl_row_in_fullres": np.linspace(0, 100, adata.n_obs),
+            "pxl_col_in_fullres": np.linspace(10, 110, adata.n_obs),
+        }
+    )
+    positions.to_csv(spatial_dir / "tissue_positions_list.csv", index=False)
+
+    fake_scanpy = _FakeScanpy()
+    fake_scanpy._read_10x_mtx_ret = adata
+    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
+
+    with caplog.at_level("WARNING"):
+        out = await dl.load_spatial_data(str(visium_dir), "visium")
+
+    assert out["spatial_coordinates_available"] is False
+    assert "Could not load spatial information" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_load_visium_h5_path_calls_spatial_helpers(
     minimal_spatial_adata,
     tmp_path: Path,
@@ -145,6 +266,33 @@ async def test_load_visium_h5_path_calls_spatial_helpers(
     await dl.load_spatial_data(str(h5_path), "visium")
 
     assert calls == {"find": 1, "add": 1}
+
+
+@pytest.mark.asyncio
+async def test_load_visium_h5_path_warns_when_spatial_helper_fails(
+    minimal_spatial_adata,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    h5_path = tmp_path / "sample_with_bad_spatial.h5"
+    h5_path.write_text("h5")
+
+    fake_scanpy = _FakeScanpy()
+    fake_scanpy._read_10x_h5_ret = minimal_spatial_adata.copy()
+    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
+    monkeypatch.setattr(dl, "_find_spatial_folder", lambda _path: "/tmp/spatial")
+    monkeypatch.setattr(
+        dl,
+        "_add_spatial_info_to_adata",
+        lambda _adata, _spatial_path: (_ for _ in ()).throw(RuntimeError("bad spatial")),
+    )
+
+    with caplog.at_level("WARNING"):
+        out = await dl.load_spatial_data(str(h5_path), "visium")
+
+    assert out["type"] == "visium"
+    assert "Could not add spatial information" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -229,6 +377,38 @@ async def test_load_visium_spatial_issue_error_adds_spatial_guidance(
 
 
 @pytest.mark.asyncio
+async def test_load_visium_rejects_unsupported_visium_input_format(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    txt_path = tmp_path / "sample.txt"
+    txt_path.write_text("plain")
+    monkeypatch.setitem(sys.modules, "scanpy", _FakeScanpy())
+
+    with pytest.raises(ProcessingError, match="Unsupported file format for visium"):
+        await dl.load_spatial_data(str(txt_path), "visium")
+
+
+@pytest.mark.asyncio
+async def test_load_visium_wraps_file_not_found_from_scanpy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    visium_dir = tmp_path / "sample_visium_missing"
+    visium_dir.mkdir()
+    (visium_dir / "filtered_feature_bc_matrix.h5").write_text("h5")
+
+    fake_scanpy = _FakeScanpy()
+    fake_scanpy.read_visium = lambda _path: (_ for _ in ()).throw(
+        FileNotFoundError("matrix missing")
+    )
+    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
+
+    with pytest.raises(DataNotFoundError, match="File not found"):
+        await dl.load_spatial_data(str(visium_dir), "visium")
+
+
+@pytest.mark.asyncio
 async def test_load_xenium_standard_h5_filters_to_cells_with_metadata(
     minimal_spatial_adata,
     tmp_path: Path,
@@ -262,6 +442,116 @@ async def test_load_xenium_standard_h5_filters_to_cells_with_metadata(
     assert out_adata.n_obs == adata.n_obs // 2
     assert "spatial" in out_adata.obsm
     assert "transcript_counts" in out_adata.obs
+
+
+@pytest.mark.asyncio
+async def test_load_xenium_zarr_format_branch_uses_zarr_loader(
+    minimal_spatial_adata,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    xen_dir = tmp_path / "xenium_zarr"
+    xen_dir.mkdir()
+    (xen_dir / "cell_feature_matrix.zarr.zip").write_text("zip")
+    (xen_dir / "cells.zarr.zip").write_text("zip")
+
+    fake_scanpy = _FakeScanpy()
+    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
+    monkeypatch.setattr(dl, "_load_xenium_zarr", lambda _path: minimal_spatial_adata.copy())
+
+    out = await dl.load_spatial_data(str(xen_dir), "xenium")
+    assert out["type"] == "xenium"
+    assert out["n_cells"] == minimal_spatial_adata.n_obs
+
+
+@pytest.mark.asyncio
+async def test_load_xenium_standard_matrix_dir_uses_read_10x_mtx(
+    minimal_spatial_adata,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    xen_dir = tmp_path / "xenium_mtx"
+    matrix_dir = xen_dir / "cell_feature_matrix"
+    xen_dir.mkdir()
+    matrix_dir.mkdir()
+    with gzip.open(xen_dir / "cells.csv.gz", "wt") as f:
+        pd.DataFrame(
+            {
+                "cell_id": [f"cell_{i}" for i in range(minimal_spatial_adata.n_obs)],
+                "x_centroid": np.linspace(0, 10, minimal_spatial_adata.n_obs),
+                "y_centroid": np.linspace(5, 15, minimal_spatial_adata.n_obs),
+            }
+        ).to_csv(f, index=False)
+
+    adata = minimal_spatial_adata.copy()
+    adata.obs_names = [f"cell_{i}" for i in range(adata.n_obs)]
+    fake_scanpy = _FakeScanpy()
+    fake_scanpy._read_10x_mtx_ret = adata
+    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
+
+    out = await dl.load_spatial_data(str(xen_dir), "xenium")
+    assert fake_scanpy.calls["read_10x_mtx"]
+    assert out["adata"].n_obs == adata.n_obs
+
+
+@pytest.mark.asyncio
+async def test_load_xenium_standard_reads_parquet_when_available(
+    minimal_spatial_adata,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    xen_dir = tmp_path / "xenium_parquet"
+    xen_dir.mkdir()
+    (xen_dir / "cell_feature_matrix.h5").write_text("h5")
+    (xen_dir / "cells.parquet").write_text("placeholder")
+
+    adata = minimal_spatial_adata.copy()
+    adata.obs_names = [f"cell_{i}" for i in range(adata.n_obs)]
+    fake_scanpy = _FakeScanpy()
+    fake_scanpy._read_10x_h5_ret = adata
+    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
+
+    monkeypatch.setattr(
+        pd,
+        "read_parquet",
+        lambda _p: pd.DataFrame(
+            {
+                "cell_id": [f"cell_{i}" for i in range(adata.n_obs)],
+                "x_centroid": np.linspace(0, 10, adata.n_obs),
+                "y_centroid": np.linspace(5, 15, adata.n_obs),
+            }
+        ),
+    )
+
+    out = await dl.load_spatial_data(str(xen_dir), "xenium")
+    assert out["adata"].n_obs == adata.n_obs
+
+
+@pytest.mark.asyncio
+async def test_load_xenium_standard_raises_when_centroid_columns_missing(
+    minimal_spatial_adata,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    xen_dir = tmp_path / "xenium_missing_centroids"
+    xen_dir.mkdir()
+    (xen_dir / "cell_feature_matrix.h5").write_text("h5")
+    with gzip.open(xen_dir / "cells.csv.gz", "wt") as f:
+        pd.DataFrame(
+            {
+                "cell_id": [f"cell_{i}" for i in range(minimal_spatial_adata.n_obs)],
+                "some_other_col": np.arange(minimal_spatial_adata.n_obs),
+            }
+        ).to_csv(f, index=False)
+
+    adata = minimal_spatial_adata.copy()
+    adata.obs_names = [f"cell_{i}" for i in range(adata.n_obs)]
+    fake_scanpy = _FakeScanpy()
+    fake_scanpy._read_10x_h5_ret = adata
+    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
+
+    with pytest.raises(DataCompatibilityError, match="missing x_centroid/y_centroid"):
+        await dl.load_spatial_data(str(xen_dir), "xenium")
 
 
 @pytest.mark.asyncio
@@ -307,6 +597,28 @@ async def test_load_xenium_raises_not_found_for_invalid_directory(
     monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
 
     with pytest.raises(DataNotFoundError, match="No valid Xenium data found"):
+        await dl.load_spatial_data(str(xen_dir), "xenium")
+
+
+@pytest.mark.asyncio
+async def test_load_xenium_wraps_unexpected_errors_as_processing_error(
+    minimal_spatial_adata,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    xen_dir = tmp_path / "xenium_runtime_error"
+    xen_dir.mkdir()
+    (xen_dir / "cell_feature_matrix.h5").write_text("h5")
+    with gzip.open(xen_dir / "cells.csv.gz", "wt") as f:
+        pd.DataFrame({"cell_id": ["cell_0"]}).to_csv(f, index=False)
+
+    adata = minimal_spatial_adata.copy()
+    fake_scanpy = _FakeScanpy()
+    fake_scanpy._read_10x_h5_ret = adata
+    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
+    monkeypatch.setattr(pd, "read_csv", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("csv boom")))
+
+    with pytest.raises(ProcessingError, match="Error loading Xenium data"):
         await dl.load_spatial_data(str(xen_dir), "xenium")
 
 
@@ -399,6 +711,108 @@ def test_add_spatial_info_loads_images_when_pillow_available(
     imgs = out.uns["spatial"]["sample_img"]["images"]
     assert "hires" in imgs
     assert imgs["hires"].shape == (4, 4, 3)
+
+
+def test_add_spatial_info_supports_6_column_positions_without_header(
+    minimal_spatial_adata,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs_names = [f"bc{i}" for i in range(adata.n_obs)]
+
+    spatial_dir = tmp_path / "sample_6col" / "spatial"
+    spatial_dir.mkdir(parents=True)
+
+    positions = pd.DataFrame(
+        {
+            0: adata.obs_names,
+            1: np.ones(adata.n_obs, dtype=int),
+            2: np.arange(adata.n_obs),
+            3: np.arange(adata.n_obs),
+            4: np.linspace(0, 10, adata.n_obs),
+            5: np.linspace(5, 15, adata.n_obs),
+        }
+    )
+    positions.to_csv(spatial_dir / "tissue_positions_list.csv", index=False, header=False)
+    (spatial_dir / "scalefactors_json.json").write_text("{}")
+    monkeypatch.setattr(dl, "is_available", lambda _name: False)
+
+    out = dl._add_spatial_info_to_adata(adata, str(spatial_dir))
+    assert out.obsm["spatial"].shape == (adata.n_obs, 2)
+
+
+def test_add_spatial_info_uses_fallback_library_id_when_parent_missing(
+    minimal_spatial_adata,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs_names = [f"bc{i}" for i in range(adata.n_obs)]
+
+    spatial_dir = tmp_path / "spatial"
+    spatial_dir.mkdir()
+    positions = pd.DataFrame(
+        {
+            "barcode": adata.obs_names,
+            "in_tissue": [1] * adata.n_obs,
+            "array_row": np.arange(adata.n_obs),
+            "array_col": np.arange(adata.n_obs),
+            "pxl_row_in_fullres": np.linspace(0, 10, adata.n_obs),
+            "pxl_col_in_fullres": np.linspace(5, 15, adata.n_obs),
+        }
+    )
+    positions.to_csv(spatial_dir / "tissue_positions_list.csv", index=False)
+    (spatial_dir / "scalefactors_json.json").write_text("{}")
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(dl, "is_available", lambda _name: False)
+
+    out = dl._add_spatial_info_to_adata(adata, "spatial")
+    assert "sample_1" in out.uns["spatial"]
+
+
+def test_add_spatial_info_logs_warning_when_image_loading_fails(
+    minimal_spatial_adata,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs_names = [f"bc{i}" for i in range(adata.n_obs)]
+
+    spatial_dir = tmp_path / "sample_bad_image" / "spatial"
+    spatial_dir.mkdir(parents=True)
+    positions = pd.DataFrame(
+        {
+            "barcode": adata.obs_names,
+            "in_tissue": [1] * adata.n_obs,
+            "array_row": np.arange(adata.n_obs),
+            "array_col": np.arange(adata.n_obs),
+            "pxl_row_in_fullres": np.linspace(0, 10, adata.n_obs),
+            "pxl_col_in_fullres": np.linspace(5, 15, adata.n_obs),
+        }
+    )
+    positions.to_csv(spatial_dir / "tissue_positions_list.csv", index=False)
+    (spatial_dir / "scalefactors_json.json").write_text("{}")
+    (spatial_dir / "tissue_lowres_image.png").write_bytes(b"x")
+
+    fake_pil = ModuleType("PIL")
+
+    class _BadImage:
+        @staticmethod
+        def open(_path):
+            raise RuntimeError("broken image")
+
+    fake_pil.Image = _BadImage
+    monkeypatch.setitem(sys.modules, "PIL", fake_pil)
+    monkeypatch.setattr(dl, "is_available", lambda name: name == "Pillow")
+
+    with caplog.at_level("WARNING"):
+        out = dl._add_spatial_info_to_adata(adata, str(spatial_dir))
+
+    assert "sample_bad_image" in out.uns["spatial"]
+    assert "Could not load image tissue_lowres_image.png" in caplog.text
 
 
 def test_add_spatial_info_raises_when_barcodes_cannot_be_aligned(
