@@ -1,0 +1,201 @@
+"""Branch-focused tests for results export extraction and index behavior."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+
+import numpy as np
+import pandas as pd
+
+from chatspatial.utils import results_export as re
+
+
+def _patch_home(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(re.Path, "home", classmethod(lambda _cls: tmp_path))
+
+
+def test_export_analysis_result_returns_empty_when_results_keys_missing(
+    minimal_spatial_adata, monkeypatch, tmp_path: Path
+) -> None:
+    _patch_home(monkeypatch, tmp_path)
+    adata = minimal_spatial_adata.copy()
+    adata.uns["demo_metadata"] = {"method": "demo", "results_keys": {}}
+    assert re.export_analysis_result(adata, "d_meta", "demo") == []
+
+
+def test_export_analysis_result_unknown_location_is_skipped(
+    minimal_spatial_adata, monkeypatch, tmp_path: Path
+) -> None:
+    _patch_home(monkeypatch, tmp_path)
+    adata = minimal_spatial_adata.copy()
+    adata.uns["demo_metadata"] = {
+        "method": "demo",
+        "results_keys": {"unknown_loc": ["abc"]},
+    }
+    assert re.export_analysis_result(adata, "d_loc", "demo") == []
+
+
+def test_extract_rank_genes_groups_missing_or_failing_returns_none(
+    minimal_spatial_adata, monkeypatch
+) -> None:
+    adata = minimal_spatial_adata.copy()
+    fake_scanpy = SimpleNamespace(
+        get=SimpleNamespace(rank_genes_groups_df=lambda *_a, **_k: pd.DataFrame())
+    )
+    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
+    assert re._extract_rank_genes_groups(adata) is None
+
+    adata.uns["rank_genes_groups"] = {"names": np.array([])}
+    fake_scanpy_bad = SimpleNamespace(
+        get=SimpleNamespace(
+            rank_genes_groups_df=lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("boom"))
+        )
+    )
+    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy_bad)
+    assert re._extract_rank_genes_groups(adata) is None
+
+
+def test_extract_from_uns_covers_dataframe_ripley_dict_structured_and_unsupported(
+    minimal_spatial_adata,
+) -> None:
+    adata = minimal_spatial_adata.copy()
+    assert re._extract_from_uns(adata, "missing_key") is None
+
+    adata.uns["as_df"] = pd.DataFrame({"v": [1.0, 2.0]})
+    out_df = re._extract_from_uns(adata, "as_df")
+    assert isinstance(out_df, pd.DataFrame)
+    assert list(out_df.columns) == ["v"]
+
+    adata.uns["my_ripley_domain"] = {"L_stat": pd.DataFrame({"L": [0.1, 0.2]})}
+    out_ripley = re._extract_from_uns(adata, "my_ripley_domain")
+    assert isinstance(out_ripley, pd.DataFrame)
+    assert list(out_ripley.columns) == ["L"]
+
+    adata.uns["flat_dict"] = {"a": 1.0, "b": 2.0}
+    out_flat = re._extract_from_uns(adata, "flat_dict")
+    assert "value" in out_flat.columns
+
+    rec = np.array([(1, 2.0)], dtype=[("x", "i4"), ("y", "f8")])
+    adata.uns["recarray"] = rec
+    out_rec = re._extract_from_uns(adata, "recarray")
+    assert list(out_rec.columns) == ["x", "y"]
+
+    adata.uns["unsupported"] = 123
+    assert re._extract_from_uns(adata, "unsupported") is None
+
+
+def test_extract_squidpy_result_handles_non_dict_missing_cluster_and_empty_metrics(
+    minimal_spatial_adata,
+) -> None:
+    adata = minimal_spatial_adata.copy()
+    assert re._extract_squidpy_spatial_result(adata, "domain_co_occurrence", ["bad"]) is None
+    assert re._extract_squidpy_spatial_result(adata, "nope_nhood_enrichment", {"zscore": np.eye(2)}) is None
+
+    adata.obs["domain"] = [f"d{i % 3}" for i in range(adata.n_obs)]  # non-categorical branch
+    out_empty = re._extract_squidpy_spatial_result(
+        adata,
+        "domain_nhood_enrichment",
+        {"not_matrix": np.array([1, 2, 3])},
+    )
+    assert out_empty is None
+
+    out_2d = re._extract_squidpy_spatial_result(
+        adata,
+        "domain_nhood_enrichment",
+        {"zscore": np.ones((3, 3)), "count": np.ones((3, 3))},
+    )
+    assert isinstance(out_2d, pd.DataFrame)
+    assert any(c.startswith("zscore_") for c in out_2d.columns)
+    assert any(c.startswith("count_") for c in out_2d.columns)
+
+
+def test_extract_from_obs_and_var_return_none_for_non_matching_key(minimal_spatial_adata) -> None:
+    adata = minimal_spatial_adata.copy()
+    assert re._extract_from_obs(adata, "not_present") is None
+    assert re._extract_from_var(adata, "not_present") is None
+
+
+def test_extract_from_obsm_covers_missing_dataframe_array_and_unknown_object(
+    minimal_spatial_adata,
+) -> None:
+    adata = minimal_spatial_adata.copy()
+    assert re._extract_from_obsm(adata, "not_present") is None
+
+    adata.obsm["df_like"] = pd.DataFrame(
+        {"a": np.arange(adata.n_obs)},
+        index=adata.obs_names,
+    )
+    out_df = re._extract_from_obsm(adata, "df_like")
+    assert isinstance(out_df, pd.DataFrame)
+    assert list(out_df.index) == list(adata.obs_names)
+
+    adata.obsm["array_like"] = np.ones((adata.n_obs, 2))
+    out_arr = re._extract_from_obsm(adata, "array_like")
+    assert list(out_arr.columns) == ["array_like_0", "array_like_1"]
+
+    class _FakeAdata:
+        def __init__(self):
+            self.obsm = {"unknown": object()}
+            self.obs_names = ["c0", "c1"]
+            self.uns = {}
+
+    assert re._extract_from_obsm(_FakeAdata(), "unknown") is None
+
+
+def test_infer_obsm_columns_prefers_metadata_and_falls_back(minimal_spatial_adata) -> None:
+    adata = minimal_spatial_adata.copy()
+    adata.uns["deconvolution_result_spotlight"] = {"cell_types": ["T", "B"]}
+    cols_props = re._infer_obsm_columns(adata, "cell_type_proportions_spotlight", 2)
+    assert cols_props == ["T", "B"]
+
+    adata.uns["liana_spatial_interactions"] = ["A|B", "B|C"]
+    cols_scores = re._infer_obsm_columns(adata, "liana_spatial_scores", 2)
+    assert cols_scores == ["A|B", "B|C"]
+
+    cols_default = re._infer_obsm_columns(adata, "x_embed", 3)
+    assert cols_default == ["x_embed_0", "x_embed_1", "x_embed_2"]
+
+
+def test_dict_to_dataframe_covers_empty_nested_list_and_flat() -> None:
+    out_empty = re._dict_to_dataframe({})
+    assert out_empty.empty
+
+    out_nested = re._dict_to_dataframe({"p1": {"score": 1.0}, "p2": {"score": 2.0}})
+    assert "score" in out_nested.columns
+
+    out_list = re._dict_to_dataframe({"g1": [1, 2], "g2": [3, 4]})
+    assert out_list.shape == (2, 2)
+
+    out_flat = re._dict_to_dataframe({"k1": 1.0, "k2": 2.0})
+    assert list(out_flat.columns) == ["value"]
+
+
+def test_update_index_recovers_from_invalid_json_and_list_exported_results_missing_index(
+    monkeypatch, tmp_path: Path
+) -> None:
+    _patch_home(monkeypatch, tmp_path)
+    assert re.list_exported_results("no_idx") == {}
+
+    results_dir = re.get_results_dir("d_idx")
+    index_path = results_dir / "_index.json"
+    index_path.write_text("{invalid json", encoding="utf-8")
+
+    export_file = re.get_analysis_dir("d_idx", "demo") / "demo_key.csv"
+    export_file.parent.mkdir(parents=True, exist_ok=True)
+    export_file.write_text("a,b\n1,2\n", encoding="utf-8")
+
+    re._update_index(
+        data_id="d_idx",
+        analysis_name="demo",
+        method="demo_method",
+        metadata={"parameters": {"path": Path("x/y")}, "statistics": {"n": 1}},
+        exported_files=[export_file],
+    )
+
+    loaded = json.loads(index_path.read_text(encoding="utf-8"))
+    assert loaded["analyses"]["demo"]["method"] == "demo_method"
+    assert loaded["analyses"]["demo"]["files"] == ["demo_key.csv"]
+    assert loaded["analyses"]["demo"]["parameters"]["path"] == "x/y"
