@@ -1825,3 +1825,189 @@ async def test_analyze_communication_fastccc_none_pvalues_sets_zero_significant(
     )
 
     assert out.n_significant == 0
+
+
+def _install_fake_rpy2(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    cellchat_genes: list[str],
+    n_lr_pairs: int = 2,
+    n_significant: int = 3,
+    top_pathways: list[str] | None = None,
+    top_lr: list[str] | None = None,
+):
+    import sys
+    import types
+
+    class _Conv:
+        def __add__(self, _other):
+            return self
+
+    class _LCtx:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _RExec:
+        def __init__(self):
+            self.scripts: list[str] = []
+            self.lookup = {
+                "cellchat_genes": list(cellchat_genes),
+                "n_lr_pairs": np.array([n_lr_pairs]),
+                "n_significant": np.array([n_significant]),
+                "top_pathways": list(top_pathways or ["PathA", "PathB"]),
+                "top_lr": list(top_lr or ["L1^R1", "L2-R2"]),
+                "as.data.frame(lr_pairs)": pd.DataFrame(
+                    {"interaction_name": ["L1^R1", "L2-R2"]}
+                ),
+                "net$prob": np.ones((2, 2, 2), dtype=float),
+                "net$pval": np.full((2, 2, 2), 0.05, dtype=float),
+                "rownames(net$prob)": ["T", "B"],
+            }
+
+        def __call__(self, code: str):
+            key = code.strip()
+            if key in self.lookup:
+                return self.lookup[key]
+            self.scripts.append(code)
+            return None
+
+    r_exec = _RExec()
+    fake_ro = types.ModuleType("rpy2.robjects")
+    fake_ro.r = r_exec
+    fake_ro.globalenv = {}
+    fake_ro.default_converter = _Conv()
+    fake_ro.numpy2ri = types.SimpleNamespace(converter=_Conv())
+    fake_ro.pandas2ri = types.SimpleNamespace(converter=_Conv())
+
+    fake_conversion = types.ModuleType("rpy2.robjects.conversion")
+    fake_conversion.localconverter = lambda _converter: _LCtx()
+
+    fake_rpy2 = types.ModuleType("rpy2")
+    fake_rpy2.robjects = fake_ro
+
+    monkeypatch.setitem(sys.modules, "rpy2", fake_rpy2)
+    monkeypatch.setitem(sys.modules, "rpy2.robjects", fake_ro)
+    monkeypatch.setitem(sys.modules, "rpy2.robjects.conversion", fake_conversion)
+
+    return r_exec, fake_ro
+
+
+def test_analyze_communication_cellchat_r_non_spatial_success(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["cell_type"] = pd.Categorical(["T"] * (adata.n_obs // 2) + ["B"] * (adata.n_obs - adata.n_obs // 2))
+
+    r_exec, fake_ro = _install_fake_rpy2(
+        monkeypatch,
+        cellchat_genes=["gene_0", "gene_1", "gene_2", "gene_3"],
+    )
+
+    monkeypatch.setattr(ccc, "validate_obs_column", lambda *_a, **_k: None)
+    monkeypatch.setattr(ccc, "get_spatial_key", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        ccc,
+        "get_raw_data_source",
+        lambda _adata, prefer_complete_genes=True: type(
+            "Raw",
+            (),
+            {"X": np.asarray(_adata.X), "var_names": pd.Index(_adata.var_names)},
+        )(),
+    )
+
+    params = CellCommunicationParameters(
+        method="cellchat_r",
+        species="human",
+        cell_type_key="cell_type",
+    )
+
+    out = ccc._analyze_communication_cellchat_r(adata, params, DummyCtx())
+
+    assert out.method == "cellchat_r"
+    assert out.n_pairs == 2
+    assert out.n_significant == 3
+    assert out.lr_pairs == ["L1_R1", "L2_R2"]
+    assert out.method_data["prob_matrix"].shape == (2, 2, 2)
+    assert "createCellChat" in "\n".join(r_exec.scripts)
+    assert "spatial_locs" not in fake_ro.globalenv
+
+
+def test_analyze_communication_cellchat_r_spatial_contact_range_and_db_category(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    # Numeric-like labels trigger CellChat-safe prefixing branch.
+    adata.obs["cell_type"] = pd.Categorical(
+        ["0"] * (adata.n_obs // 2) + ["1"] * (adata.n_obs - adata.n_obs // 2)
+    )
+
+    r_exec, fake_ro = _install_fake_rpy2(
+        monkeypatch,
+        cellchat_genes=["gene_0", "gene_1", "gene_2", "gene_3"],
+    )
+
+    monkeypatch.setattr(ccc, "validate_obs_column", lambda *_a, **_k: None)
+    monkeypatch.setattr(ccc, "get_spatial_key", lambda *_a, **_k: "spatial")
+    monkeypatch.setattr(
+        ccc,
+        "get_raw_data_source",
+        lambda _adata, prefer_complete_genes=True: type(
+            "Raw",
+            (),
+            {"X": np.asarray(_adata.X), "var_names": pd.Index(_adata.var_names)},
+        )(),
+    )
+
+    params = CellCommunicationParameters(
+        method="cellchat_r",
+        species="human",
+        cell_type_key="cell_type",
+        cellchat_db_category="Secreted Signaling",
+        cellchat_contact_range=100.0,
+        cellchat_distance_use=True,
+    )
+
+    out = ccc._analyze_communication_cellchat_r(adata, params, DummyCtx())
+
+    scripts = "\n".join(r_exec.scripts)
+    assert out.statistics["spatial_mode"] is True
+    assert "contact.range = 100.0" in scripts
+    assert "subsetDB" in scripts
+    assert "spatial_locs" in fake_ro.globalenv
+    # Labels should be prefixed when numeric-like.
+    assert set(fake_ro.globalenv["meta_df"]["labels"].unique()) == {"cluster_0", "cluster_1"}
+
+
+def test_analyze_communication_cellchat_r_no_gene_overlap_is_wrapped(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["cell_type"] = pd.Categorical(["T"] * adata.n_obs)
+
+    _install_fake_rpy2(monkeypatch, cellchat_genes=["NOT_IN_DATA"])
+
+    monkeypatch.setattr(ccc, "validate_obs_column", lambda *_a, **_k: None)
+    monkeypatch.setattr(ccc, "get_spatial_key", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        ccc,
+        "get_raw_data_source",
+        lambda _adata, prefer_complete_genes=True: type(
+            "Raw",
+            (),
+            {"X": np.asarray(_adata.X), "var_names": pd.Index(_adata.var_names)},
+        )(),
+    )
+
+    with pytest.raises(ProcessingError, match="No genes overlap"):
+        ccc._analyze_communication_cellchat_r(
+            adata,
+            CellCommunicationParameters(
+                method="cellchat_r",
+                species="human",
+                cell_type_key="cell_type",
+            ),
+            DummyCtx(),
+        )
