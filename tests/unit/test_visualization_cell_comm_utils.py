@@ -24,6 +24,12 @@ class DummyCtx:
         self.infos.append(msg)
 
 
+@pytest.fixture(autouse=True)
+def _close_figures_after_test():
+    yield
+    plt.close("all")
+
+
 def _store_cluster_ccc(adata, *, method: str = "cellphonedb") -> None:
     results = pd.DataFrame(
         {
@@ -376,7 +382,12 @@ def test_create_spatial_lr_visualization_uses_metric_and_handles_missing_pair_co
     fig.clf()
 
 
-def test_create_unified_dotplot_validates_required_columns():
+def test_create_unified_dotplot_validates_required_columns(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(viz_cc, "require", lambda *_a, **_k: None)
+    fake_liana = ModuleType("liana")
+    fake_liana.pl = ModuleType("liana.pl")
+    fake_liana.pl.dotplot = lambda **_kwargs: _FakePlotnine()
+    monkeypatch.setitem(sys.modules, "liana", fake_liana)
     bad = pd.DataFrame({"source": ["A"], "target": ["B"]})
     data = _mock_cc_data(bad)
     with pytest.raises(DataNotFoundError, match="Missing required columns"):
@@ -423,6 +434,30 @@ def test_create_unified_dotplot_falls_back_on_liana_error(monkeypatch: pytest.Mo
         VisualizationParameters(plot_type="communication", subtype="dotplot"),
     )
     assert out is sentinel
+
+
+def test_create_unified_dotplot_success_and_empty_contract(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(viz_cc, "require", lambda *_a, **_k: None)
+
+    fake_liana = ModuleType("liana")
+    fake_liana.pl = ModuleType("liana.pl")
+    fake_liana.pl.dotplot = lambda **_kwargs: _FakePlotnine()
+    monkeypatch.setitem(sys.modules, "liana", fake_liana)
+
+    good = _mock_cc_data(_mock_liana_results())
+    fig = viz_cc._create_unified_dotplot(
+        good,
+        VisualizationParameters(plot_type="communication", subtype="dotplot", dpi=111),
+    )
+    assert fig.get_dpi() == 111
+    fig.clf()
+
+    empty = _mock_cc_data(pd.DataFrame())
+    with pytest.raises(DataNotFoundError, match="No cellphonedb results found"):
+        viz_cc._create_unified_dotplot(
+            empty,
+            VisualizationParameters(plot_type="communication", subtype="dotplot"),
+        )
 
 
 def test_create_fallback_dotplot_zero_rank_branch_sets_constant_size():
@@ -478,6 +513,30 @@ def test_create_unified_tileplot_falls_back_on_liana_error(monkeypatch: pytest.M
     assert out is sentinel
 
 
+def test_create_unified_tileplot_success_and_empty_contract(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(viz_cc, "require", lambda *_a, **_k: None)
+
+    fake_liana = ModuleType("liana")
+    fake_liana.pl = ModuleType("liana.pl")
+    fake_liana.pl.tileplot = lambda **_kwargs: _FakePlotnine()
+    monkeypatch.setitem(sys.modules, "liana", fake_liana)
+
+    good = _mock_cc_data(_mock_liana_results())
+    fig = viz_cc._create_unified_tileplot(
+        good,
+        VisualizationParameters(plot_type="communication", subtype="tileplot", dpi=109),
+    )
+    assert fig.get_dpi() == 109
+    fig.clf()
+
+    empty = _mock_cc_data(pd.DataFrame())
+    with pytest.raises(DataNotFoundError, match="No cellphonedb results found"):
+        viz_cc._create_unified_tileplot(
+            empty,
+            VisualizationParameters(plot_type="communication", subtype="tileplot"),
+        )
+
+
 def test_create_fallback_tileplot_requires_value_column():
     data = _mock_cc_data(_mock_liana_results(include_scores=False))
     with pytest.raises(DataNotFoundError, match="No suitable value column found"):
@@ -485,6 +544,23 @@ def test_create_fallback_tileplot_requires_value_column():
             data,
             VisualizationParameters(plot_type="communication", subtype="tileplot"),
         )
+
+
+def test_create_fallback_tileplot_success_heatmap_path():
+    data = _mock_cc_data(_mock_liana_results())
+    fig = viz_cc._create_fallback_tileplot(
+        data,
+        VisualizationParameters(
+            plot_type="communication",
+            subtype="tileplot",
+            colormap="coolwarm",
+            plot_top_pairs=2,
+        ),
+    )
+    ax = fig.axes[0]
+    assert "Cell Type Pairs" in ax.get_xlabel()
+    assert "Ligand-Receptor Pairs" in ax.get_ylabel()
+    fig.clf()
 
 
 def test_create_unified_circle_plot_supports_weighted_and_count_modes():
@@ -504,6 +580,18 @@ def test_create_unified_circle_plot_supports_weighted_and_count_modes():
     )
     assert fig2.axes[0].name == "polar"
     fig2.clf()
+
+    with pytest.raises(DataNotFoundError, match="No cellphonedb results found"):
+        viz_cc._create_unified_circle_plot(
+            _mock_cc_data(pd.DataFrame()),
+            VisualizationParameters(plot_type="communication", subtype="circle_plot"),
+        )
+
+    with pytest.raises(DataNotFoundError, match="Missing source/target columns"):
+        viz_cc._create_unified_circle_plot(
+            _mock_cc_data(pd.DataFrame({"ligand_complex": ["L"], "receptor_complex": ["R"]})),
+            VisualizationParameters(plot_type="communication", subtype="circle_plot"),
+        )
 
 
 def test_plotnine_to_matplotlib_success_and_error_wrap():
