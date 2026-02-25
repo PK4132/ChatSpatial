@@ -1046,3 +1046,183 @@ async def test_preprocess_data_scale_failure_warns_and_continues(
 
     assert result.n_cells == 12
     assert any("Scaling failed: scale boom" in msg for msg in ctx.warnings)
+
+
+@pytest.mark.asyncio
+async def test_preprocess_data_sct_sparse_input_without_gene_filtering(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _install_lightweight_preprocess_mocks(monkeypatch)
+    
+    def _sparse_safe_qc(adata, qc_vars=None, percent_top=None, inplace=True):
+        del qc_vars, percent_top, inplace
+        counts = adata.X.toarray() if sp.issparse(adata.X) else np.asarray(adata.X)
+        adata.obs["n_genes_by_counts"] = (counts > 0).sum(axis=1)
+        adata.obs["total_counts"] = counts.sum(axis=1)
+        if "mt" in adata.var.columns:
+            mt_mask = adata.var["mt"].to_numpy()
+            mt_counts = counts[:, mt_mask].sum(axis=1)
+            total = np.clip(counts.sum(axis=1), 1e-9, None)
+            adata.obs["pct_counts_mt"] = mt_counts / total * 100.0
+
+    monkeypatch.setattr(preprocessing_mod.sc.pp, "calculate_qc_metrics", _sparse_safe_qc)
+    monkeypatch.setattr(preprocessing_mod, "validate_r_package", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        preprocessing_mod,
+        "sample_expression_values",
+        lambda _adata: np.array([0.0, 1.0, 2.0]),
+    )
+
+    adata = _make_adata(n_obs=14, n_vars=120)
+    adata.X = sp.csr_matrix(adata.X)
+    kept_genes = list(adata.var_names)
+    pearson_residuals = np.full((adata.n_vars, adata.n_obs), 0.2, dtype=np.float32)
+    residual_variance = np.linspace(0.0, 1.0, adata.n_vars, dtype=np.float32)
+    _install_fake_rpy2_for_sct(
+        monkeypatch,
+        pearson_residuals=pearson_residuals,
+        residual_variance=residual_variance,
+        kept_genes=kept_genes,
+    )
+
+    ctx = DummyCtx(adata)
+    result = await preprocess_data(
+        "d34",
+        ctx,
+        PreprocessingParameters(
+            normalization="sct",
+            filter_mito_pct=None,
+            remove_mito_genes=False,
+        ),
+    )
+
+    assert result.n_genes == 120
+    assert ctx.saved_adata is not None
+    assert ctx.saved_adata.uns["sctransform"]["n_genes_filtered_by_sct"] == 0
+
+
+@pytest.mark.asyncio
+async def test_preprocess_data_scvi_normalized_expression_uses_values_attribute(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _install_lightweight_preprocess_mocks(monkeypatch)
+    monkeypatch.setattr(preprocessing_mod, "require", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        preprocessing_mod,
+        "sample_expression_values",
+        lambda _adata: np.array([0.0, 1.0, 2.0]),
+    )
+
+    class _FakeSCVI:
+        @staticmethod
+        def setup_anndata(adata, layer=None, batch_key=None):
+            del adata, layer, batch_key
+            return None
+
+        def __init__(self, adata, **kwargs):
+            self._adata = adata
+            del kwargs
+
+        def train(self, **kwargs):
+            del kwargs
+            return None
+
+        def get_latent_representation(self):
+            return np.ones((self._adata.n_obs, 2), dtype=float)
+
+        def get_normalized_expression(self, library_size=1e4):
+            del library_size
+            return SimpleNamespace(
+                values=np.full((self._adata.n_obs, self._adata.n_vars), 3.0, dtype=float)
+            )
+
+    monkeypatch.setitem(sys.modules, "scvi", SimpleNamespace(model=SimpleNamespace(SCVI=_FakeSCVI)))
+
+    adata = _make_adata(n_obs=12, n_vars=120)
+    ctx = DummyCtx(adata)
+    await preprocess_data(
+        "d35",
+        ctx,
+        PreprocessingParameters(normalization="scvi", filter_mito_pct=None),
+    )
+
+    assert ctx.saved_adata is not None
+    assert np.isfinite(ctx.saved_adata.X).all()
+
+
+@pytest.mark.asyncio
+async def test_preprocess_data_hvg_selection_failure_is_wrapped(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _install_lightweight_preprocess_mocks(monkeypatch)
+    monkeypatch.setattr(
+        preprocessing_mod.sc.pp,
+        "highly_variable_genes",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("hvg boom")),
+    )
+
+    adata = _make_adata(n_obs=14, n_vars=120)
+    ctx = DummyCtx(adata)
+
+    with pytest.raises(ProcessingError, match="HVG selection failed: hvg boom"):
+        await preprocess_data(
+            "d36",
+            ctx,
+            PreprocessingParameters(normalization="log", filter_mito_pct=None),
+        )
+
+
+@pytest.mark.asyncio
+async def test_preprocess_data_remove_ribo_genes_drops_ribo_from_hvgs(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _install_lightweight_preprocess_mocks(monkeypatch)
+    adata = _make_adata(n_obs=14, n_vars=120)
+    ctx = DummyCtx(adata)
+
+    await preprocess_data(
+        "d37",
+        ctx,
+        PreprocessingParameters(
+            normalization="log",
+            filter_mito_pct=None,
+            remove_mito_genes=False,
+            remove_ribo_genes=True,
+            n_hvgs=20,
+        ),
+    )
+
+    assert ctx.saved_adata is not None
+    assert bool(ctx.saved_adata.var.loc["RPS3", "ribo"]) is True
+    assert bool(ctx.saved_adata.var.loc["RPS3", "highly_variable"]) is False
+
+
+@pytest.mark.asyncio
+async def test_preprocess_data_gene_subsample_requires_hvg_column_presence(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    _install_lightweight_preprocess_mocks(monkeypatch)
+
+    def _drop_hvg_column(adata, n_top_genes=2000):
+        del n_top_genes
+        if "highly_variable" in adata.var.columns:
+            del adata.var["highly_variable"]
+
+    monkeypatch.setattr(preprocessing_mod.sc.pp, "highly_variable_genes", _drop_hvg_column)
+
+    adata = _make_adata(n_obs=16, n_vars=120)
+    ctx = DummyCtx(adata)
+
+    with pytest.raises(ProcessingError, match="Gene subsampling failed: no HVGs identified"):
+        await preprocess_data(
+            "d38",
+            ctx,
+            PreprocessingParameters(
+                normalization="log",
+                filter_mito_pct=None,
+                subsample_genes=20,
+                n_hvgs=20,
+                remove_mito_genes=False,
+                remove_ribo_genes=False,
+            ),
+        )
