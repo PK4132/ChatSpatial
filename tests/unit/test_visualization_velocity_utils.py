@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import sys
 from types import ModuleType, SimpleNamespace
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import pytest
 
 from chatspatial.models.data import VisualizationParameters
@@ -155,3 +157,298 @@ async def test_paga_requires_cluster_key(minimal_spatial_adata):
             ),
             context=DummyCtx(),
         )
+
+
+@pytest.mark.asyncio
+async def test_create_rna_velocity_visualization_routes_remaining_subtypes(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    sentinel = object()
+
+    async def _fake(*_args, **_kwargs):
+        return sentinel
+
+    monkeypatch.setattr(viz_vel, "_create_velocity_phase_plot", _fake)
+    monkeypatch.setattr(viz_vel, "_create_velocity_proportions_plot", _fake)
+    monkeypatch.setattr(viz_vel, "_create_velocity_heatmap", _fake)
+    monkeypatch.setattr(viz_vel, "_create_velocity_paga_plot", _fake)
+
+    for subtype in ["phase", "proportions", "heatmap", "paga"]:
+        out = await viz_vel.create_rna_velocity_visualization(
+            minimal_spatial_adata,
+            VisualizationParameters(plot_type="velocity", subtype=subtype),
+            context=DummyCtx(),
+        )
+        assert out is sentinel
+
+
+@pytest.mark.asyncio
+async def test_stream_success_uses_inferred_basis_and_auto_feature(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.uns["velocity_graph"] = np.eye(adata.n_obs)
+
+    monkeypatch.setattr(viz_vel, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(viz_vel, "infer_basis", lambda *_a, **_k: "spatial")
+
+    fig, ax = plt.subplots()
+    monkeypatch.setattr(viz_vel, "create_figure_from_params", lambda *_a, **_k: (fig, [ax]))
+
+    captured: dict[str, object] = {}
+    fake_scv = ModuleType("scvelo")
+
+    def _stream(*_args, **kwargs):
+        captured["basis"] = kwargs.get("basis")
+        captured["color"] = kwargs.get("color")
+        captured["legend_loc"] = kwargs.get("legend_loc")
+        kwargs["ax"].scatter([0], [0], c=[1.0])
+
+    fake_scv.pl = SimpleNamespace(velocity_embedding_stream=_stream)
+    monkeypatch.setitem(sys.modules, "scvelo", fake_scv)
+
+    ctx = DummyCtx()
+    await viz_vel._create_velocity_stream_plot(
+        adata,
+        VisualizationParameters(plot_type="velocity", subtype="stream", basis="umap"),
+        context=ctx,
+    )
+
+    assert captured["basis"] == "spatial"
+    assert captured["color"] == "group"
+    assert captured["legend_loc"] == "right margin"
+    assert any("Using 'spatial' as basis" in msg for msg in ctx.infos)
+    assert any("Using 'group' for coloring" in msg for msg in ctx.infos)
+    assert ax.yaxis_inverted()
+    fig.clf()
+
+
+@pytest.mark.asyncio
+async def test_phase_success_uses_velocity_genes_and_context(minimal_spatial_adata, monkeypatch):
+    adata = minimal_spatial_adata.copy()
+    adata.layers["velocity"] = np.zeros((adata.n_obs, adata.n_vars), dtype=float)
+    adata.layers["Ms"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata.layers["Mu"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata.var["velocity_genes"] = [True] * 5 + [False] * (adata.n_vars - 5)
+
+    monkeypatch.setattr(viz_vel, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(viz_vel, "infer_basis", lambda *_a, **_k: "umap")
+
+    captured: dict[str, object] = {}
+    fake_scv = ModuleType("scvelo")
+
+    def _velocity(*_args, **kwargs):
+        captured["var_names"] = kwargs.get("var_names")
+        captured["basis"] = kwargs.get("basis")
+        captured["color"] = kwargs.get("color")
+        plt.figure()
+
+    fake_scv.pl = SimpleNamespace(velocity=_velocity)
+    monkeypatch.setitem(sys.modules, "scvelo", fake_scv)
+
+    ctx = DummyCtx()
+    fig = await viz_vel._create_velocity_phase_plot(
+        adata,
+        VisualizationParameters(
+            plot_type="velocity",
+            subtype="phase",
+            cluster_key="group",
+            title="Phase Title",
+        ),
+        context=ctx,
+    )
+    assert captured["basis"] == "umap"
+    assert captured["color"] == "group"
+    assert len(captured["var_names"]) <= 4
+    assert all(g in adata.var_names for g in captured["var_names"])
+    assert any("Creating phase plot for genes" in msg for msg in ctx.infos)
+    assert fig._suptitle is not None
+    fig.clf()
+
+
+@pytest.mark.asyncio
+async def test_phase_raises_when_requested_genes_are_missing(minimal_spatial_adata, monkeypatch):
+    adata = minimal_spatial_adata.copy()
+    adata.layers["velocity"] = np.zeros((adata.n_obs, adata.n_vars), dtype=float)
+    adata.layers["Ms"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata.layers["Mu"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+
+    monkeypatch.setattr(viz_vel, "require", lambda *_a, **_k: None)
+    monkeypatch.setitem(sys.modules, "scvelo", ModuleType("scvelo"))
+
+    with pytest.raises(DataNotFoundError, match="None of the specified genes found"):
+        await viz_vel._create_velocity_phase_plot(
+            adata,
+            VisualizationParameters(
+                plot_type="velocity",
+                subtype="phase",
+                feature=["missing_a", "missing_b"],
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_proportions_success_and_cluster_auto_selection(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.layers["spliced"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata.layers["unspliced"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+
+    monkeypatch.setattr(viz_vel, "require", lambda *_a, **_k: None)
+    captured: dict[str, object] = {}
+
+    fake_scv = ModuleType("scvelo")
+
+    def _props(*_args, **kwargs):
+        captured["groupby"] = kwargs.get("groupby")
+        plt.figure()
+
+    fake_scv.pl = SimpleNamespace(proportions=_props)
+    monkeypatch.setitem(sys.modules, "scvelo", fake_scv)
+
+    ctx = DummyCtx()
+    fig = await viz_vel._create_velocity_proportions_plot(
+        adata,
+        VisualizationParameters(plot_type="velocity", subtype="proportions"),
+        context=ctx,
+    )
+    assert captured["groupby"] == "group"
+    assert any("Using cluster_key: 'group'" in msg for msg in ctx.infos)
+    assert any("Creating proportions plot grouped by 'group'" in msg for msg in ctx.infos)
+    fig.clf()
+
+
+@pytest.mark.asyncio
+async def test_proportions_requires_cluster_key_when_no_categorical(minimal_spatial_adata, monkeypatch):
+    adata = minimal_spatial_adata.copy()
+    adata.layers["spliced"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata.layers["unspliced"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata.obs = pd.DataFrame(index=adata.obs.index)
+
+    monkeypatch.setattr(viz_vel, "require", lambda *_a, **_k: None)
+    monkeypatch.setitem(sys.modules, "scvelo", ModuleType("scvelo"))
+
+    with pytest.raises(ParameterError, match="cluster_key is required for proportions plot"):
+        await viz_vel._create_velocity_proportions_plot(
+            adata,
+            VisualizationParameters(plot_type="velocity", subtype="proportions"),
+            context=DummyCtx(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_heatmap_success_uses_latent_time_and_hvg_fallback(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["latent_time"] = np.linspace(0.0, 1.0, adata.n_obs)
+    adata.var["highly_variable"] = [True] * 8 + [False] * (adata.n_vars - 8)
+
+    monkeypatch.setattr(viz_vel, "require", lambda *_a, **_k: None)
+    captured: dict[str, object] = {}
+    fake_scv = ModuleType("scvelo")
+
+    def _heatmap(*_args, **kwargs):
+        captured["sortby"] = kwargs.get("sortby")
+        captured["var_names"] = kwargs.get("var_names")
+        captured["col_color"] = kwargs.get("col_color")
+        plt.figure()
+
+    fake_scv.pl = SimpleNamespace(heatmap=_heatmap)
+    fake_scv.tl = SimpleNamespace(velocity_pseudotime=lambda *_a, **_k: None)
+    monkeypatch.setitem(sys.modules, "scvelo", fake_scv)
+
+    ctx = DummyCtx()
+    fig = await viz_vel._create_velocity_heatmap(
+        adata,
+        VisualizationParameters(
+            plot_type="velocity",
+            subtype="heatmap",
+            cluster_key="group",
+            title="Heatmap Title",
+        ),
+        context=ctx,
+    )
+    assert captured["sortby"] == "latent_time"
+    assert len(captured["var_names"]) == 8
+    assert captured["col_color"] == "group"
+    assert any("Using 'latent_time' for heatmap ordering" in msg for msg in ctx.infos)
+    assert any("Creating velocity heatmap with 8 genes" in msg for msg in ctx.infos)
+    assert fig._suptitle is not None
+    fig.clf()
+
+
+@pytest.mark.asyncio
+async def test_heatmap_rejects_missing_requested_genes(minimal_spatial_adata, monkeypatch):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["latent_time"] = np.linspace(0.0, 1.0, adata.n_obs)
+
+    monkeypatch.setattr(viz_vel, "require", lambda *_a, **_k: None)
+    fake_scv = ModuleType("scvelo")
+    fake_scv.pl = SimpleNamespace(heatmap=lambda *_a, **_k: None)
+    fake_scv.tl = SimpleNamespace(velocity_pseudotime=lambda *_a, **_k: None)
+    monkeypatch.setitem(sys.modules, "scvelo", fake_scv)
+
+    with pytest.raises(DataNotFoundError, match="None of the specified genes found"):
+        await viz_vel._create_velocity_heatmap(
+            adata,
+            VisualizationParameters(
+                plot_type="velocity",
+                subtype="heatmap",
+                feature=["missing_gene"],
+            ),
+            context=DummyCtx(),
+        )
+
+
+@pytest.mark.asyncio
+async def test_paga_success_recompute_and_uns_group_shortcut(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    calls: dict[str, int] = {"paga": 0, "plot": 0}
+
+    import scanpy as sc
+
+    def _paga(*_args, **_kwargs):
+        calls["paga"] += 1
+
+    def _plot_paga(*_args, **kwargs):
+        calls["plot"] += 1
+        kwargs["ax"].scatter([0], [0], c=[1.0])
+
+    monkeypatch.setattr(sc.tl, "paga", _paga)
+    monkeypatch.setattr(sc.pl, "paga", _plot_paga)
+
+    fig, ax = plt.subplots()
+    monkeypatch.setattr(viz_vel, "create_figure_from_params", lambda *_a, **_k: (fig, [ax]))
+
+    ctx = DummyCtx()
+    out = await viz_vel._create_velocity_paga_plot(
+        adata,
+        VisualizationParameters(plot_type="velocity", subtype="paga", cluster_key="group"),
+        context=ctx,
+    )
+    assert out is fig
+    assert calls["paga"] == 1
+    assert calls["plot"] == 1
+    assert any("Computing PAGA for cluster_key='group'" in msg for msg in ctx.infos)
+    assert any("Creating PAGA plot for 'group'" in msg for msg in ctx.infos)
+    fig.clf()
+
+    adata.uns["paga"] = {"groups": "group"}
+    fig2, ax2 = plt.subplots()
+    monkeypatch.setattr(
+        viz_vel, "create_figure_from_params", lambda *_a, **_k: (fig2, [ax2])
+    )
+    calls["paga"] = 0
+    out2 = await viz_vel._create_velocity_paga_plot(
+        adata,
+        VisualizationParameters(plot_type="velocity", subtype="paga", title="Custom PAGA"),
+        context=DummyCtx(),
+    )
+    assert out2 is fig2
+    assert calls["paga"] == 0
+    assert ax2.get_title() == "Custom PAGA"
+    fig2.clf()
