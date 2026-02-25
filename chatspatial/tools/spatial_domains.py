@@ -620,6 +620,8 @@ async def _identify_domains_stagate(
     clustered to define spatial domains. This method requires the `STAGATE_pyG`
     package.
     """
+    import asyncio
+
     import torch
 
     # Check PyTorch version compatibility with torch_sparse/torch_geometric
@@ -664,7 +666,6 @@ async def _identify_domains_stagate(
         device = torch.device(device_str)
 
         # Train STAGATE with timeout protection
-        import asyncio
         import concurrent.futures
 
         loop = asyncio.get_running_loop()

@@ -832,3 +832,759 @@ async def test_identify_domains_banksy_timeout_is_wrapped(
             SpatialDomainParameters(method="banksy", timeout=1),
             DummyCtx(adata),
         )
+
+
+def _install_fake_spagcn_modules(
+    monkeypatch: pytest.MonkeyPatch, detect_fn
+) -> None:
+    import sys
+    import types
+
+    ez_mod = types.ModuleType("SpaGCN.ez_mode")
+    ez_mod.detect_spatial_domains_ez_mode = detect_fn
+    pkg = types.ModuleType("SpaGCN")
+    pkg.ez_mode = ez_mod
+
+    monkeypatch.setitem(sys.modules, "SpaGCN", pkg)
+    monkeypatch.setitem(sys.modules, "SpaGCN.ez_mode", ez_mod)
+
+
+def _install_fake_banksy_modules(
+    monkeypatch: pytest.MonkeyPatch,
+    initialize_fn,
+    generate_fn,
+) -> None:
+    import sys
+    import types
+
+    init_mod = types.ModuleType("banksy.initialize_banksy")
+    init_mod.initialize_banksy = initialize_fn
+    embed_mod = types.ModuleType("banksy.embed_banksy")
+    embed_mod.generate_banksy_matrix = generate_fn
+
+    monkeypatch.setitem(sys.modules, "banksy", types.ModuleType("banksy"))
+    monkeypatch.setitem(sys.modules, "banksy.initialize_banksy", init_mod)
+    monkeypatch.setitem(sys.modules, "banksy.embed_banksy", embed_mod)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method", "helper_name"),
+    [
+        ("spagcn", "_identify_domains_spagcn"),
+        ("stagate", "_identify_domains_stagate"),
+        ("graphst", "_identify_domains_graphst"),
+        ("banksy", "_identify_domains_banksy"),
+    ],
+)
+async def test_identify_spatial_domains_dispatches_non_clustering_methods(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    helper_name: str,
+):
+    adata = minimal_spatial_adata.copy()
+    ctx = DummyCtx(adata)
+    labels = ["0"] * adata.n_obs
+    called = {"value": False}
+
+    async def _fake_method(*_args, **_kwargs):
+        called["value"] = True
+        return labels, None, {"method": method}
+
+    monkeypatch.setattr(sd, helper_name, _fake_method)
+    monkeypatch.setattr(sd, "store_analysis_metadata", lambda *_a, **_k: None)
+    monkeypatch.setattr(sd, "export_analysis_result", lambda *_a, **_k: [])
+
+    out = await sd.identify_spatial_domains(
+        "d1",
+        ctx,
+        SpatialDomainParameters(method=method, refine_domains=False),
+    )
+
+    assert called["value"] is True
+    assert out.method == method
+    assert out.domain_key == f"spatial_domains_{method}"
+
+
+@pytest.mark.asyncio
+async def test_identify_spatial_domains_refinement_success_updates_metadata(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    ctx = DummyCtx(adata)
+    captured: dict[str, object] = {}
+
+    async def _fake_clustering(adata_subset, params, _ctx):
+        del params, _ctx
+        return ["0"] * adata_subset.n_obs, None, {"score": 1.0}
+
+    monkeypatch.setattr(sd, "_identify_domains_clustering", _fake_clustering)
+    monkeypatch.setattr(
+        sd,
+        "_refine_spatial_domains",
+        lambda a, domain_key, threshold=0.5: np.array(["1"] * a.n_obs, dtype=object),
+    )
+    monkeypatch.setattr(
+        sd,
+        "store_analysis_metadata",
+        lambda _adata, **kwargs: captured.update(kwargs),
+    )
+    monkeypatch.setattr(sd, "export_analysis_result", lambda *_a, **_k: [])
+
+    out = await sd.identify_spatial_domains(
+        "d1",
+        ctx,
+        SpatialDomainParameters(method="leiden", refine_domains=True),
+    )
+
+    assert out.refined_domain_key == "spatial_domains_leiden_refined"
+    assert captured["results_keys"] == {
+        "obs": ["spatial_domains_leiden", "spatial_domains_leiden_refined"]
+    }
+
+
+@pytest.mark.asyncio
+async def test_identify_spatial_domains_sparse_zero_matrix_path(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.X = sp.csr_matrix((adata.n_obs, adata.n_vars), dtype=np.float32)
+
+    async def _fake_clustering(adata_subset, params, _ctx):
+        del params, _ctx
+        assert sp.issparse(adata_subset.X)
+        assert adata_subset.X.data.size == 0
+        return ["0"] * adata_subset.n_obs, None, {"ok": 1}
+
+    monkeypatch.setattr(sd, "_identify_domains_clustering", _fake_clustering)
+    monkeypatch.setattr(sd, "store_analysis_metadata", lambda *_a, **_k: None)
+    monkeypatch.setattr(sd, "export_analysis_result", lambda *_a, **_k: [])
+
+    out = await sd.identify_spatial_domains(
+        "d1",
+        DummyCtx(adata),
+        SpatialDomainParameters(method="leiden", refine_domains=False),
+    )
+
+    assert out.n_domains == 1
+
+
+@pytest.mark.asyncio
+async def test_identify_spatial_domains_hvg_subset_casts_to_float_and_warns_large_values(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    mask = np.arange(adata.n_vars) % 2 == 0
+    adata.var["highly_variable"] = mask
+    adata.X = np.asarray(adata.X, dtype=np.int16)
+    adata.X[0, 0] = 120
+
+    async def _fake_clustering(adata_subset, params, _ctx):
+        del params, _ctx
+        assert adata_subset.n_vars == int(mask.sum())
+        assert adata_subset.X.dtype in (np.float32, np.float64)
+        return ["0"] * adata_subset.n_obs, None, {"ok": 1}
+
+    monkeypatch.setattr(sd, "_identify_domains_clustering", _fake_clustering)
+    monkeypatch.setattr(sd, "store_analysis_metadata", lambda *_a, **_k: None)
+    monkeypatch.setattr(sd, "export_analysis_result", lambda *_a, **_k: [])
+
+    ctx = DummyCtx(adata)
+    await sd.identify_spatial_domains(
+        "d1",
+        ctx,
+        SpatialDomainParameters(
+            method="leiden",
+            refine_domains=False,
+            use_highly_variable=True,
+        ),
+    )
+
+    assert any("large values" in w for w in ctx.warnings)
+
+
+@pytest.mark.asyncio
+async def test_identify_spatial_domains_uses_raw_hvg_subset_with_negative_current_matrix(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.raw = adata.copy()
+    mask = np.arange(adata.n_vars) % 2 == 1
+    adata.var["highly_variable"] = mask
+    adata.X = np.asarray(adata.X, dtype=float)
+    adata.X[0, 0] = -2.0
+
+    expected_hvg = list(adata.var_names[mask])
+
+    async def _fake_clustering(adata_subset, params, _ctx):
+        del params, _ctx
+        assert list(adata_subset.var_names) == expected_hvg
+        assert float(np.min(np.asarray(adata_subset.X))) >= 0.0
+        return ["0"] * adata_subset.n_obs, None, {"ok": 1}
+
+    monkeypatch.setattr(sd, "_identify_domains_clustering", _fake_clustering)
+    monkeypatch.setattr(sd, "store_analysis_metadata", lambda *_a, **_k: None)
+    monkeypatch.setattr(sd, "export_analysis_result", lambda *_a, **_k: [])
+
+    ctx = DummyCtx(adata)
+    await sd.identify_spatial_domains(
+        "d1",
+        ctx,
+        SpatialDomainParameters(
+            method="leiden",
+            refine_domains=False,
+            use_highly_variable=True,
+        ),
+    )
+
+    assert any("negative values" in w for w in ctx.warnings)
+
+
+@pytest.mark.asyncio
+async def test_identify_spatial_domains_cleans_sparse_nan_inf(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    dense = np.asarray(adata.X, dtype=float)
+    dense[0, 0] = np.nan
+    dense[1, 1] = np.inf
+    adata.X = sp.csr_matrix(dense)
+
+    async def _fake_clustering(adata_subset, params, _ctx):
+        del params, _ctx
+        assert sp.issparse(adata_subset.X)
+        assert np.isfinite(adata_subset.X.data).all()
+        return ["0"] * adata_subset.n_obs, None, {"ok": 1}
+
+    monkeypatch.setattr(sd, "_identify_domains_clustering", _fake_clustering)
+    monkeypatch.setattr(sd, "store_analysis_metadata", lambda *_a, **_k: None)
+    monkeypatch.setattr(sd, "export_analysis_result", lambda *_a, **_k: [])
+
+    ctx = DummyCtx(adata)
+    await sd.identify_spatial_domains(
+        "d1",
+        ctx,
+        SpatialDomainParameters(method="leiden", refine_domains=False),
+    )
+
+    assert any("sparse data" in w for w in ctx.warnings)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("images", "scalefactors", "expected_scale"),
+    [
+        ({"hires": np.ones((5, 5, 3), dtype=np.uint8)}, {"tissue_hires_scalef": 2.0}, 2.0),
+        ({"lowres": np.ones((5, 5, 3), dtype=np.uint8)}, {"tissue_lowres_scalef": 3.0}, 3.0),
+        ({"hires": np.ones((5, 5, 3), dtype=np.uint8)}, {}, 1.0),
+        ({"lowres": np.ones((5, 5, 3), dtype=np.uint8)}, {}, 1.0),
+    ],
+)
+async def test_identify_domains_spagcn_histology_image_selection_and_scaling(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+    images: dict,
+    scalefactors: dict,
+    expected_scale: float,
+):
+    adata = minimal_spatial_adata.copy()
+    ctx = DummyCtx(adata)
+    adata.uns["spatial"] = {"lib1": {"images": images, "scalefactors": scalefactors}}
+    captured: dict[str, object] = {}
+
+    class _FakeSpg:
+        @staticmethod
+        def prefilter_genes(_adata, min_cells=3):
+            del _adata, min_cells
+
+        @staticmethod
+        def prefilter_specialgenes(_adata):
+            del _adata
+
+    def _detect_fn(_adata, _img, x_array, _y_array, x_pixel, _y_pixel, **_kwargs):
+        captured["x_array"] = x_array
+        captured["x_pixel"] = x_pixel
+        return ["0"] * _adata.n_obs
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: _FakeSpg)
+    monkeypatch.setattr("chatspatial.utils.compat.ensure_spagcn_compat", lambda *_a, **_k: None)
+    _install_fake_spagcn_modules(monkeypatch, _detect_fn)
+
+    labels, emb_key, stats = await sd._identify_domains_spagcn(
+        adata,
+        SpatialDomainParameters(method="spagcn", spagcn_use_histology=True),
+        ctx,
+    )
+
+    expected_pixels = [int(x * expected_scale) for x in captured["x_array"]]
+    assert list(captured["x_pixel"]) == expected_pixels
+    assert len(labels) == adata.n_obs
+    assert emb_key is None
+    assert stats["use_histology"] is True
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_spagcn_prefilter_failure_warns_and_continues(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    ctx = DummyCtx(adata)
+
+    class _FakeSpg:
+        @staticmethod
+        def prefilter_genes(_adata, min_cells=3):
+            del _adata, min_cells
+            raise RuntimeError("prefilter failed")
+
+        @staticmethod
+        def prefilter_specialgenes(_adata):
+            del _adata
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: _FakeSpg)
+    monkeypatch.setattr("chatspatial.utils.compat.ensure_spagcn_compat", lambda *_a, **_k: None)
+    _install_fake_spagcn_modules(monkeypatch, lambda ad, *_a, **_k: ["0"] * ad.n_obs)
+
+    labels, _, _ = await sd._identify_domains_spagcn(
+        adata,
+        SpatialDomainParameters(method="spagcn"),
+        ctx,
+    )
+
+    assert len(labels) == adata.n_obs
+    assert any("gene filtering failed" in w for w in ctx.warnings)
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_clustering_leiden_without_spatial_sets_zero_spatial_weight(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    del adata.obsm["spatial"]
+
+    monkeypatch.setattr(sd, "ensure_pca", lambda *_a, **_k: None)
+    monkeypatch.setattr(sd, "ensure_neighbors", lambda *_a, **_k: None)
+
+    def _fake_leiden(a, resolution=1.0, key_added="spatial_leiden"):
+        del resolution
+        a.obs[key_added] = ["0"] * a.n_obs
+
+    monkeypatch.setattr(sd.sc.tl, "leiden", _fake_leiden)
+
+    labels, _, stats = await sd._identify_domains_clustering(
+        adata,
+        SpatialDomainParameters(method="leiden"),
+        DummyCtx(adata),
+    )
+
+    assert len(labels) == adata.n_obs
+    assert stats["spatial_weight"] == 0.0
+
+
+def test_refine_spatial_domains_empty_dataset_raises_processing_error(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata[:0].copy()
+    adata.obs["domain"] = []
+    monkeypatch.setattr(sd, "require_spatial_coords", lambda _adata: np.empty((0, 2)))
+
+    with pytest.raises(ProcessingError, match="Dataset is empty"):
+        _refine_spatial_domains(adata, "domain", threshold=0.5)
+
+
+def test_refine_spatial_domains_single_spot_returns_original_when_coords_are_mocked(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata[:1].copy()
+    adata.obs["domain"] = ["A"]
+    monkeypatch.setattr(
+        sd, "require_spatial_coords", lambda _adata: np.array([[1.0, 2.0]])
+    )
+
+    refined = _refine_spatial_domains(adata, "domain", threshold=0.5)
+    assert refined.tolist() == ["A"]
+
+
+def test_refine_spatial_domains_nn_failure_is_wrapped(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["domain"] = ["A"] * adata.n_obs
+
+    class _BrokenNN:
+        def __init__(self, n_neighbors):
+            del n_neighbors
+
+        def fit(self, coords):
+            del coords
+            raise RuntimeError("nn boom")
+
+    monkeypatch.setattr("sklearn.neighbors.NearestNeighbors", _BrokenNN)
+
+    with pytest.raises(ProcessingError, match="Nearest neighbors computation failed"):
+        _refine_spatial_domains(adata, "domain", threshold=0.5)
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_stagate_generic_error_is_wrapped(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import sys
+    import types
+
+    adata = minimal_spatial_adata.copy()
+    torch_mod = types.ModuleType("torch")
+    torch_mod.__version__ = "2.8.0"
+    torch_mod.device = lambda x: x
+    monkeypatch.setitem(sys.modules, "torch", torch_mod)
+
+    class _FakeSTAGATE:
+        @staticmethod
+        def Cal_Spatial_Net(_adata, rad_cutoff=50):
+            del _adata, rad_cutoff
+            raise RuntimeError("cal graph failed")
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: _FakeSTAGATE)
+
+    with pytest.raises(ProcessingError, match="STAGATE execution failed"):
+        await sd._identify_domains_stagate(
+            adata,
+            SpatialDomainParameters(method="stagate"),
+            DummyCtx(adata),
+        )
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_graphst_leiden_refinement_branch_and_radius_stats(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import sys
+    import types
+
+    adata = minimal_spatial_adata.copy()
+
+    torch_mod = types.ModuleType("torch")
+    torch_mod.__version__ = "2.8.0"
+    torch_mod.device = lambda x: x
+    monkeypatch.setitem(sys.modules, "torch", torch_mod)
+
+    class _FakeGraphST:
+        def __init__(self, adata_graphst, device=None, random_seed=0):
+            del device, random_seed
+            self._adata = adata_graphst
+
+        def train(self):
+            rng = np.random.default_rng(7)
+            self._adata.obsm["emb"] = rng.normal(size=(self._adata.n_obs, 24))
+            return self._adata
+
+    graphst_sub = types.ModuleType("GraphST.GraphST")
+    graphst_sub.GraphST = _FakeGraphST
+    graphst_pkg = types.ModuleType("GraphST")
+    graphst_pkg.GraphST = graphst_sub
+    graphst_utils = types.ModuleType("GraphST.utils")
+    graphst_utils.refine_label = lambda a, radius=50, key="domain": [
+        f"r_{v}" for v in a.obs[key].astype(str).tolist()
+    ]
+
+    monkeypatch.setitem(sys.modules, "GraphST", graphst_pkg)
+    monkeypatch.setitem(sys.modules, "GraphST.GraphST", graphst_sub)
+    monkeypatch.setitem(sys.modules, "GraphST.utils", graphst_utils)
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(sd.sc.pp, "neighbors", lambda *_a, **_k: None)
+
+    calls = {"n": 0}
+
+    def _fake_leiden(a, resolution=1.0, random_state=0):
+        del resolution, random_state
+        calls["n"] += 1
+        if calls["n"] == 1:
+            n = 2  # < target
+        elif calls["n"] == 2:
+            n = 4  # > target
+        else:
+            n = 3  # == target
+        a.obs["leiden"] = [str(i % n) for i in range(a.n_obs)]
+
+    monkeypatch.setattr(sd.sc.tl, "leiden", _fake_leiden)
+
+    async def _fake_resolve_device(prefer_gpu: bool, ctx):
+        del prefer_gpu, ctx
+        return "cpu"
+
+    monkeypatch.setattr(sd, "resolve_device_async", _fake_resolve_device)
+
+    labels, emb_key, stats = await sd._identify_domains_graphst(
+        adata,
+        SpatialDomainParameters(
+            method="graphst",
+            n_domains=3,
+            graphst_n_clusters=3,
+            graphst_clustering_method="leiden",
+            graphst_refinement=True,
+            graphst_radius=77,
+        ),
+        DummyCtx(adata),
+    )
+
+    assert len(labels) == adata.n_obs
+    assert all(label.startswith("r_") for label in labels[:5])
+    assert emb_key == "emb"
+    assert stats["refinement"] is True
+    assert stats["refinement_radius"] == 77
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_banksy_missing_spatial_coordinates_is_wrapped(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    del adata.obsm["spatial"]
+    adata.uns.pop("spatial", None)
+
+    _install_fake_banksy_modules(
+        monkeypatch,
+        initialize_fn=lambda *_a, **_k: {"ok": True},
+        generate_fn=lambda *_a, **_k: (None, adata.copy()),
+    )
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: None)
+
+    with pytest.raises(ProcessingError, match="No spatial coordinates found"):
+        await sd._identify_domains_banksy(
+            adata,
+            SpatialDomainParameters(method="banksy"),
+            DummyCtx(adata),
+        )
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_banksy_uses_alternative_spatial_key(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obsm["X_spatial"] = adata.obsm.pop("spatial")
+    banksy_matrix = adata.copy()
+
+    _install_fake_banksy_modules(
+        monkeypatch,
+        initialize_fn=lambda *_a, **_k: {"ok": True},
+        generate_fn=lambda *_a, **_k: (None, banksy_matrix),
+    )
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        sd.sc.pp,
+        "pca",
+        lambda a, n_comps=20: a.obsm.__setitem__("X_pca", np.ones((a.n_obs, n_comps))),
+    )
+    monkeypatch.setattr(sd.sc.pp, "neighbors", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        sd.sc.tl,
+        "leiden",
+        lambda a, resolution=0.5, key_added="banksy_cluster": a.obs.__setitem__(
+            key_added, ["0"] * a.n_obs
+        ),
+    )
+
+    labels, emb_key, _stats = await sd._identify_domains_banksy(
+        adata,
+        SpatialDomainParameters(method="banksy", banksy_pca_dims=5),
+        DummyCtx(adata),
+    )
+
+    assert len(labels) == adata.n_obs
+    assert emb_key == "X_banksy_pca"
+    assert "spatial" in adata.obsm
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_banksy_generic_error_is_wrapped(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+
+    _install_fake_banksy_modules(
+        monkeypatch,
+        initialize_fn=lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("init boom")),
+        generate_fn=lambda *_a, **_k: (None, adata.copy()),
+    )
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: None)
+
+    with pytest.raises(ProcessingError, match="BANKSY execution failed"):
+        await sd._identify_domains_banksy(
+            adata,
+            SpatialDomainParameters(method="banksy"),
+            DummyCtx(adata),
+        )
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_graphst_mclust_refinement_branch(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import sys
+    import types
+
+    adata = minimal_spatial_adata.copy()
+
+    torch_mod = types.ModuleType("torch")
+    torch_mod.__version__ = "2.8.0"
+    torch_mod.device = lambda x: x
+    monkeypatch.setitem(sys.modules, "torch", torch_mod)
+
+    class _FakeGraphST:
+        def __init__(self, adata_graphst, device=None, random_seed=0):
+            del device, random_seed
+            self._adata = adata_graphst
+
+        def train(self):
+            rng = np.random.default_rng(11)
+            self._adata.obsm["emb"] = rng.normal(size=(self._adata.n_obs, 24))
+            return self._adata
+
+    graphst_sub = types.ModuleType("GraphST.GraphST")
+    graphst_sub.GraphST = _FakeGraphST
+    graphst_pkg = types.ModuleType("GraphST")
+    graphst_pkg.GraphST = graphst_sub
+    graphst_utils = types.ModuleType("GraphST.utils")
+    graphst_utils.refine_label = lambda a, radius=50, key="domain": [
+        f"m_{v}" for v in a.obs[key].astype(str).tolist()
+    ]
+
+    monkeypatch.setitem(sys.modules, "GraphST", graphst_pkg)
+    monkeypatch.setitem(sys.modules, "GraphST.GraphST", graphst_sub)
+    monkeypatch.setitem(sys.modules, "GraphST.utils", graphst_utils)
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "chatspatial.utils.compute.gmm_clustering",
+        lambda data, n_clusters, **_kwargs: np.arange(data.shape[0]) % n_clusters,
+    )
+
+    async def _fake_resolve_device(prefer_gpu: bool, ctx):
+        del prefer_gpu, ctx
+        return "cpu"
+
+    monkeypatch.setattr(sd, "resolve_device_async", _fake_resolve_device)
+
+    labels, _, stats = await sd._identify_domains_graphst(
+        adata,
+        SpatialDomainParameters(
+            method="graphst",
+            graphst_clustering_method="mclust",
+            graphst_refinement=True,
+            graphst_radius=66,
+            n_domains=3,
+            graphst_n_clusters=3,
+        ),
+        DummyCtx(adata),
+    )
+
+    assert len(labels) == adata.n_obs
+    assert all(label.startswith("m_") for label in labels[:5])
+    assert stats["refinement_radius"] == 66
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_graphst_leiden_early_stopping_branch(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import sys
+    import types
+
+    adata = minimal_spatial_adata.copy()
+
+    torch_mod = types.ModuleType("torch")
+    torch_mod.__version__ = "2.8.0"
+    torch_mod.device = lambda x: x
+    monkeypatch.setitem(sys.modules, "torch", torch_mod)
+
+    class _FakeGraphST:
+        def __init__(self, adata_graphst, device=None, random_seed=0):
+            del device, random_seed
+            self._adata = adata_graphst
+
+        def train(self):
+            rng = np.random.default_rng(13)
+            self._adata.obsm["emb"] = rng.normal(size=(self._adata.n_obs, 24))
+            return self._adata
+
+    graphst_sub = types.ModuleType("GraphST.GraphST")
+    graphst_sub.GraphST = _FakeGraphST
+    graphst_pkg = types.ModuleType("GraphST")
+    graphst_pkg.GraphST = graphst_sub
+    monkeypatch.setitem(sys.modules, "GraphST", graphst_pkg)
+    monkeypatch.setitem(sys.modules, "GraphST.GraphST", graphst_sub)
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(sd.sc.pp, "neighbors", lambda *_a, **_k: None)
+    def _fake_leiden(a, resolution=1.0, random_state=0):
+        del resolution, random_state
+        a.obs["leiden"] = [str(i % 2) for i in range(a.n_obs)]
+
+    monkeypatch.setattr(sd.sc.tl, "leiden", _fake_leiden)
+
+    async def _fake_resolve_device(prefer_gpu: bool, ctx):
+        del prefer_gpu, ctx
+        return "cpu"
+
+    monkeypatch.setattr(sd, "resolve_device_async", _fake_resolve_device)
+
+    labels, _, stats = await sd._identify_domains_graphst(
+        adata,
+        SpatialDomainParameters(
+            method="graphst",
+            graphst_clustering_method="leiden",
+            graphst_refinement=False,
+            n_domains=9,  # Unreachable by fake leiden => triggers early-stop branch
+            graphst_n_clusters=9,
+        ),
+        DummyCtx(adata),
+    )
+
+    assert len(labels) == adata.n_obs
+    assert stats["clustering_method"] == "leiden"
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_graphst_generic_error_is_wrapped(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import sys
+    import types
+
+    adata = minimal_spatial_adata.copy()
+
+    torch_mod = types.ModuleType("torch")
+    torch_mod.__version__ = "2.8.0"
+    torch_mod.device = lambda x: x
+    monkeypatch.setitem(sys.modules, "torch", torch_mod)
+
+    class _FakeGraphST:
+        def __init__(self, adata_graphst, device=None, random_seed=0):
+            del adata_graphst, device, random_seed
+
+        def train(self):
+            raise RuntimeError("train failed")
+
+    graphst_sub = types.ModuleType("GraphST.GraphST")
+    graphst_sub.GraphST = _FakeGraphST
+    graphst_pkg = types.ModuleType("GraphST")
+    graphst_pkg.GraphST = graphst_sub
+    monkeypatch.setitem(sys.modules, "GraphST", graphst_pkg)
+    monkeypatch.setitem(sys.modules, "GraphST.GraphST", graphst_sub)
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: None)
+
+    async def _fake_resolve_device(prefer_gpu: bool, ctx):
+        del prefer_gpu, ctx
+        return "cpu"
+
+    monkeypatch.setattr(sd, "resolve_device_async", _fake_resolve_device)
+
+    with pytest.raises(ProcessingError, match="GraphST execution failed"):
+        await sd._identify_domains_graphst(
+            adata,
+            SpatialDomainParameters(method="graphst"),
+            DummyCtx(adata),
+        )
