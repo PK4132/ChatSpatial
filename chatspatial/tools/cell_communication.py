@@ -45,6 +45,7 @@ from ..models.analysis import CellCommunicationResult
 from ..models.data import CellCommunicationParameters
 from ..utils import validate_obs_column
 from ..utils.adata_utils import get_raw_data_source, get_spatial_key, to_dense
+from ..utils.compute import top_n_desc_indices
 from ..utils.dependency_manager import require, validate_r_package
 from ..utils.exceptions import (
     DataCompatibilityError,
@@ -65,19 +66,8 @@ CCC_SPATIAL_PVALS_KEY = "ccc_spatial_pvals"  # Spatial p-values in adata.obsm
 
 
 def _top_n_desc_indices(values: np.ndarray, n_top: int) -> np.ndarray:
-    """Return indices of top-n values in descending order.
-
-    Non-finite values are treated as the lowest possible scores.
-    """
-    if n_top <= 0 or values.size == 0:
-        return np.array([], dtype=int)
-
-    rank_values = np.asarray(values, dtype=float)
-    rank_values = np.where(np.isfinite(rank_values), rank_values, -np.inf)
-    n = min(n_top, rank_values.size)
-
-    top_idx = np.argpartition(rank_values, -n)[-n:]
-    return top_idx[np.argsort(rank_values[top_idx])[::-1]]
+    """Backward-compatible wrapper with non-finite sanitization."""
+    return top_n_desc_indices(values, n_top, sanitize_nonfinite=True)
 
 
 @dataclass
@@ -1725,8 +1715,8 @@ async def _analyze_communication_fastccc(
                     include=[np.number]
                 ).values
                 mean_strength = np.nanmean(strength_array, axis=1)
-                top_indices = _top_n_desc_indices(
-                    mean_strength, params.plot_top_pairs
+                top_indices = top_n_desc_indices(
+                    mean_strength, params.plot_top_pairs, sanitize_nonfinite=True
                 )
                 top_lr_pairs_raw = [interactions_strength.index[i] for i in top_indices]
 

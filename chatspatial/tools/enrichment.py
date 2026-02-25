@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
 from ..models.analysis import EnrichmentResult
 from ..utils.adata_utils import get_raw_data_source, store_analysis_metadata, to_dense
+from ..utils.compute import top_n_desc_indices
 from ..utils.dependency_manager import require
 from ..utils.exceptions import DataNotFoundError, ParameterError, ProcessingError
 from ..utils.results_export import export_analysis_result
@@ -61,19 +62,8 @@ DEFAULT_ENRICHR_DATABASES: tuple[str, ...] = (
 
 
 def _top_n_desc_indices(values: np.ndarray, n_top: int) -> np.ndarray:
-    """Return indices of top-n values in descending order.
-
-    Non-finite values are treated as the lowest possible scores.
-    """
-    if n_top <= 0 or values.size == 0:
-        return np.array([], dtype=int)
-
-    rank_values = np.asarray(values, dtype=float)
-    rank_values = np.where(np.isfinite(rank_values), rank_values, -np.inf)
-    n = min(n_top, rank_values.size)
-
-    top_idx = np.argpartition(rank_values, -n)[-n:]
-    return top_idx[np.argsort(rank_values[top_idx])[::-1]]
+    """Backward-compatible wrapper with non-finite sanitization."""
+    return top_n_desc_indices(values, n_top, sanitize_nonfinite=True)
 
 
 def _load_library_first_available(database_key: str, organism: str) -> dict[str, list[str]]:
@@ -733,7 +723,7 @@ def perform_ora(
                 nonzero_mask = np.abs(mean) > 1e-10
                 cv[nonzero_mask] = std[nonzero_mask] / np.abs(mean[nonzero_mask])
 
-                top_indices = _top_n_desc_indices(cv, 500)
+                top_indices = top_n_desc_indices(cv, 500, sanitize_nonfinite=True)
                 gene_list = adata.var_names[top_indices].tolist()
 
     # Background genes

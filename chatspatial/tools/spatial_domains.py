@@ -41,7 +41,7 @@ from ..utils.results_export import export_analysis_result
 async def identify_spatial_domains(
     data_id: str,
     ctx: "ToolContext",
-    params: SpatialDomainParameters = SpatialDomainParameters(),
+    params: SpatialDomainParameters | None = None,
 ) -> SpatialDomainResult:
     """
     Identifies spatial domains by clustering spots based on gene expression and location.
@@ -63,6 +63,9 @@ async def identify_spatial_domains(
         A SpatialDomainResult object containing the identified domains and
         associated metadata.
     """
+    if params is None:
+        params = SpatialDomainParameters()
+
     # COW FIX: Direct reference instead of copy
     # Only add metadata to adata.obs/obsm/obsp, never overwrite entire adata
     adata = await ctx.get_adata(data_id)

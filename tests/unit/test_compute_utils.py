@@ -128,6 +128,18 @@ def test_ensure_spatial_neighbors_grid_and_generic_dispatch(minimal_spatial_adat
     assert calls[-1] == {"coord_type": "generic", "n_neighs": 8}
 
 
+def test_top_n_desc_indices_returns_descending_top_k():
+    values = np.array([1.0, 9.0, 3.0, 7.0, 5.0])
+    out = compute.top_n_desc_indices(values, 3)
+    assert out.tolist() == [1, 3, 4]
+
+
+def test_top_n_desc_indices_sanitizes_non_finite_values():
+    values = np.array([1.0, np.nan, np.inf, 2.0])
+    out = compute.top_n_desc_indices(values, 2, sanitize_nonfinite=True)
+    assert out.tolist() == [3, 0]
+
+
 def test_gmm_clustering_validates_input_shape_and_cluster_count():
     with pytest.raises(ValueError, match="2D array"):
         compute.gmm_clustering(np.array([1.0, 2.0]), n_clusters=2)
@@ -148,4 +160,3 @@ def test_gmm_clustering_returns_one_indexed_labels():
     assert labels.min() >= 1
     assert labels.max() <= 2
     assert len(labels) == 20
-

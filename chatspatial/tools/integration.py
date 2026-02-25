@@ -746,7 +746,7 @@ def integrate_with_scvi(
 async def integrate_samples(
     data_ids: list[str],
     ctx: "ToolContext",
-    params: IntegrationParameters = IntegrationParameters(),
+    params: IntegrationParameters | None = None,
 ) -> IntegrationResult:
     """Integrate multiple spatial transcriptomics samples and perform batch correction
 
@@ -758,6 +758,9 @@ async def integrate_samples(
     Returns:
         Integration result
     """
+    if params is None:
+        params = IntegrationParameters()
+
     # Collect all AnnData objects
     # Memory optimization: concatenate() creates new object without modifying sources
     # Verified by comprehensive testing: all operations preserve original datasets

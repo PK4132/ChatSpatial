@@ -380,7 +380,7 @@ def has_velocity_data(adata: "ad.AnnData") -> bool:
 async def analyze_trajectory(
     data_id: str,
     ctx: "ToolContext",
-    params: TrajectoryParameters = TrajectoryParameters(),
+    params: TrajectoryParameters | None = None,
 ) -> TrajectoryResult:
     """
     Analyze trajectory and cell state transitions in spatial transcriptomics data.
@@ -398,6 +398,9 @@ async def analyze_trajectory(
     Returns:
         TrajectoryResult with pseudotime and method metadata.
     """
+    if params is None:
+        params = TrajectoryParameters()
+
     adata = await ctx.get_adata(data_id)
 
     velocity_available = has_velocity_data(adata)

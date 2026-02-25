@@ -89,7 +89,7 @@ PLOT_HANDLERS = {
 async def visualize_data(
     data_id: str,
     ctx: "ToolContext",
-    params: VisualizationParameters = VisualizationParameters(),
+    params: VisualizationParameters | None = None,
 ) -> str:
     """Visualize spatial transcriptomics data.
 
@@ -107,6 +107,9 @@ async def visualize_data(
         DataCompatibilityError: If data is not compatible with the visualization
         ProcessingError: If processing fails
     """
+    if params is None:
+        params = VisualizationParameters()
+
     # Validate parameters - use PLOT_HANDLERS as single source of truth
     if params.plot_type not in PLOT_HANDLERS:
         raise ParameterError(

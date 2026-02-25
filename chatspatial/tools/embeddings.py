@@ -149,7 +149,7 @@ class EmbeddingResult(BaseModel):
 async def compute_embeddings(
     data_id: str,
     ctx: ToolContext,
-    params: EmbeddingParameters = EmbeddingParameters(),
+    params: EmbeddingParameters | None = None,
 ) -> EmbeddingResult:
     """Compute dimensionality reduction, clustering, and neighbor graphs.
 
@@ -167,6 +167,9 @@ async def compute_embeddings(
     Returns:
         Summary of computed embeddings
     """
+    if params is None:
+        params = EmbeddingParameters()
+
     adata = await ctx.get_adata(data_id)
     computed = []
     skipped = []

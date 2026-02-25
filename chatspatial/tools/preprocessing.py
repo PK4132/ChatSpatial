@@ -53,7 +53,7 @@ def _compute_safe_percent_top(n_genes: int) -> list[int] | None:
 async def preprocess_data(
     data_id: str,
     ctx: ToolContext,
-    params: PreprocessingParameters = PreprocessingParameters(),
+    params: PreprocessingParameters | None = None,
 ) -> PreprocessingResult:
     """Preprocess spatial transcriptomics data
 
@@ -65,6 +65,9 @@ async def preprocess_data(
     Returns:
         Preprocessing result summary
     """
+    if params is None:
+        params = PreprocessingParameters()
+
     # Get AnnData directly via ToolContext
     adata = await ctx.get_adata(data_id)
 

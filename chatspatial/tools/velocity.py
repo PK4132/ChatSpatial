@@ -337,9 +337,15 @@ async def analyze_velocity_with_velovi(
         else:
             scaled_velocities /= scaling
 
-        # Store results in preprocessed data object
+        # Store results in preprocessed data object.
+        # VELOVI latent_time may be 1D (per-cell) or 2D (cell x gene). Keep
+        # 1D results in obs to avoid invalid layer shape and unnecessary memory.
         adata_prepared.layers["velocity_velovi"] = scaled_velocities
-        adata_prepared.layers["latent_time_velovi"] = latent_time
+        if latent_time.ndim == 1:
+            adata_prepared.obs["latent_time_velovi"] = latent_time
+            adata.obs["latent_time_velovi"] = latent_time
+        else:
+            adata_prepared.layers["latent_time_velovi"] = latent_time
         adata_prepared.obsm["X_velovi_latent"] = latent_repr
 
         # Calculate velocity statistics
@@ -378,7 +384,7 @@ async def analyze_velocity_with_velovi(
 async def analyze_rna_velocity(
     data_id: str,
     ctx: "ToolContext",
-    params: RNAVelocityParameters = RNAVelocityParameters(),
+    params: RNAVelocityParameters | None = None,
 ) -> RNAVelocityResult:
     """
     Computes RNA velocity for spatial transcriptomics data.
@@ -398,6 +404,9 @@ async def analyze_rna_velocity(
         DataNotFoundError: If data lacks required layers.
         ProcessingError: If velocity computation fails.
     """
+    if params is None:
+        params = RNAVelocityParameters()
+
     require("scvelo")
     import scvelo as scv  # noqa: F401
 

@@ -21,6 +21,7 @@ Usage:
 
 from typing import TYPE_CHECKING, Literal, Optional
 
+import numpy as np
 import scanpy as sc
 
 from .adata_utils import ensure_categorical
@@ -28,12 +29,39 @@ from .exceptions import DataNotFoundError
 
 if TYPE_CHECKING:
     import anndata as ad
-    import numpy as np
 
 
 # =============================================================================
 # Core Computation Functions
 # =============================================================================
+
+
+def top_n_desc_indices(
+    values: np.ndarray,
+    n_top: int,
+    *,
+    sanitize_nonfinite: bool = False,
+) -> np.ndarray:
+    """Return indices of top-n values in descending order.
+
+    Args:
+        values: 1D score array.
+        n_top: Number of top indices to return.
+        sanitize_nonfinite: Replace non-finite values with -inf before ranking.
+
+    Returns:
+        Indices sorted from highest score to lowest score.
+    """
+    if n_top <= 0 or values.size == 0:
+        return np.array([], dtype=int)
+
+    rank_values = np.asarray(values, dtype=float)
+    if sanitize_nonfinite:
+        rank_values = np.where(np.isfinite(rank_values), rank_values, -np.inf)
+
+    n = min(n_top, rank_values.size)
+    top_idx = np.argpartition(rank_values, -n)[-n:]
+    return top_idx[np.argsort(rank_values[top_idx])[::-1]]
 
 
 def ensure_pca(
