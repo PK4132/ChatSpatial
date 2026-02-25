@@ -573,3 +573,588 @@ def test_analyze_spatial_centrality_handles_missing_node_keys(
     # Only node 0 from fake centrality has non-zero; others should be safely backfilled with 0
     assert float(adata.obs["degree_centrality"].iloc[0]) == 1.0
     assert float(adata.obs["degree_centrality"].iloc[1]) == 0.0
+
+
+def test_build_results_keys_dynamic_cluster_variants_and_getis_ord_obs_keys():
+    co_keys = _build_results_keys("co_occurrence", genes=None, cluster_key="leiden")
+    ripley_keys = _build_results_keys("ripley", genes=None, cluster_key="celltype")
+    cent_keys = _build_results_keys("centrality", genes=None, cluster_key="group")
+    getis_keys = _build_results_keys("getis_ord", genes=["g1", "g2"])
+
+    assert co_keys["uns"] == ["leiden_co_occurrence"]
+    assert ripley_keys["uns"] == ["celltype_ripley_L"]
+    assert cent_keys["uns"] == ["group_centrality_scores"]
+    assert set(getis_keys["obs"]) == {
+        "g1_getis_ord_z",
+        "g1_getis_ord_p",
+        "g2_getis_ord_z",
+        "g2_getis_ord_p",
+    }
+
+
+def test_extract_result_summary_covers_remaining_analysis_branches():
+    geary = _extract_result_summary(
+        {"n_genes_analyzed": 5, "mean_gearys_c": 0.88, "analysis_key": "gearyC"},
+        "geary",
+    )
+    assert geary["n_features_analyzed"] == 5
+    assert geary["summary_metrics"] == {"mean_gearys_c": 0.88}
+    assert geary["results_key"] == "gearyC"
+
+    local_moran = _extract_result_summary(
+        {
+            "genes_analyzed": ["g1", "g2"],
+            "results": {
+                "g1": {"n_significant": 2, "n_hotspots": 1, "n_coldspots": 3},
+                "g2": {"n_significant": 4, "n_hotspots": 5, "n_coldspots": 1},
+            },
+        },
+        "local_moran",
+    )
+    assert local_moran["n_features_analyzed"] == 2
+    assert local_moran["n_significant"] == 6
+    assert local_moran["summary_metrics"]["mean_hotspots_per_gene"] == 3.0
+    assert local_moran["summary_metrics"]["mean_coldspots_per_gene"] == 2.0
+
+    getis = _extract_result_summary(
+        {
+            "genes_analyzed": ["g1"],
+            "results": {"g1": {"n_hot_spots": 7, "n_cold_spots": 2}},
+        },
+        "getis_ord",
+    )
+    assert getis["n_features_analyzed"] == 1
+    assert getis["summary_metrics"] == {"total_hotspots": 7, "total_coldspots": 2}
+
+    co = _extract_result_summary({"n_clusters": 3, "analysis_key": "x_co"}, "co_occurrence")
+    rip = _extract_result_summary({"n_clusters": 4, "analysis_key": "x_rip"}, "ripley")
+    cen = _extract_result_summary({"n_clusters": 2, "analysis_key": "x_cent"}, "centrality")
+    assert co["n_features_analyzed"] == 3 and co["results_key"] == "x_co"
+    assert rip["n_features_analyzed"] == 4 and rip["results_key"] == "x_rip"
+    assert cen["n_features_analyzed"] == 2 and cen["results_key"] == "x_cent"
+
+    biv = _extract_result_summary(
+        {
+            "n_pairs_analyzed": 3,
+            "bivariate_morans_i": {"a_vs_b": 0.1, "c_vs_d": 0.4, "e_vs_f": -0.35},
+            "mean_bivariate_i": 0.05,
+        },
+        "bivariate_moran",
+    )
+    assert biv["n_features_analyzed"] == 3
+    assert biv["n_significant"] == 2
+    assert biv["summary_metrics"] == {"mean_bivariate_i": 0.05}
+
+    ljc_empty = _extract_result_summary(
+        {"n_categories": 0, "categories": [], "per_category_stats": {}},
+        "local_join_count",
+    )
+    assert ljc_empty["summary_metrics"] == {
+        "mean_hotspots_per_category": 0.0,
+        "total_significant_clusters": 0,
+    }
+
+
+def test_analyze_morans_i_handles_small_gene_set_without_duplicate_rank_lists(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    monkeypatch.setattr(
+        ss, "select_genes_for_analysis", lambda *_args, **_kwargs: ["gene_0", "gene_1", "gene_2", "gene_3"]
+    )
+
+    def _fake_autocorr(a, **_kwargs):
+        a.uns["moranI"] = pd.DataFrame(
+            {"I": [0.7, 0.2, -0.1, 0.4], "pval_norm": [0.01, 0.2, 0.04, 0.9]},
+            index=["gene_0", "gene_1", "gene_2", "gene_3"],
+        )
+
+    monkeypatch.setattr(ss.sq.gr, "spatial_autocorr", _fake_autocorr)
+    out = ss._analyze_morans_i(
+        adata,
+        SpatialStatisticsParameters(analysis_type="moran", n_top_genes=4),
+        DummyCtx(adata),
+    )
+    assert out["n_genes_analyzed"] == 4
+    assert out["n_significant"] == 2
+    assert out["top_highest_autocorrelation"] == []
+    assert out["top_lowest_autocorrelation"] == []
+    assert out["analysis_key"] == "moranI"
+
+
+def test_analyze_morans_i_raises_when_results_missing(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    monkeypatch.setattr(ss, "select_genes_for_analysis", lambda *_args, **_kwargs: ["gene_0"])
+    monkeypatch.setattr(ss.sq.gr, "spatial_autocorr", lambda *_args, **_kwargs: None)
+    with pytest.raises(ProcessingError, match="Moran's I computation did not produce results"):
+        ss._analyze_morans_i(
+            adata,
+            SpatialStatisticsParameters(analysis_type="moran", genes=["gene_0"]),
+            DummyCtx(adata),
+        )
+
+
+def test_analyze_gearys_c_success_dataframe_path(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    monkeypatch.setattr(ss, "select_genes_for_analysis", lambda *_args, **_kwargs: ["gene_0", "gene_1"])
+
+    def _fake_geary(a, **_kwargs):
+        a.uns["gearyC"] = pd.DataFrame({"C": [0.2, 1.0]}, index=["gene_0", "gene_1"])
+
+    monkeypatch.setattr(ss.sq.gr, "spatial_autocorr", _fake_geary)
+    out = ss._analyze_gearys_c(
+        adata,
+        SpatialStatisticsParameters(analysis_type="geary", genes=["gene_0", "gene_1"]),
+        DummyCtx(adata),
+    )
+    assert out["n_genes_analyzed"] == 2
+    assert out["mean_gearys_c"] == pytest.approx(0.6)
+    assert out["analysis_key"] == "gearyC"
+
+
+def test_analyze_neighborhood_and_co_occurrence_raise_when_results_missing(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["leiden"] = pd.Categorical(["0"] * 30 + ["1"] * 30)
+
+    monkeypatch.setattr(ss.sq.gr, "nhood_enrichment", lambda *_args, **_kwargs: None)
+    with pytest.raises(ProcessingError, match="Neighborhood enrichment did not produce results"):
+        ss._analyze_neighborhood_enrichment(adata, "leiden", DummyCtx(adata))
+
+    monkeypatch.setattr(ss.sq.gr, "co_occurrence", lambda *_args, **_kwargs: None)
+    with pytest.raises(ProcessingError, match="Co-occurrence analysis did not produce results"):
+        ss._analyze_co_occurrence(
+            adata,
+            "leiden",
+            SpatialStatisticsParameters(analysis_type="co_occurrence", cluster_key="leiden"),
+            DummyCtx(adata),
+        )
+
+
+def test_analyze_ripleys_k_success_and_error_paths(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["leiden"] = pd.Categorical(["0"] * 20 + ["1"] * 20 + ["2"] * 20)
+
+    monkeypatch.setattr(ss.sq.gr, "ripley", lambda *_args, **_kwargs: None)
+    out = ss._analyze_ripleys_k(adata, "leiden", DummyCtx(adata))
+    assert out["analysis_completed"] is True
+    assert out["analysis_key"] == "leiden_ripley_L"
+    assert out["n_clusters"] == 3
+
+    monkeypatch.setattr(ss.sq.gr, "ripley", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("bad ripley")))
+    with pytest.raises(ProcessingError, match="Ripley's K analysis failed"):
+        ss._analyze_ripleys_k(adata, "leiden", DummyCtx(adata))
+
+
+def test_analyze_getis_ord_bonferroni_branch_adds_corrected_columns(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        ss,
+        "select_genes_for_analysis",
+        lambda *_args, **_kwargs: ["gene_0", "gene_1"],
+    )
+
+    class _FakeGLocal:
+        def __init__(self, y, w, transform="R", star=True):
+            del w, transform, star
+            n = len(np.asarray(y))
+            self.Zs = np.tile(np.array([2.2, -2.2, 0.0, 1.2]), int(np.ceil(n / 4)))[:n]
+            self.p_sim = np.full(n, 0.02, dtype=float)
+
+    fake_esda_getisord = ModuleType("esda.getisord")
+    fake_esda_getisord.G_Local = _FakeGLocal
+
+    class _KNNObj:
+        def __init__(self):
+            self.transform = None
+
+    fake_pysal_lib = ModuleType("pysal.lib")
+    fake_pysal_lib.weights = SimpleNamespace(
+        KNN=SimpleNamespace(from_array=lambda *_args, **_kwargs: _KNNObj())
+    )
+
+    monkeypatch.setitem(__import__("sys").modules, "esda.getisord", fake_esda_getisord)
+    monkeypatch.setitem(__import__("sys").modules, "pysal.lib", fake_pysal_lib)
+
+    params = SpatialStatisticsParameters(
+        analysis_type="getis_ord",
+        genes=["gene_0", "gene_1"],
+        n_neighbors=6,
+        getis_ord_correction="bonferroni",
+        getis_ord_alpha=0.05,
+    )
+    out = ss._analyze_getis_ord(adata, params, DummyCtx(adata))
+
+    assert out["n_genes_analyzed"] == 2
+    assert "n_hot_spots_corrected" in out["results"]["gene_0"]
+    assert "n_cold_spots_corrected" in out["results"]["gene_1"]
+    assert "gene_0_getis_ord_p_corrected" in adata.obs.columns
+    assert "gene_1_getis_ord_p_corrected" in adata.obs.columns
+
+
+def test_analyze_getis_ord_wraps_runtime_errors(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ss, "select_genes_for_analysis", lambda *_args, **_kwargs: ["gene_0"])
+
+    class _BrokenGLocal:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("cannot compute")
+
+    fake_esda_getisord = ModuleType("esda.getisord")
+    fake_esda_getisord.G_Local = _BrokenGLocal
+    fake_pysal_lib = ModuleType("pysal.lib")
+    fake_pysal_lib.weights = SimpleNamespace(
+        KNN=SimpleNamespace(from_array=lambda *_args, **_kwargs: SimpleNamespace(transform=None))
+    )
+    monkeypatch.setitem(__import__("sys").modules, "esda.getisord", fake_esda_getisord)
+    monkeypatch.setitem(__import__("sys").modules, "pysal.lib", fake_pysal_lib)
+
+    with pytest.raises(ProcessingError, match="Getis-Ord analysis failed"):
+        ss._analyze_getis_ord(
+            adata,
+            SpatialStatisticsParameters(analysis_type="getis_ord", genes=["gene_0"]),
+            DummyCtx(adata),
+        )
+
+
+def test_analyze_centrality_success_and_missing_key_failure(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["leiden"] = pd.Categorical(["0"] * 30 + ["1"] * 30)
+
+    monkeypatch.setattr(
+        ss.sq.gr,
+        "centrality_scores",
+        lambda a, cluster_key: a.uns.__setitem__(f"{cluster_key}_centrality_scores", {"0": 1.0, "1": 0.5}),
+    )
+    out = ss._analyze_centrality(adata, "leiden", DummyCtx(adata))
+    assert out["analysis_completed"] is True
+    assert out["analysis_key"] == "leiden_centrality_scores"
+    assert out["n_clusters"] == 2
+
+    monkeypatch.setattr(ss.sq.gr, "centrality_scores", lambda *_args, **_kwargs: None)
+    adata.uns.pop("leiden_centrality_scores", None)
+    with pytest.raises(ProcessingError, match="Centrality analysis did not produce results"):
+        ss._analyze_centrality(adata, "leiden", DummyCtx(adata))
+
+
+def test_analyze_bivariate_moran_requires_gene_pairs_and_handles_zero_variance(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    from scipy.sparse import csr_matrix
+
+    adata = minimal_spatial_adata.copy()
+    adata.X[:, 0] = 1.0
+    adata.X[:, 1] = 1.0
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(ParameterError, match="requires gene_pairs"):
+        ss._analyze_bivariate_moran(
+            adata,
+            SpatialStatisticsParameters(analysis_type="bivariate_moran", gene_pairs=None),
+            DummyCtx(adata),
+        )
+
+    n = adata.n_obs
+    dense_w = np.ones((n, n), dtype=float)
+    np.fill_diagonal(dense_w, 0.0)
+    fake_libpysal_weights = ModuleType("libpysal.weights")
+    fake_libpysal_weights.KNN = SimpleNamespace(
+        from_array=lambda *_args, **_kwargs: SimpleNamespace(
+            sparse=csr_matrix(dense_w), transform=None
+        )
+    )
+    monkeypatch.setitem(__import__("sys").modules, "libpysal.weights", fake_libpysal_weights)
+
+    out = ss._analyze_bivariate_moran(
+        adata,
+        SpatialStatisticsParameters(
+            analysis_type="bivariate_moran",
+            gene_pairs=[("gene_0", "gene_1")],
+            n_neighbors=5,
+        ),
+        DummyCtx(adata),
+    )
+    assert out["bivariate_morans_i"]["gene_0_vs_gene_1"] == 0.0
+
+
+def test_analyze_join_count_success_and_wraps_runtime_error(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["binary"] = pd.Categorical(["x"] * 30 + ["y"] * 30)
+
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ss, "require_spatial_coords", lambda a: a.obsm["spatial"])
+
+    class _FakeJoinCounts:
+        def __init__(self, y, w):
+            del y, w
+            self.bb = 11.0
+            self.ww = 7.0
+            self.bw = 5.0
+            self.J = 23.0
+            self.p_sim = 0.04
+
+    fake_esda_join_counts = ModuleType("esda.join_counts")
+    fake_esda_join_counts.Join_Counts = _FakeJoinCounts
+    fake_libpysal_weights = ModuleType("libpysal.weights")
+    fake_libpysal_weights.KNN = SimpleNamespace(from_array=lambda *_args, **_kwargs: object())
+    monkeypatch.setitem(__import__("sys").modules, "esda.join_counts", fake_esda_join_counts)
+    monkeypatch.setitem(__import__("sys").modules, "libpysal.weights", fake_libpysal_weights)
+
+    out = ss._analyze_join_count(
+        adata,
+        "binary",
+        SpatialStatisticsParameters(analysis_type="join_count", n_neighbors=4),
+        DummyCtx(adata),
+    )
+    assert out == {"bb": 11.0, "ww": 7.0, "bw": 5.0, "J": 23.0, "p_value": 0.04}
+
+    class _BrokenJoinCounts:
+        def __init__(self, *_args, **_kwargs):
+            raise RuntimeError("join count failed")
+
+    fake_esda_join_counts.Join_Counts = _BrokenJoinCounts
+    with pytest.raises(ProcessingError, match="Join Count analysis failed"):
+        ss._analyze_join_count(
+            adata,
+            "binary",
+            SpatialStatisticsParameters(analysis_type="join_count", n_neighbors=4),
+            DummyCtx(adata),
+        )
+
+
+def test_analyze_local_join_count_success_and_failure_paths(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["celltype"] = pd.Categorical(["A"] * 20 + ["B"] * 20 + ["C"] * 20)
+
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ss, "require_spatial_coords", lambda a: a.obsm["spatial"])
+
+    class _FakeLJC:
+        def __init__(self, connectivity):
+            self.connectivity = connectivity
+
+        def fit(self, y):
+            del self.connectivity
+            y = np.asarray(y)
+            self.LJC = y.astype(float)
+            self.p_sim = np.where(y > 0, 0.01, 0.5)
+            return self
+
+    fake_esda_ljc = ModuleType("esda.join_counts_local")
+    fake_esda_ljc.Join_Counts_Local = _FakeLJC
+    fake_libpysal_weights = ModuleType("libpysal.weights")
+    fake_libpysal_weights.KNN = SimpleNamespace(from_array=lambda *_args, **_kwargs: object())
+    monkeypatch.setitem(__import__("sys").modules, "esda.join_counts_local", fake_esda_ljc)
+    monkeypatch.setitem(__import__("sys").modules, "libpysal.weights", fake_libpysal_weights)
+
+    out = ss._analyze_local_join_count(
+        adata,
+        "celltype",
+        SpatialStatisticsParameters(analysis_type="local_join_count", n_neighbors=4),
+        DummyCtx(adata),
+    )
+    assert out["n_categories"] == 3
+    assert "A" in out["per_category_stats"]
+    assert "local_join_count" in adata.uns
+    assert "ljc_A" in adata.obs.columns
+    assert "ljc_B_pvalue" in adata.obs.columns
+
+    class _BrokenLJC:
+        def __init__(self, connectivity):
+            self.connectivity = connectivity
+
+        def fit(self, *_args, **_kwargs):
+            raise RuntimeError("local join count failed")
+
+    fake_esda_ljc.Join_Counts_Local = _BrokenLJC
+    with pytest.raises(ProcessingError, match="Local Join Count analysis failed"):
+        ss._analyze_local_join_count(
+            adata,
+            "celltype",
+            SpatialStatisticsParameters(analysis_type="local_join_count", n_neighbors=4),
+            DummyCtx(adata),
+        )
+
+
+def test_analyze_network_properties_connected_fallback_and_avg_clustering_guard(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import networkx as nx
+
+    adata = minimal_spatial_adata.copy()
+    adata.obsp.pop("spatial_connectivities", None)
+
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(nx, "average_clustering", lambda _g: (_ for _ in ()).throw(RuntimeError("clustering failed")))
+
+    out = ss._analyze_network_properties(
+        adata,
+        cluster_key="group",
+        params=SpatialStatisticsParameters(analysis_type="network_properties", n_neighbors=59),
+        ctx=DummyCtx(adata),
+    )
+    assert out["is_connected"] is True
+    assert "diameter" in out and "radius" in out
+    assert out["avg_clustering"] is None
+    assert "network_properties" in adata.uns
+
+
+def test_analyze_spatial_centrality_fallback_kneighbors_graph_path(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    from scipy.sparse import eye
+
+    adata = minimal_spatial_adata.copy()
+    adata.obs["group"] = pd.Categorical(["a"] * 30 + ["b"] * 30)
+    adata.obsp.pop("spatial_connectivities", None)
+    n_nodes = adata.n_obs
+
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+
+    fake_nx = ModuleType("networkx")
+    fake_nx.from_scipy_sparse_array = lambda _arr: object()
+    fake_nx.degree_centrality = lambda _g: {i: 0.1 for i in range(n_nodes)}
+    fake_nx.closeness_centrality = lambda _g: {i: 0.2 for i in range(n_nodes)}
+    fake_nx.betweenness_centrality = lambda _g: {i: 0.3 for i in range(n_nodes)}
+    monkeypatch.setitem(__import__("sys").modules, "networkx", fake_nx)
+
+    fake_sklearn_neighbors = ModuleType("sklearn.neighbors")
+    fake_sklearn_neighbors.kneighbors_graph = (
+        lambda *_args, **_kwargs: eye(n_nodes, format="csr")
+    )
+    monkeypatch.setitem(__import__("sys").modules, "sklearn.neighbors", fake_sklearn_neighbors)
+
+    out = ss._analyze_spatial_centrality(
+        adata,
+        cluster_key="group",
+        params=SpatialStatisticsParameters(analysis_type="spatial_centrality", n_neighbors=5),
+        ctx=DummyCtx(adata),
+    )
+    assert out["centrality_computed"] is True
+    assert out["global_stats"]["mean_degree"] == pytest.approx(0.1)
+    assert out["global_stats"]["mean_closeness"] == pytest.approx(0.2)
+    assert out["global_stats"]["mean_betweenness"] == pytest.approx(0.3)
+
+
+def test_analyze_local_moran_success_with_fdr_and_persists_obs_uns(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    from scipy.sparse import csr_matrix
+
+    adata = minimal_spatial_adata.copy()
+    adata.obsp["spatial_connectivities"] = csr_matrix(np.eye(adata.n_obs))
+
+    monkeypatch.setattr(ss, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ss, "select_genes_for_analysis", lambda *_args, **_kwargs: ["gene_0"])
+
+    class _FakePySALWeights:
+        def __init__(self, neighbors, weights):
+            self.neighbors = neighbors
+            self.weights = weights
+
+    class _FakeMoranLocal:
+        def __init__(self, expr, w, permutations):
+            del w, permutations
+            n = len(expr)
+            self.Is = np.linspace(0.0, 1.0, n)
+            self.p_sim = np.tile(np.array([0.01, 0.2]), int(np.ceil(n / 2)))[:n]
+            self.q = np.tile(np.array([1, 3, 4, 2]), int(np.ceil(n / 4)))[:n]
+
+    fake_esda_moran = ModuleType("esda.moran")
+    fake_esda_moran.Moran_Local = _FakeMoranLocal
+    fake_libpysal_weights = ModuleType("libpysal.weights")
+    fake_libpysal_weights.W = _FakePySALWeights
+
+    fake_statsmodels_multitest = ModuleType("statsmodels.stats.multitest")
+    fake_statsmodels_multitest.multipletests = (
+        lambda p_values, alpha, method: (
+            np.asarray(p_values) < alpha,
+            np.asarray(p_values) * 0.5,
+            alpha,
+            alpha,
+        )
+    )
+
+    monkeypatch.setitem(__import__("sys").modules, "esda.moran", fake_esda_moran)
+    monkeypatch.setitem(__import__("sys").modules, "libpysal.weights", fake_libpysal_weights)
+    monkeypatch.setitem(
+        __import__("sys").modules, "statsmodels.stats.multitest", fake_statsmodels_multitest
+    )
+
+    out = ss._analyze_local_moran(
+        adata,
+        SpatialStatisticsParameters(
+            analysis_type="local_moran",
+            genes=["gene_0"],
+            local_moran_permutations=99,
+            local_moran_alpha=0.05,
+            local_moran_fdr_correction=True,
+            n_neighbors=5,
+        ),
+        DummyCtx(adata),
+    )
+
+    assert out["analysis_type"] == "local_moran"
+    assert out["genes_analyzed"] == ["gene_0"]
+    assert "gene_0_local_morans" in adata.obs.columns
+    assert "gene_0_lisa_cluster" in adata.obs.columns
+    assert "gene_0_lisa_pvalue" in adata.obs.columns
+    assert "local_moran" in adata.uns
+    assert out["results"]["gene_0"]["fdr_corrected"] is True
+
+
+@pytest.mark.asyncio
+async def test_analyze_spatial_statistics_metadata_includes_mean_score_when_present(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["leiden"] = pd.Categorical(["0"] * 30 + ["1"] * 30)
+    params = SpatialStatisticsParameters(analysis_type="neighborhood", cluster_key="leiden")
+    captured: dict[str, object] = {}
+
+    monkeypatch.setattr(ss, "ensure_spatial_neighbors", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        ss,
+        "_dispatch_analysis",
+        lambda *_args, **_kwargs: {
+            "n_clusters": 2,
+            "max_enrichment": 1.1,
+            "min_enrichment": -0.2,
+            "analysis_key": "leiden_nhood_enrichment",
+            "mean_score": 0.45,
+        },
+    )
+    monkeypatch.setattr(ss, "export_analysis_result", lambda *_args, **_kwargs: [])
+
+    def _store(_adata, *, statistics, **_kwargs):
+        captured["statistics"] = statistics
+
+    monkeypatch.setattr(ss, "store_analysis_metadata", _store)
+
+    out = await ss.analyze_spatial_statistics("d1", DummyCtx(adata), params)
+    assert out.analysis_type == "neighborhood"
+    assert captured["statistics"] == {
+        "n_cells": adata.n_obs,
+        "mean_score": 0.45,
+    }

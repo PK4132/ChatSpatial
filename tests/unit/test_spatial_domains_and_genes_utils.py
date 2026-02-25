@@ -501,3 +501,327 @@ async def test_identify_domains_spagcn_rejects_mismatched_coordinate_length(
             SpatialDomainParameters(method="spagcn"),
             DummyCtx(adata),
         )
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_stagate_rejects_unsupported_torch_version(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import sys
+    import types
+
+    adata = minimal_spatial_adata.copy()
+    torch_mod = types.ModuleType("torch")
+    torch_mod.__version__ = "2.9.0"
+    torch_mod.device = lambda x: x
+    sys.modules["torch"] = torch_mod
+
+    with pytest.raises(ProcessingError, match="requires PyTorch <= 2.8.0"):
+        await sd._identify_domains_stagate(
+            adata,
+            SpatialDomainParameters(method="stagate"),
+            DummyCtx(adata),
+        )
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_stagate_success_returns_embeddings_and_stats(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import sys
+    import types
+
+    adata = minimal_spatial_adata.copy()
+
+    torch_mod = types.ModuleType("torch")
+    torch_mod.__version__ = "2.8.0"
+    torch_mod.device = lambda x: f"device:{x}"
+    sys.modules["torch"] = torch_mod
+
+    class _FakeSTAGATE:
+        @staticmethod
+        def Cal_Spatial_Net(a, rad_cutoff=50):
+            a.uns["rad_cutoff"] = rad_cutoff
+
+        @staticmethod
+        def Stats_Spatial_Net(_a):
+            return None
+
+        @staticmethod
+        def train_STAGATE(a, device=None):
+            del device
+            a.obsm["STAGATE"] = np.ones((a.n_obs, 4), dtype=float)
+            return a
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: _FakeSTAGATE)
+    monkeypatch.setattr(
+        "chatspatial.utils.compute.gmm_clustering",
+        lambda data, n_clusters, **_kwargs: np.arange(data.shape[0]) % n_clusters,
+    )
+
+    async def _fake_resolve_device(prefer_gpu: bool, ctx):
+        del prefer_gpu, ctx
+        return "cpu"
+
+    monkeypatch.setattr(sd, "resolve_device_async", _fake_resolve_device)
+
+    labels, emb_key, stats = await sd._identify_domains_stagate(
+        adata,
+        SpatialDomainParameters(
+            method="stagate",
+            n_domains=3,
+            stagate_use_gpu=False,
+            stagate_rad_cutoff=40,
+        ),
+        DummyCtx(adata),
+    )
+
+    assert len(labels) == adata.n_obs
+    assert emb_key == "STAGATE"
+    assert "STAGATE" in adata.obsm
+    assert stats["method"] == "stagate_pyg"
+    assert stats["target_n_clusters"] == 3
+    assert stats["rad_cutoff"] == 40
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_stagate_timeout_is_wrapped(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import asyncio as _asyncio
+    import sys
+    import types
+
+    adata = minimal_spatial_adata.copy()
+
+    torch_mod = types.ModuleType("torch")
+    torch_mod.__version__ = "2.8.0"
+    torch_mod.device = lambda x: x
+    sys.modules["torch"] = torch_mod
+
+    class _FakeSTAGATE:
+        @staticmethod
+        def Cal_Spatial_Net(_a, rad_cutoff=50):
+            del rad_cutoff
+
+        @staticmethod
+        def train_STAGATE(a, device=None):
+            del a, device
+            return None
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: _FakeSTAGATE)
+
+    async def _fake_resolve_device(prefer_gpu: bool, ctx):
+        del prefer_gpu, ctx
+        return "cpu"
+
+    monkeypatch.setattr(sd, "resolve_device_async", _fake_resolve_device)
+
+    async def _raise_timeout(_future, timeout=None):
+        del _future, timeout
+        raise _asyncio.TimeoutError()
+
+    monkeypatch.setattr("asyncio.wait_for", _raise_timeout)
+
+    with pytest.raises(ProcessingError, match="STAGATE training timeout"):
+        await sd._identify_domains_stagate(
+            adata,
+            SpatialDomainParameters(method="stagate", timeout=1),
+            DummyCtx(adata),
+        )
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_graphst_mclust_path_success(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import sys
+    import types
+
+    adata = minimal_spatial_adata.copy()
+
+    torch_mod = types.ModuleType("torch")
+    torch_mod.__version__ = "2.8.0"
+    torch_mod.device = lambda x: f"device:{x}"
+    sys.modules["torch"] = torch_mod
+
+    class _FakeGraphST:
+        def __init__(self, adata_graphst, device=None, random_seed=0):
+            del device, random_seed
+            self._adata = adata_graphst
+
+        def train(self):
+            self._adata.obsm["emb"] = np.ones((self._adata.n_obs, 24), dtype=float)
+            return self._adata
+
+    graphst_sub = types.ModuleType("GraphST.GraphST")
+    graphst_sub.GraphST = _FakeGraphST
+    graphst_pkg = types.ModuleType("GraphST")
+    graphst_pkg.GraphST = graphst_sub
+    sys.modules["GraphST"] = graphst_pkg
+    sys.modules["GraphST.GraphST"] = graphst_sub
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        "chatspatial.utils.compute.gmm_clustering",
+        lambda data, n_clusters, **_kwargs: np.arange(data.shape[0]) % n_clusters,
+    )
+
+    async def _fake_resolve_device(prefer_gpu: bool, ctx):
+        del prefer_gpu, ctx
+        return "cpu"
+
+    monkeypatch.setattr(sd, "resolve_device_async", _fake_resolve_device)
+
+    labels, emb_key, stats = await sd._identify_domains_graphst(
+        adata,
+        SpatialDomainParameters(
+            method="graphst",
+            graphst_clustering_method="mclust",
+            graphst_refinement=False,
+            graphst_n_clusters=4,
+            n_domains=4,
+        ),
+        DummyCtx(adata),
+    )
+
+    assert len(labels) == adata.n_obs
+    assert emb_key == "emb"
+    assert "emb" in adata.obsm
+    assert stats["method"] == "graphst"
+    assert stats["clustering_method"] == "mclust"
+    assert stats["n_clusters"] == 4
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_graphst_timeout_is_wrapped(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import asyncio as _asyncio
+    import sys
+    import types
+
+    adata = minimal_spatial_adata.copy()
+
+    torch_mod = types.ModuleType("torch")
+    torch_mod.__version__ = "2.8.0"
+    torch_mod.device = lambda x: x
+    sys.modules["torch"] = torch_mod
+
+    class _FakeGraphST:
+        def __init__(self, adata_graphst, device=None, random_seed=0):
+            del adata_graphst, device, random_seed
+
+        def train(self):
+            return adata
+
+    graphst_sub = types.ModuleType("GraphST.GraphST")
+    graphst_sub.GraphST = _FakeGraphST
+    graphst_pkg = types.ModuleType("GraphST")
+    graphst_pkg.GraphST = graphst_sub
+    sys.modules["GraphST"] = graphst_pkg
+    sys.modules["GraphST.GraphST"] = graphst_sub
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: None)
+
+    async def _fake_resolve_device(prefer_gpu: bool, ctx):
+        del prefer_gpu, ctx
+        return "cpu"
+
+    monkeypatch.setattr(sd, "resolve_device_async", _fake_resolve_device)
+
+    async def _raise_timeout(_future, timeout=None):
+        del _future, timeout
+        raise _asyncio.TimeoutError()
+
+    monkeypatch.setattr("asyncio.wait_for", _raise_timeout)
+
+    with pytest.raises(ProcessingError, match="GraphST training timeout"):
+        await sd._identify_domains_graphst(
+            adata,
+            SpatialDomainParameters(method="graphst", timeout=1),
+            DummyCtx(adata),
+        )
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_banksy_success_path(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import sys
+    import types
+
+    adata = minimal_spatial_adata.copy()
+    banksy_matrix = adata.copy()
+
+    init_mod = types.ModuleType("banksy.initialize_banksy")
+    init_mod.initialize_banksy = lambda *_a, **_k: {"ok": True}
+    embed_mod = types.ModuleType("banksy.embed_banksy")
+    embed_mod.generate_banksy_matrix = lambda *_a, **_k: (None, banksy_matrix)
+
+    sys.modules["banksy"] = types.ModuleType("banksy")
+    sys.modules["banksy.initialize_banksy"] = init_mod
+    sys.modules["banksy.embed_banksy"] = embed_mod
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        sd.sc.pp,
+        "pca",
+        lambda a, n_comps=20: a.obsm.__setitem__("X_pca", np.ones((a.n_obs, n_comps))),
+    )
+    monkeypatch.setattr(sd.sc.pp, "neighbors", lambda *_a, **_k: None)
+    monkeypatch.setattr(
+        sd.sc.tl,
+        "leiden",
+        lambda a, resolution=0.5, key_added="banksy_cluster": a.obs.__setitem__(
+            key_added, ["0"] * (a.n_obs // 2) + ["1"] * (a.n_obs - a.n_obs // 2)
+        ),
+    )
+
+    labels, emb_key, stats = await sd._identify_domains_banksy(
+        adata,
+        SpatialDomainParameters(method="banksy", banksy_pca_dims=5, n_domains=2),
+        DummyCtx(adata),
+    )
+
+    assert len(labels) == adata.n_obs
+    assert emb_key == "X_banksy_pca"
+    assert "X_banksy_pca" in adata.obsm
+    assert stats["method"] == "banksy"
+    assert stats["n_clusters"] == 2
+    assert stats["feature_expansion"].endswith("x")
+
+
+@pytest.mark.asyncio
+async def test_identify_domains_banksy_timeout_is_wrapped(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    import asyncio as _asyncio
+    import sys
+    import types
+
+    adata = minimal_spatial_adata.copy()
+
+    init_mod = types.ModuleType("banksy.initialize_banksy")
+    init_mod.initialize_banksy = lambda *_a, **_k: {"ok": True}
+    embed_mod = types.ModuleType("banksy.embed_banksy")
+    embed_mod.generate_banksy_matrix = lambda *_a, **_k: (None, adata.copy())
+
+    sys.modules["banksy"] = types.ModuleType("banksy")
+    sys.modules["banksy.initialize_banksy"] = init_mod
+    sys.modules["banksy.embed_banksy"] = embed_mod
+
+    monkeypatch.setattr(sd, "require", lambda *_a, **_k: None)
+
+    async def _raise_timeout(_future, timeout=None):
+        del _future, timeout
+        raise _asyncio.TimeoutError()
+
+    monkeypatch.setattr("asyncio.wait_for", _raise_timeout)
+
+    with pytest.raises(ProcessingError, match="BANKSY timeout"):
+        await sd._identify_domains_banksy(
+            adata,
+            SpatialDomainParameters(method="banksy", timeout=1),
+            DummyCtx(adata),
+        )
