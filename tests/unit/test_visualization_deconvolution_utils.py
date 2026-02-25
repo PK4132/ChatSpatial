@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import pandas as pd
 import pytest
 
 from chatspatial.models.data import VisualizationParameters
@@ -37,6 +38,33 @@ def _add_deconv_metadata(
             "dominant_type_key": dominant_type_key,
         }
     }
+
+
+def _mock_deconv_data(adata, method: str = "mock"):
+    proportions = pd.DataFrame(
+        {
+            "T": np.array([0.9, 0.2, 0.0, 0.4, 0.8][: adata.n_obs], dtype=float),
+            "B": np.array([0.1, 0.8, 0.5, 0.3, 0.2][: adata.n_obs], dtype=float),
+            "Myeloid": np.array([0.0, 0.0, 0.5, 0.3, 0.0][: adata.n_obs], dtype=float),
+        },
+        index=adata.obs_names[: min(5, adata.n_obs)],
+    )
+    if len(proportions) < adata.n_obs:
+        # Repeat rows for larger fixtures while preserving proportions shape
+        reps = int(np.ceil(adata.n_obs / len(proportions)))
+        proportions = pd.concat([proportions] * reps, ignore_index=True).iloc[: adata.n_obs]
+        proportions.index = adata.obs_names
+    else:
+        proportions = proportions.iloc[: adata.n_obs]
+        proportions.index = adata.obs_names
+
+    return viz_deconv.DeconvolutionData(
+        proportions=proportions,
+        method=method,
+        cell_types=list(proportions.columns),
+        proportions_key="deconvolution_mock",
+        dominant_type_key=None,
+    )
 
 
 def test_get_available_methods_prefers_metadata_then_fallback(minimal_spatial_adata):
@@ -160,4 +188,338 @@ async def test_create_deconvolution_visualization_unknown_subtype_error(
         await viz_deconv.create_deconvolution_visualization(
             minimal_spatial_adata,
             VisualizationParameters(plot_type="deconvolution", subtype="mystery"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_deconvolution_visualization_routes_all_subtypes(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    sentinel = object()
+
+    async def _spatial(*_args, **_kwargs):
+        return sentinel
+
+    async def _dominant(*_args, **_kwargs):
+        return sentinel
+
+    async def _diversity(*_args, **_kwargs):
+        return sentinel
+
+    async def _pie(*_args, **_kwargs):
+        return sentinel
+
+    async def _umap(*_args, **_kwargs):
+        return sentinel
+
+    async def _imp(*_args, **_kwargs):
+        return sentinel
+
+    monkeypatch.setattr(viz_deconv, "_create_spatial_multi_deconvolution", _spatial)
+    monkeypatch.setattr(viz_deconv, "_create_dominant_celltype_map", _dominant)
+    monkeypatch.setattr(viz_deconv, "_create_diversity_map", _diversity)
+    monkeypatch.setattr(viz_deconv, "_create_scatterpie_plot", _pie)
+    monkeypatch.setattr(viz_deconv, "_create_umap_proportions", _umap)
+    monkeypatch.setattr(viz_deconv, "_create_card_imputation", _imp)
+
+    for subtype in [None, "spatial_multi", "dominant_type", "diversity", "pie", "scatterpie", "umap", "imputation"]:
+        out = await viz_deconv.create_deconvolution_visualization(
+            minimal_spatial_adata,
+            VisualizationParameters(plot_type="deconvolution", subtype=subtype),
+        )
+        assert out is sentinel
+
+
+@pytest.mark.asyncio
+async def test_create_dominant_celltype_map_supports_mixed_and_non_mixed_modes(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    data = _mock_deconv_data(adata, method="rctd")
+    async def _get_data(*_args, **_kwargs):
+        return data
+
+    monkeypatch.setattr(viz_deconv, "get_deconvolution_data", _get_data)
+    monkeypatch.setattr(viz_deconv, "require_spatial_coords", lambda _a: _a.obsm["spatial"])
+
+    fig = await viz_deconv._create_dominant_celltype_map(
+        adata,
+        VisualizationParameters(
+            plot_type="deconvolution",
+            subtype="dominant_type",
+            show_mixed_spots=True,
+            min_proportion_threshold=0.75,
+        ),
+        context=None,
+    )
+    legend_labels = [t.get_text() for t in fig.axes[0].get_legend().texts]
+    assert "Mixed" in legend_labels
+    assert "Threshold: 0.75" in fig.axes[0].get_title()
+    fig.clf()
+
+    fig2 = await viz_deconv._create_dominant_celltype_map(
+        adata,
+        VisualizationParameters(
+            plot_type="deconvolution",
+            subtype="dominant_type",
+            show_mixed_spots=False,
+        ),
+        context=None,
+    )
+    legend_labels2 = [t.get_text() for t in fig2.axes[0].get_legend().texts]
+    assert "Mixed" not in legend_labels2
+    fig2.clf()
+
+
+@pytest.mark.asyncio
+async def test_create_diversity_map_renders_and_logs(minimal_spatial_adata, monkeypatch):
+    adata = minimal_spatial_adata.copy()
+    ctx = DummyCtx()
+    data = _mock_deconv_data(adata, method="cell2location")
+    async def _get_data(*_args, **_kwargs):
+        return data
+
+    monkeypatch.setattr(viz_deconv, "get_deconvolution_data", _get_data)
+    monkeypatch.setattr(viz_deconv, "require_spatial_coords", lambda _a: _a.obsm["spatial"])
+    monkeypatch.setattr(
+        viz_deconv,
+        "entropy",
+        lambda values_t, base=2: np.linspace(0.2, 0.8, values_t.shape[1]),
+    )
+
+    fig = await viz_deconv._create_diversity_map(
+        adata,
+        VisualizationParameters(plot_type="deconvolution", subtype="diversity"),
+        context=ctx,
+    )
+
+    assert any("Mean entropy" in msg for msg in ctx.infos)
+    assert "Diversity Map" in fig.axes[0].get_title()
+    # main axis + colorbar axis
+    assert len(fig.axes) >= 2
+    fig.clf()
+
+
+@pytest.mark.asyncio
+async def test_create_scatterpie_plot_skips_zero_rows_and_adds_legend(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    data = _mock_deconv_data(adata, method="spotlight")
+    data.proportions.iloc[0] = 0.0  # zero row path
+    async def _get_data(*_args, **_kwargs):
+        return data
+
+    monkeypatch.setattr(viz_deconv, "get_deconvolution_data", _get_data)
+    monkeypatch.setattr(viz_deconv, "require_spatial_coords", lambda _a: _a.obsm["spatial"])
+
+    fig = await viz_deconv._create_scatterpie_plot(
+        adata,
+        VisualizationParameters(plot_type="deconvolution", subtype="pie", pie_scale=0.3),
+        context=None,
+    )
+
+    assert len(fig.axes[0].patches) > 0
+    assert fig.axes[0].get_legend() is not None
+    fig.clf()
+
+
+@pytest.mark.asyncio
+async def test_create_umap_proportions_requires_umap(minimal_spatial_adata, monkeypatch):
+    adata = minimal_spatial_adata.copy()
+    data = _mock_deconv_data(adata)
+    async def _get_data(*_args, **_kwargs):
+        return data
+
+    monkeypatch.setattr(viz_deconv, "get_deconvolution_data", _get_data)
+
+    with pytest.raises(DataNotFoundError, match="UMAP coordinates not found"):
+        await viz_deconv._create_umap_proportions(
+            adata,
+            VisualizationParameters(plot_type="deconvolution", subtype="umap"),
+            context=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_umap_proportions_renders_top_n_and_hides_unused_axes(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obsm["X_umap"] = np.column_stack([np.arange(adata.n_obs), np.arange(adata.n_obs)])
+    data = _mock_deconv_data(adata, method="rctd")
+    calls = {"count": 0}
+
+    class _CB:
+        def set_label(self, *_args, **_kwargs):
+            return None
+
+    async def _get_data(*_args, **_kwargs):
+        return data
+
+    monkeypatch.setattr(viz_deconv, "get_deconvolution_data", _get_data)
+    monkeypatch.setattr(
+        viz_deconv.plt,
+        "colorbar",
+        lambda *_args, **_kwargs: calls.__setitem__("count", calls["count"] + 1) or _CB(),
+    )
+
+    fig = await viz_deconv._create_umap_proportions(
+        adata,
+        VisualizationParameters(
+            plot_type="deconvolution",
+            subtype="umap",
+            n_cell_types=2,
+        ),
+        context=None,
+    )
+
+    assert fig._suptitle is not None
+    assert "Top 2 cell types" in fig._suptitle.get_text()
+    assert calls["count"] == 2
+    fig.clf()
+
+
+@pytest.mark.asyncio
+async def test_create_spatial_multi_deconvolution_handles_nan_and_temp_cleanup(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    data = _mock_deconv_data(adata, method="card")
+    data.proportions.iloc[0, 0] = np.nan
+    async def _get_data(*_args, **_kwargs):
+        return data
+
+    monkeypatch.setattr(viz_deconv, "get_deconvolution_data", _get_data)
+
+    fig = await viz_deconv._create_spatial_multi_deconvolution(
+        adata,
+        VisualizationParameters(
+            plot_type="deconvolution",
+            subtype="spatial_multi",
+            n_cell_types=2,
+            show_colorbar=False,
+        ),
+        context=None,
+    )
+
+    assert "_deconv_viz_temp" not in adata.obs.columns
+    assert len(fig.axes) >= 2
+    fig.clf()
+
+
+@pytest.mark.asyncio
+async def test_create_spatial_multi_deconvolution_falls_back_to_bar_without_spatial(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obsm.pop("spatial", None)
+    data = _mock_deconv_data(adata, method="card")
+    async def _get_data(*_args, **_kwargs):
+        return data
+
+    monkeypatch.setattr(viz_deconv, "get_deconvolution_data", _get_data)
+
+    fig = await viz_deconv._create_spatial_multi_deconvolution(
+        adata,
+        VisualizationParameters(
+            plot_type="deconvolution",
+            subtype="spatial_multi",
+            n_cell_types=1,
+        ),
+        context=None,
+    )
+
+    assert fig.axes[0].get_xlabel() == "Spots (sorted)"
+    assert fig.axes[0].get_ylabel() == "Proportion"
+    fig.clf()
+
+
+@pytest.mark.asyncio
+async def test_create_card_imputation_requires_data(minimal_spatial_adata):
+    with pytest.raises(DataNotFoundError, match="CARD imputation data not found"):
+        await viz_deconv._create_card_imputation(
+            minimal_spatial_adata,
+            VisualizationParameters(plot_type="deconvolution", subtype="imputation"),
+            context=None,
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_card_imputation_dominant_and_specific_feature_paths(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    ctx = DummyCtx()
+    n = adata.n_obs
+    adata.uns["card_imputation"] = {
+        "proportions": pd.DataFrame(
+            {
+                "T": np.linspace(0.1, 0.9, n),
+                "B": np.linspace(0.9, 0.1, n),
+            }
+        ),
+        "coordinates": pd.DataFrame(
+            {"x": np.linspace(0, 10, n), "y": np.linspace(0, 5, n)}
+        ),
+        "resolution_increase": 2.5,
+    }
+    calls = {"count": 0}
+
+    class _CB:
+        def set_label(self, *_args, **_kwargs):
+            return None
+
+    monkeypatch.setattr(
+        viz_deconv.plt,
+        "colorbar",
+        lambda *_args, **_kwargs: calls.__setitem__("count", calls["count"] + 1) or _CB(),
+    )
+
+    fig1 = await viz_deconv._create_card_imputation(
+        adata,
+        VisualizationParameters(
+            plot_type="deconvolution",
+            subtype="imputation",
+            feature="dominant",
+        ),
+        context=ctx,
+    )
+    assert fig1.axes[0].get_legend() is not None
+    fig1.clf()
+
+    fig2 = await viz_deconv._create_card_imputation(
+        adata,
+        VisualizationParameters(
+            plot_type="deconvolution",
+            subtype="imputation",
+            feature="T",
+        ),
+        context=ctx,
+    )
+    assert "CARD Imputation: T" in fig2.axes[0].get_title()
+    assert calls["count"] == 1
+    assert any("visualization created successfully" in m for m in ctx.infos)
+    fig2.clf()
+
+
+@pytest.mark.asyncio
+async def test_create_card_imputation_missing_feature_error(minimal_spatial_adata):
+    adata = minimal_spatial_adata.copy()
+    n = adata.n_obs
+    adata.uns["card_imputation"] = {
+        "proportions": pd.DataFrame({"T": np.linspace(0.1, 0.9, n)}),
+        "coordinates": pd.DataFrame({"x": np.arange(n), "y": np.arange(n)}),
+        "resolution_increase": 1.5,
+    }
+
+    with pytest.raises(DataNotFoundError, match="Feature 'X' not found"):
+        await viz_deconv._create_card_imputation(
+            adata,
+            VisualizationParameters(
+                plot_type="deconvolution",
+                subtype="imputation",
+                feature="X",
+            ),
+            context=None,
         )
