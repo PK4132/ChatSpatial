@@ -20,6 +20,7 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 from numpy.typing import NDArray
+from scipy import sparse
 
 if TYPE_CHECKING:
     from ...models.data import DeconvolutionParameters
@@ -300,9 +301,9 @@ async def _prepare_counts(
     if require_int_dtype:
         X = adata_copy.X
         sample_size = min(100, X.shape[0] * X.shape[1])
-        if hasattr(X, "data"):  # sparse
+        if sparse.issparse(X):
             sample = X.data[:sample_size] if len(X.data) > 0 else np.array([0])
-        else:  # dense
+        else:
             flat = X.flatten()
             sample = flat[:sample_size]
         is_integer = np.allclose(sample, np.round(sample), equal_nan=True)

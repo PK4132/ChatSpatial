@@ -254,9 +254,7 @@ def _register_stalign(
         target_expr = target[:, common_genes].X
 
         def _safe_sum(X):
-            if hasattr(X, "toarray"):
-                return np.array(X.sum(axis=1)).flatten().astype(np.float32)
-            return X.sum(axis=1).astype(np.float32)
+            return np.asarray(X.sum(axis=1)).flatten().astype(np.float32)
 
         source_intensity = _safe_sum(source_expr)
         target_intensity = _safe_sum(target_expr)

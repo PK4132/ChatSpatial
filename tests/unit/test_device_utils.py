@@ -159,6 +159,21 @@ def test_get_accelerator_returns_gpu_for_mps_when_requested(
     assert du.get_accelerator(prefer_gpu=False) == "cpu"
 
 
+def test_get_accelerator_prefers_cuda_without_mps_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(du, "cuda_available", lambda: True)
+    monkeypatch.setattr(du, "mps_available", lambda: True)
+    called = {"mps_config": 0}
+
+    def _configure_once() -> None:
+        called["mps_config"] += 1
+
+    monkeypatch.setattr(du, "_configure_mps", _configure_once)
+    assert du.get_accelerator(prefer_gpu=True) == "gpu"
+    assert called["mps_config"] == 0
+
+
 @pytest.mark.asyncio
 async def test_resolve_device_async_warns_on_cpu_fallback(
     monkeypatch: pytest.MonkeyPatch,

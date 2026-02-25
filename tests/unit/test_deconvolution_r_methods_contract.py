@@ -366,6 +366,64 @@ def test_card_success_with_fake_r_outputs(
     assert stats["common_genes"] == len(data.common_genes)
 
 
+def test_card_uses_default_spatial_coords_and_reference_sample_info(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    data = replace(_prepared_data(minimal_spatial_adata), spatial_coords=None)
+    data.reference.obs["sample_id"] = [f"s{i % 3}" for i in range(data.reference.n_obs)]
+
+    def _ro_r(code: str):
+        text = code.strip()
+        if text == "rownames(CARD_obj@Proportion_CARD)":
+            return ["s1", "s2"]
+        if text == "colnames(CARD_obj@Proportion_CARD)":
+            return ["A", "B"]
+        if text == "CARD_obj@Proportion_CARD":
+            return np.array([[0.7, 0.3], [0.2, 0.8]])
+        return None
+
+    _install_fake_r_modules(monkeypatch, ro_r=_ro_r)
+    monkeypatch.setattr(card_module, "validate_r_package", lambda *_args, **_kwargs: None)
+
+    proportions, _stats = card_module.deconvolve(data, sample_key="sample_id")
+
+    import rpy2.robjects as ro
+
+    spatial_location = ro.globalenv["spatial_location"]
+    sc_meta = ro.globalenv["sc_meta"]
+    assert list(spatial_location["x"]) == list(range(data.spatial.n_obs))
+    assert list(spatial_location["y"]) == [0] * data.spatial.n_obs
+    assert sc_meta["sampleInfo"].tolist() == data.reference.obs["sample_id"].tolist()
+    assert proportions.shape == (2, 2)
+
+
+def test_card_re_raises_processing_error_without_wrapping(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    data = _prepared_data(minimal_spatial_adata)
+
+    def _ro_r(code: str):
+        text = code.strip()
+        if text == "rownames(CARD_obj@Proportion_CARD)":
+            return ["s1", "s2"]
+        if text == "colnames(CARD_obj@Proportion_CARD)":
+            return ["A", "B"]
+        if text == "CARD_obj@Proportion_CARD":
+            return np.array([[0.7, 0.3], [0.2, 0.8]])
+        return None
+
+    _install_fake_r_modules(monkeypatch, ro_r=_ro_r)
+    monkeypatch.setattr(card_module, "validate_r_package", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        card_module,
+        "create_deconvolution_stats",
+        lambda *_a, **_k: (_ for _ in ()).throw(ProcessingError("stats failed")),
+    )
+
+    with pytest.raises(ProcessingError, match="stats failed"):
+        card_module.deconvolve(data)
+
+
 def test_card_success_with_imputation_adds_imputation_statistics(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):

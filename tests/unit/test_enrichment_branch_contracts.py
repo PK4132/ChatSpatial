@@ -231,6 +231,76 @@ def test_perform_ora_builds_gene_list_from_rank_genes_groups_without_pvals(
     assert out.n_gene_sets == 1
 
 
+def test_perform_ora_uses_pvals_adj_filtering_when_available(
+    monkeypatch: pytest.MonkeyPatch,
+    minimal_spatial_adata,
+) -> None:
+    adata = minimal_spatial_adata.copy()
+    _patch_metadata_noop(monkeypatch)
+
+    names = np.zeros(3, dtype=[("A", "U16")])
+    names["A"] = ["gene_0", "gene_1", "gene_2"]
+    pvals_adj = np.zeros(3, dtype=[("A", "f8")])
+    pvals_adj["A"] = [0.01, 0.2, 0.03]
+    adata.uns["rank_genes_groups"] = {"names": names, "pvals_adj": pvals_adj}
+
+    out = perform_ora(
+        adata=adata,
+        gene_sets={"GS_A": ["gene_0", "gene_2"], "GS_B": ["gene_1"]},
+        gene_list=None,
+        pvalue_threshold=0.05,
+        min_size=1,
+        max_size=100,
+    )
+    assert out.gene_set_statistics["GS_A"]["query_size"] == 2
+    assert "GS_B" not in out.gene_set_statistics
+
+
+def test_perform_ora_uses_pvals_filtering_when_adjusted_not_available(
+    monkeypatch: pytest.MonkeyPatch,
+    minimal_spatial_adata,
+) -> None:
+    adata = minimal_spatial_adata.copy()
+    _patch_metadata_noop(monkeypatch)
+
+    names = np.zeros(3, dtype=[("A", "U16")])
+    names["A"] = ["gene_0", "gene_1", "gene_2"]
+    pvals = np.zeros(3, dtype=[("A", "f8")])
+    pvals["A"] = [0.01, 0.04, 0.2]
+    adata.uns["rank_genes_groups"] = {"names": names, "pvals": pvals}
+
+    out = perform_ora(
+        adata=adata,
+        gene_sets={"GS_A": ["gene_0", "gene_1"], "GS_B": ["gene_2"]},
+        gene_list=None,
+        pvalue_threshold=0.05,
+        min_size=1,
+        max_size=100,
+    )
+    assert out.gene_set_statistics["GS_A"]["query_size"] == 2
+    assert "GS_B" not in out.gene_set_statistics
+
+
+def test_perform_ora_uses_highly_variable_genes_when_rank_genes_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    minimal_spatial_adata,
+) -> None:
+    adata = minimal_spatial_adata.copy()
+    _patch_metadata_noop(monkeypatch)
+    adata.var["highly_variable"] = False
+    adata.var.loc[adata.var_names[:3], "highly_variable"] = True
+
+    out = perform_ora(
+        adata=adata,
+        gene_sets={"GS_A": adata.var_names[:3].tolist(), "GS_B": adata.var_names[5:8].tolist()},
+        gene_list=None,
+        min_size=1,
+        max_size=100,
+    )
+    assert out.method == "ora"
+    assert out.gene_set_statistics["GS_A"]["query_size"] == 3
+
+
 def test_perform_ora_fallback_cv_and_case_insensitive_gene_matching(
     monkeypatch: pytest.MonkeyPatch,
     minimal_spatial_adata,
@@ -413,6 +483,13 @@ def test_load_msigdb_additional_collections_and_species_paths(
         min_size=1,
         max_size=10,
     )
+    out_kegg_human = load_msigdb_gene_sets(
+        species="human",
+        collection="C2",
+        subcollection="CP:KEGG",
+        min_size=1,
+        max_size=10,
+    )
     out_reactome = load_msigdb_gene_sets(
         species="human",
         collection="C2",
@@ -436,10 +513,12 @@ def test_load_msigdb_additional_collections_and_species_paths(
     )
 
     assert out_kegg_mouse == {"ok": ["A", "B", "C"]}
+    assert out_kegg_human == {"ok": ["A", "B", "C"]}
     assert out_reactome == {"ok": ["A", "B", "C"]}
     assert out_go_all == {"ok": ["A", "B", "C"]}
     assert out_c8 == {"ok": ["A", "B", "C"]}
     assert "KEGG_2019_Mouse" in calls
+    assert "KEGG_2021_Human" in calls
     assert "Reactome_2022" in calls
     assert "GO_Biological_Process_2023" in calls
     assert "GO_Molecular_Function_2023" in calls

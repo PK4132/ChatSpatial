@@ -205,6 +205,78 @@ async def test_singler_delta_extraction_failure_falls_back_to_score_confidence(
 
 
 @pytest.mark.asyncio
+async def test_singler_delta_confidence_computation_failure_falls_back_to_scores(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    ref = minimal_spatial_adata.copy()
+    ref.obs["ctype"] = pd.Categorical(["B"] * (ref.n_obs // 2) + ["T"] * (ref.n_obs - ref.n_obs // 2))
+
+    class _DeltaToken:
+        def __init__(self, value: float):
+            self.value = value
+
+        def __bool__(self):
+            return True
+
+        def __lt__(self, other):
+            return self.value < other
+
+    class _SingleResults:
+        def __init__(self, n_obs: int):
+            self._best = ["B" if i % 2 == 0 else "T" for i in range(n_obs)]
+            self._scores = pd.DataFrame(
+                {
+                    "B": [0.8 if i % 2 == 0 else 0.1 for i in range(n_obs)],
+                    "T": [0.2 if i % 2 == 0 else 0.9 for i in range(n_obs)],
+                }
+            )
+            self._delta = [_DeltaToken(0.1)] * n_obs
+
+        def column(self, name: str):
+            if name == "best":
+                return self._best
+            if name == "scores":
+                return self._scores
+            if name == "delta":
+                return self._delta
+            raise KeyError(name)
+
+    fake_singler = ModuleType("singler")
+    fake_singler.annotate_single = lambda **_kwargs: _SingleResults(adata.n_obs)
+    monkeypatch.setitem(__import__("sys").modules, "singler", fake_singler)
+
+    async def _no_dupes(*_args, **_kwargs):
+        return 0
+
+    monkeypatch.setattr(ann, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(ann, "is_available", lambda *_a, **_k: False)
+    monkeypatch.setattr(ann, "ensure_unique_var_names_async", _no_dupes)
+    monkeypatch.setattr(
+        ann,
+        "find_common_genes",
+        lambda test_features, ref_features: [g for g in test_features if g in set(ref_features)],
+    )
+    monkeypatch.setattr(
+        ann,
+        "get_raw_data_source",
+        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X),
+    )
+
+    out = await ann._annotate_with_singler(
+        adata,
+        AnnotationParameters(method="singler", reference_data_id="r", cell_type_key="ctype"),
+        DummyWarnCtx(),
+        "cell_type_singler",
+        "confidence_singler",
+        reference_adata=ref,
+    )
+
+    assert out.confidence
+    assert "B" in out.confidence and "T" in out.confidence
+
+
+@pytest.mark.asyncio
 async def test_tangram_clusters_mode_without_detectable_cluster_label_raises(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):
@@ -1031,6 +1103,57 @@ async def test_tangram_uses_marker_genes_when_training_genes_not_given(
     )
 
     assert set(seen["genes"]) == {"gene_0", "gene_1", "gene_2"}
+
+
+@pytest.mark.asyncio
+async def test_tangram_uses_reference_hvgs_when_training_genes_not_provided(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    ref = minimal_spatial_adata.copy()
+    ref.obs["ctype"] = pd.Categorical(["B"] * ref.n_obs)
+    ref.var["highly_variable"] = False
+    ref.var.loc[ref.var_names[:2], "highly_variable"] = True
+    seen: dict[str, object] = {}
+
+    fake_tg = ModuleType("tangram")
+
+    def _pp_adatas(_adata_sc, _adata_sp, genes):
+        seen["genes"] = genes
+
+    fake_tg.pp_adatas = _pp_adatas
+    fake_tg.map_cells_to_space = lambda *_a, **_k: SimpleNamespace(
+        uns={"training_history": {"main_loss": [1.0]}}
+    )
+    fake_tg.project_cell_annotations = lambda _ad_map, adata_sp, annotation: adata_sp.obsm.__setitem__(
+        "tangram_ct_pred",
+        pd.DataFrame({"B": np.ones(adata_sp.n_obs, dtype=float)}, index=adata_sp.obs_names),
+    )
+    monkeypatch.setitem(__import__("sys").modules, "tangram", fake_tg)
+
+    async def _no_dupes(*_args, **_kwargs):
+        return 0
+
+    monkeypatch.setattr(ann, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(ann, "ensure_unique_var_names_async", _no_dupes)
+    monkeypatch.setattr(ann, "get_device", lambda prefer_gpu=False: "cpu")
+    monkeypatch.setattr(ann, "shallow_copy_adata", lambda x: x)
+
+    await ann._annotate_with_tangram(
+        adata,
+        AnnotationParameters(
+            method="tangram",
+            cell_type_key="ctype",
+            training_genes=None,
+            marker_genes=None,
+        ),
+        DummyWarnCtx(),
+        "cell_type_tangram",
+        "confidence_tangram",
+        reference_adata=ref,
+    )
+
+    assert set(seen["genes"]) == set(ref.var_names[:2])
 
 
 @pytest.mark.asyncio

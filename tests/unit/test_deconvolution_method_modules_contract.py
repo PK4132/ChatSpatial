@@ -217,6 +217,31 @@ def test_tangram_wraps_unexpected_errors(minimal_spatial_adata, monkeypatch: pyt
         tangram_module.deconvolve(data, mode="cells")
 
 
+def test_tangram_preserves_processing_error_from_internal_checks(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    data = _prepared_data(minimal_spatial_adata)
+
+    class _Map:
+        def __init__(self, X):
+            self.X = X
+
+    fake_mod = ModuleType("tangram")
+    fake_mod.pp_adatas = lambda *_a, **_k: None
+    fake_mod.map_cells_to_space = lambda ref_data, spatial_data, **_k: _Map(
+        np.ones((ref_data.n_obs, spatial_data.n_obs), dtype=float)
+    )
+    monkeypatch.setitem(__import__("sys").modules, "tangram", fake_mod)
+    monkeypatch.setattr(
+        tangram_module,
+        "create_deconvolution_stats",
+        lambda *_a, **_k: (_ for _ in ()).throw(ProcessingError("stats failed tangram")),
+    )
+
+    with pytest.raises(ProcessingError, match="stats failed tangram"):
+        tangram_module.deconvolve(data, mode="clusters")
+
+
 def test_destvi_dependency_error(minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch):
     data = _prepared_data(minimal_spatial_adata)
     monkeypatch.setattr(destvi_module, "is_available", lambda *_: False)
@@ -278,6 +303,86 @@ def test_destvi_success_with_fake_scvi(minimal_spatial_adata, monkeypatch: pytes
     assert proportions.shape == (data.n_spots, 2)
     assert stats["method"] == "DestVI"
     assert stats["n_cell_types"] == 2
+
+
+def test_destvi_raises_processing_error_for_invalid_proportion_shape(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    data = _prepared_data(minimal_spatial_adata)
+    monkeypatch.setattr(destvi_module, "is_available", lambda *_: True)
+
+    class FakeCondSCVI:
+        @staticmethod
+        def setup_anndata(*_args, **_kwargs):
+            return None
+
+        def __init__(self, _ref, **_kwargs):
+            return None
+
+        def train(self, **_kwargs):
+            return None
+
+    class FakeDestVI:
+        @staticmethod
+        def setup_anndata(*_args, **_kwargs):
+            return None
+
+        @classmethod
+        def from_rna_model(cls, _spatial_data, _cond_model, **_kwargs):
+            return cls()
+
+        def train(self, **_kwargs):
+            return None
+
+        def get_proportions(self):
+            return pd.DataFrame()
+
+    fake_scvi = ModuleType("scvi")
+    fake_scvi.model = SimpleNamespace(CondSCVI=FakeCondSCVI, DestVI=FakeDestVI)
+    monkeypatch.setitem(__import__("sys").modules, "scvi", fake_scvi)
+
+    with pytest.raises(ProcessingError, match="Failed to extract valid proportions from DestVI"):
+        destvi_module.deconvolve(data)
+
+
+def test_destvi_wraps_unexpected_runtime_errors(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    data = _prepared_data(minimal_spatial_adata)
+    monkeypatch.setattr(destvi_module, "is_available", lambda *_: True)
+
+    class FakeCondSCVI:
+        @staticmethod
+        def setup_anndata(*_args, **_kwargs):
+            return None
+
+        def __init__(self, _ref, **_kwargs):
+            return None
+
+        def train(self, **_kwargs):
+            raise RuntimeError("condscvi failed")
+
+    class FakeDestVI:
+        @staticmethod
+        def setup_anndata(*_args, **_kwargs):
+            return None
+
+        @classmethod
+        def from_rna_model(cls, _spatial_data, _cond_model, **_kwargs):
+            return cls()
+
+        def train(self, **_kwargs):
+            return None
+
+        def get_proportions(self):
+            return pd.DataFrame()
+
+    fake_scvi = ModuleType("scvi")
+    fake_scvi.model = SimpleNamespace(CondSCVI=FakeCondSCVI, DestVI=FakeDestVI)
+    monkeypatch.setitem(__import__("sys").modules, "scvi", fake_scvi)
+
+    with pytest.raises(ProcessingError, match="DestVI deconvolution failed: condscvi failed"):
+        destvi_module.deconvolve(data)
 
 
 def test_stereoscope_success_with_fake_scvi_external(
@@ -421,6 +526,56 @@ def test_stereoscope_wraps_unexpected_errors(
 
     with pytest.raises(ProcessingError, match="Stereoscope deconvolution failed"):
         stereo_module.deconvolve(data, n_epochs=10, use_gpu=False)
+
+
+def test_stereoscope_preserves_processing_error_from_internal_checks(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    data = _prepared_data(minimal_spatial_adata)
+    data.reference.obs["cell_type"] = data.reference.obs["cell_type"].astype(str)
+
+    class FakeRNAStereoscope:
+        @staticmethod
+        def setup_anndata(*_args, **_kwargs):
+            return None
+
+        def __init__(self, _ref):
+            return None
+
+        def train(self, **_kwargs):
+            return None
+
+    class FakeSpatialStereoscope:
+        @staticmethod
+        def setup_anndata(*_args, **_kwargs):
+            return None
+
+        @classmethod
+        def from_rna_model(cls, spatial_data, _rna_model):
+            inst = cls()
+            inst._n = spatial_data.n_obs
+            return inst
+
+        def train(self, **_kwargs):
+            return None
+
+        def get_proportions(self):
+            return np.tile(np.array([0.8, 0.2]), (self._n, 1))
+
+    scvi_mod = ModuleType("scvi")
+    external_mod = ModuleType("scvi.external")
+    external_mod.RNAStereoscope = FakeRNAStereoscope
+    external_mod.SpatialStereoscope = FakeSpatialStereoscope
+    monkeypatch.setitem(__import__("sys").modules, "scvi", scvi_mod)
+    monkeypatch.setitem(__import__("sys").modules, "scvi.external", external_mod)
+    monkeypatch.setattr(
+        stereo_module,
+        "create_deconvolution_stats",
+        lambda *_a, **_k: (_ for _ in ()).throw(ProcessingError("stats failed")),
+    )
+
+    with pytest.raises(ProcessingError, match="stats failed"):
+        stereo_module.deconvolve(data, n_epochs=20, use_gpu=False)
 
 
 @pytest.mark.asyncio

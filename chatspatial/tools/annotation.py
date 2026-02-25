@@ -1187,12 +1187,10 @@ async def _annotate_with_cellassign(
     # Compute size factors BEFORE subsetting (official CellAssign requirement)
     if "size_factors" not in adata.obs:
         # Calculate size factors from FULL dataset
-        if hasattr(adata.X, "sum"):
-            size_factors = adata.X.sum(axis=1)
-            if hasattr(size_factors, "A1"):  # sparse matrix
-                size_factors = size_factors.A1
-        else:
-            size_factors = np.sum(adata.X, axis=1)
+        size_factors = adata.X.sum(axis=1)
+        if hasattr(size_factors, "A1"):  # sparse matrix
+            size_factors = size_factors.A1
+        size_factors = np.asarray(size_factors).flatten()
 
         # Normalize and ensure positive
         size_factors = np.maximum(size_factors, 1e-6)
@@ -1244,12 +1242,10 @@ async def _annotate_with_cellassign(
         X_array = np.maximum(X_array, 0)
         adata_subset.X = X_array
 
-    # Verify size factors were transferred to subset
-    if "size_factors" not in adata_subset.obs:
-        raise ProcessingError(
-            "Size factors not found in adata.obs. This should not happen - "
-            "they should have been computed before subsetting. Please report this bug."
-        )
+    # Keep size factors aligned to subset observations.
+    adata_subset.obs["size_factors"] = (
+        adata.obs["size_factors"].reindex(adata_subset.obs.index).fillna(1.0).astype(float)
+    )
 
     # Setup CellAssign on subset data only
     CellAssign.setup_anndata(adata_subset, size_factor_key="size_factors")

@@ -35,6 +35,7 @@ def test_is_writable_dir_create_and_permission_failure(
 ) -> None:
     writable = tmp_path / "writable"
     assert cfg._is_writable_dir(writable, create=True) is True
+    assert cfg._is_writable_dir(tmp_path / "missing", create=False) is False
 
     def _deny_touch(self: Path, *args, **kwargs):
         raise PermissionError("denied")
@@ -97,6 +98,23 @@ def test_get_default_output_dir_uses_tmp_as_last_resort(
     out = cfg.get_default_output_dir()
     assert out == Path("/tmp/chatspatial/outputs")
     assert out.exists()
+
+
+def test_get_default_output_dir_uses_home_when_cwd_unusable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("CHATSPATIAL_OUTPUT_DIR", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    monkeypatch.setattr(cfg, "is_inside_package_dir", lambda p=None: True)
+    monkeypatch.setattr(
+        cfg,
+        "_is_writable_dir",
+        lambda path, create=False: path == cfg.DEFAULT_OUTPUT_DIR and create,
+    )
+
+    out = cfg.get_default_output_dir()
+    assert out == cfg.DEFAULT_OUTPUT_DIR
 
 
 def test_configure_environment_sets_required_vars(monkeypatch: pytest.MonkeyPatch) -> None:

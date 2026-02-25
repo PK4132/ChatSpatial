@@ -1246,6 +1246,40 @@ def test_infer_pseudotime_palantir_valid_root_populates_outputs(
     assert "palantir_branch_probs" in adata.obsm
 
 
+def test_infer_pseudotime_palantir_auto_selects_root_from_first_component(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obsm["X_pca"] = np.ones((adata.n_obs, 5))
+    monkeypatch.setattr(traj, "ensure_pca", lambda *_a, **_k: None)
+    captured: dict[str, object] = {}
+
+    eigen = np.zeros((adata.n_obs, 3), dtype=float)
+    eigen[5, 0] = 10.0
+
+    class _PR:
+        pseudotime = pd.Series(np.linspace(0, 1, adata.n_obs), index=adata.obs_names)
+        branch_probs = np.ones((adata.n_obs, 2))
+
+    fake_palantir = ModuleType("palantir")
+    fake_palantir.utils = SimpleNamespace(
+        run_diffusion_maps=lambda *_a, **_k: {"EigenVectors": eigen}
+    )
+
+    def _fake_run_palantir(_ms_data, start_cell, num_waypoints):
+        captured["start_cell"] = start_cell
+        captured["num_waypoints"] = num_waypoints
+        return _PR()
+
+    fake_palantir.core = SimpleNamespace(run_palantir=_fake_run_palantir)
+    monkeypatch.setitem(__import__("sys").modules, "palantir", fake_palantir)
+
+    out = traj.infer_pseudotime_palantir(adata, root_cells=None, num_waypoints=77)
+    assert out is adata
+    assert captured["start_cell"] == adata.obs_names[5]
+    assert captured["num_waypoints"] == 77
+
+
 def test_compute_dpt_trajectory_valid_root_and_fillna(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):

@@ -203,6 +203,52 @@ def test_register_stalign_invalid_transform_payload_is_wrapped(
         reg._register_stalign([ad1, ad2], RegistrationParameters(method="stalign"))
 
 
+def test_register_stalign_expression_intensity_uses_dense_sum_path(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    ad1 = minimal_spatial_adata.copy()
+    ad2 = minimal_spatial_adata.copy()
+    ad1.X = np.asarray(ad1.X, dtype=float)
+    ad2.X = np.asarray(ad2.X, dtype=float)
+
+    captured: dict[str, np.ndarray] = {}
+
+    def _fake_prepare(coords, intensity, image_size):
+        del coords, image_size
+        key = "source_intensity" if "source_intensity" not in captured else "target_intensity"
+        captured[key] = np.asarray(intensity)
+        return [np.array([0.0]), np.array([0.0])], np.ones((2, 2), dtype=np.float32)
+
+    monkeypatch.setattr(reg, "_prepare_stalign_image", _fake_prepare)
+    monkeypatch.setattr(reg, "get_device", lambda prefer_gpu=False: "cpu")
+
+    fake_torch = types.SimpleNamespace(
+        float32="float32",
+        tensor=lambda x, dtype=None: np.asarray(x, dtype=np.float32),
+        Tensor=type("Tensor", (), {}),
+    )
+
+    fake_st = types.ModuleType("STalign.STalign")
+    fake_st.LDDMM = lambda **_kwargs: {"A": np.eye(2), "v": np.zeros((1, 2)), "xv": np.zeros((1, 2))}
+    fake_st.transform_points_source_to_target = lambda xv, v, A, points: points
+    pkg = types.ModuleType("STalign")
+    pkg.STalign = fake_st
+
+    monkeypatch.setitem(sys.modules, "torch", fake_torch)
+    monkeypatch.setitem(sys.modules, "STalign", pkg)
+    monkeypatch.setitem(sys.modules, "STalign.STalign", fake_st)
+
+    out = reg._register_stalign(
+        [ad1, ad2],
+        RegistrationParameters(method="stalign", stalign_use_expression=True),
+    )
+
+    assert out[0].obsm["spatial_registered"].shape == ad1.obsm["spatial"].shape
+    assert captured["source_intensity"].shape[0] == ad1.n_obs
+    assert np.allclose(captured["source_intensity"], ad1.X.sum(axis=1))
+    assert np.allclose(captured["target_intensity"], ad2.X.sum(axis=1))
+
+
 def test_prepare_stalign_image_returns_normalized_tensor(monkeypatch: pytest.MonkeyPatch):
     fake_torch = types.SimpleNamespace(
         float32="float32",

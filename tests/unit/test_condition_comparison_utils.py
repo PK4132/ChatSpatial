@@ -459,6 +459,39 @@ async def test_compare_conditions_min_samples_guard_for_condition2(
 
 
 @pytest.mark.asyncio
+async def test_compare_conditions_min_samples_guard_for_condition1(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["condition"] = ["treated"] * 20 + ["control"] * 40
+    adata.obs["sample"] = ["s1"] * 20 + ["s2"] * 20 + ["s3"] * 20
+    ctx = DummyCtx(adata)
+
+    class _RawStub:
+        def __init__(self, X, var_names):
+            self.X = X
+            self.var_names = var_names
+
+    monkeypatch.setattr(cc_module, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        cc_module,
+        "get_raw_data_source",
+        lambda *_args, **_kwargs: _RawStub(adata.X, adata.var_names),
+    )
+    monkeypatch.setattr(cc_module, "check_is_integer_counts", lambda _X: (True, None, None))
+
+    params = ConditionComparisonParameters(
+        condition_key="condition",
+        condition1="treated",
+        condition2="control",
+        sample_key="sample",
+        min_samples_per_condition=2,
+    )
+    with pytest.raises(DataError, match="Insufficient samples for treated: 1"):
+        await compare_conditions("d1", ctx, params)
+
+
+@pytest.mark.asyncio
 async def test_compare_conditions_stratified_branch_warns_for_non_integer_counts(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):

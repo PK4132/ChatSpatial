@@ -185,3 +185,71 @@ async def test_compute_embeddings_spatial_neighbor_error_is_non_fatal(
     out = await emb.compute_embeddings("d4", ctx, emb.EmbeddingParameters())
     assert any("spatial neighbors (error: no spatial coordinates)" in s for s in out.skipped)
     assert any("Could not compute spatial neighbors" in w for w in ctx.warnings)
+
+
+@pytest.mark.asyncio
+async def test_compute_embeddings_louvain_computed_branch_sets_cluster_count(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    ctx = DummyCtx(adata)
+
+    monkeypatch.setattr(emb, "ensure_pca", lambda *_a, **_k: False)
+    monkeypatch.setattr(emb, "ensure_neighbors", lambda *_a, **_k: False)
+    monkeypatch.setattr(emb, "ensure_umap", lambda *_a, **_k: False)
+    monkeypatch.setattr(emb, "ensure_diffmap", lambda *_a, **_k: False)
+    monkeypatch.setattr(emb, "ensure_spatial_neighbors", lambda *_a, **_k: False)
+    monkeypatch.setattr(emb, "ensure_leiden", lambda *_a, **_k: False)
+
+    def _ensure_louvain(adata_obj, *, key_added, **_kwargs):
+        adata_obj.obs[key_added] = ["0"] * (adata_obj.n_obs // 2) + ["1"] * (
+            adata_obj.n_obs - adata_obj.n_obs // 2
+        )
+        return True
+
+    monkeypatch.setattr(emb, "ensure_louvain", _ensure_louvain)
+    monkeypatch.setattr(emb, "store_analysis_metadata", lambda *_a, **_k: None)
+    monkeypatch.setattr(emb, "export_analysis_result", lambda *_a, **_k: None)
+
+    out = await emb.compute_embeddings(
+        "d5",
+        ctx,
+        emb.EmbeddingParameters(
+            clustering_method="louvain",
+            clustering_key="louvain_auto",
+            compute_diffmap=False,
+        ),
+    )
+
+    assert out.n_clusters == 2
+    assert any("Louvain clustering (2 clusters)" in s for s in out.computed)
+
+
+@pytest.mark.asyncio
+async def test_compute_embeddings_louvain_missing_key_reports_skip_message(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    ctx = DummyCtx(adata)
+
+    monkeypatch.setattr(emb, "ensure_pca", lambda *_a, **_k: False)
+    monkeypatch.setattr(emb, "ensure_neighbors", lambda *_a, **_k: False)
+    monkeypatch.setattr(emb, "ensure_umap", lambda *_a, **_k: False)
+    monkeypatch.setattr(emb, "ensure_diffmap", lambda *_a, **_k: False)
+    monkeypatch.setattr(emb, "ensure_spatial_neighbors", lambda *_a, **_k: False)
+    monkeypatch.setattr(emb, "ensure_leiden", lambda *_a, **_k: False)
+    monkeypatch.setattr(emb, "ensure_louvain", lambda *_a, **_k: False)
+    monkeypatch.setattr(emb, "store_analysis_metadata", lambda *_a, **_k: None)
+    monkeypatch.setattr(emb, "export_analysis_result", lambda *_a, **_k: None)
+
+    out = await emb.compute_embeddings(
+        "d6",
+        ctx,
+        emb.EmbeddingParameters(
+            clustering_method="louvain",
+            clustering_key="not_written",
+            compute_diffmap=False,
+        ),
+    )
+
+    assert any("not_written (missing; clustering not computed)" in s for s in out.skipped)
