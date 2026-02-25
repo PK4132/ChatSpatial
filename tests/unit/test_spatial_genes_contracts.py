@@ -10,7 +10,7 @@ import pytest
 
 from chatspatial.models.data import SpatialVariableGenesParameters
 from chatspatial.tools import spatial_genes as sg
-from chatspatial.utils.exceptions import DataError, DataNotFoundError
+from chatspatial.utils.exceptions import DataError, DataNotFoundError, ProcessingError
 
 
 class DummyCtx:
@@ -890,6 +890,73 @@ async def test_sparkx_hvg_no_overlap_raises_data_error(
                 method="sparkx",
                 spatial_key="spatial",
                 test_only_hvg=True,
+                sparkx_percentage=0.01,
+                sparkx_min_total_counts=1,
+            ),
+            DummyCtx(),
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("res_mtest", "is_dataframe", "error_match"),
+    [
+        (None, True, "returned None for res_mtest"),
+        ({"combinedPval": [0.01], "adjustedPval": [0.02]}, False, "output format error"),
+        ({"adjustedPval": [0.02]}, True, "missing 'combinedPval'"),
+        ({"combinedPval": [0.01]}, True, "missing 'adjustedPval'"),
+    ],
+)
+async def test_sparkx_invalid_output_formats_raise_processing_error(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+    res_mtest,
+    is_dataframe: bool,
+    error_match: str,
+):
+    import sys
+
+    adata = minimal_spatial_adata[:, :4].copy()
+
+    class _SparkPkg:
+        @staticmethod
+        def sparkx(count_in, locus_in, X_in, numCores, option, verbose):
+            del count_in, locus_in, X_in, numCores, option, verbose
+            return SimpleNamespace(
+                rx2=lambda key: res_mtest if key == "res_mtest" else None
+            )
+
+    _install_fake_rpy2_runtime(monkeypatch, spark_factory=lambda: _SparkPkg())
+    fake_ro = sys.modules["rpy2.robjects"]
+    fake_ro.r._funcs["is.data.frame"] = lambda _obj: [is_dataframe]
+
+    monkeypatch.setattr(sg, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        sg,
+        "get_raw_data_source",
+        lambda _adata, prefer_complete_genes=True: SimpleNamespace(
+            X=np.asarray(_adata.X, dtype=float),
+            var_names=_adata.var_names,
+            source="raw",
+        ),
+    )
+    monkeypatch.setattr(
+        "chatspatial.utils.adata_utils.store_analysis_metadata",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        "chatspatial.utils.results_export.export_analysis_result",
+        lambda *_args, **_kwargs: [],
+    )
+
+    with pytest.raises(ProcessingError, match=error_match):
+        await sg._identify_spatial_genes_sparkx(
+            "spark_bad_format",
+            adata,
+            SpatialVariableGenesParameters(
+                method="sparkx",
+                spatial_key="spatial",
+                test_only_hvg=False,
                 sparkx_percentage=0.01,
                 sparkx_min_total_counts=1,
             ),
