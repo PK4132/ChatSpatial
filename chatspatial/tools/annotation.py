@@ -1464,8 +1464,13 @@ async def annotate_cell_types(
         parameters_dict = {
             "n_latent": params.scanvi_n_latent,
             "n_hidden": params.scanvi_n_hidden,
+            "n_layers": params.scanvi_n_layers,
             "dropout_rate": params.scanvi_dropout_rate,
             "use_scvi_pretrain": params.scanvi_use_scvi_pretrain,
+            "scvi_epochs": params.scanvi_scvi_epochs,
+            "scanvi_epochs": params.scanvi_scanvi_epochs,
+            "query_epochs": params.scanvi_query_epochs,
+            "n_samples_per_label": params.scanvi_n_samples_per_label,
         }
     elif params.method == "mllmcelltype":
         parameters_dict = {
@@ -1646,21 +1651,22 @@ def _is_remote_resource(path: str) -> bool:
 
 
 def _get_sctype_cache_key(adata, params: AnnotationParameters) -> str:
-    """Generate cache key for sc-type results"""
-    # Create a hash based on data and parameters
+    """Generate cache key for sc-type results."""
     data_hash = hashlib.md5()
 
-    # Hash expression data (sample first 1000 cells and 500 genes for efficiency)
-    sample_slice = adata.X[: min(1000, adata.n_obs), : min(500, adata.n_vars)]
-    data_hash.update(str(sample_slice.shape).encode())
-    if sparse.issparse(sample_slice):
-        sample_csr = sample_slice.tocsr()
-        data_hash.update(sample_csr.data.tobytes())
-        data_hash.update(sample_csr.indices.tobytes())
-        data_hash.update(sample_csr.indptr.tobytes())
+    # Include full shape so any cell/gene count change invalidates
+    data_hash.update(f"{adata.n_obs}x{adata.n_vars}".encode())
+
+    # Hash the entire expression matrix for correctness
+    X = adata.X
+    if sparse.issparse(X):
+        csr = X.tocsr()
+        data_hash.update(csr.data.tobytes())
+        data_hash.update(csr.indices.tobytes())
+        data_hash.update(csr.indptr.tobytes())
     else:
-        sample_data = np.asarray(sample_slice)
-        data_hash.update(np.ascontiguousarray(sample_data).tobytes())
+        arr = np.asarray(X)
+        data_hash.update(np.ascontiguousarray(arr).tobytes())
 
     # Hash relevant parameters
     params_dict = {
@@ -2112,13 +2118,18 @@ async def _annotate_with_sctype(
         cache_key = _get_sctype_cache_key(adata, params)
         cached = _load_cached_sctype_results(cache_key, ctx)
         if cached:
-            # Cache stores per-cell labels; response returns unique labels for contract consistency.
-            per_cell_types, counts, confidence_by_celltype, _ = cached
+            per_cell_types, counts, confidence_by_celltype, per_cell_conf = cached
             if len(per_cell_types) == adata.n_obs:
                 adata.obs[output_key] = pd.Categorical(per_cell_types)
-                adata.obs[confidence_key] = [
-                    float(confidence_by_celltype.get(ct, 0.0)) for ct in per_cell_types
-                ]
+                # Use per-cell confidence if available (new format),
+                # fall back to per-type mean for legacy cache entries.
+                if per_cell_conf is not None and len(per_cell_conf) == adata.n_obs:
+                    adata.obs[confidence_key] = per_cell_conf
+                else:
+                    adata.obs[confidence_key] = [
+                        float(confidence_by_celltype.get(ct, 0.0))
+                        for ct in per_cell_types
+                    ]
                 unique_cell_types = list(dict.fromkeys(per_cell_types))
                 return AnnotationMethodOutput(
                     cell_types=unique_cell_types,
@@ -2161,9 +2172,14 @@ async def _annotate_with_sctype(
     # Preserve deterministic cell-type order based on first appearance.
     unique_cell_types = list(dict.fromkeys(per_cell_types))
 
-    # Cache results (as tuple for compatibility)
+    # Cache results: store per-cell confidence for consistent restore
     if params.sctype_use_cache and cache_key:
-        cache_tuple = (per_cell_types, counts, confidence_by_celltype, None)
+        cache_tuple = (
+            per_cell_types,
+            counts,
+            confidence_by_celltype,
+            per_cell_confidence,
+        )
         await _cache_sctype_results(cache_key, cache_tuple, ctx)
 
     return AnnotationMethodOutput(

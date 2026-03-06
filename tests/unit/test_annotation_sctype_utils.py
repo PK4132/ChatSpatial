@@ -188,6 +188,8 @@ async def test_annotate_with_sctype_cache_miss_preserves_cell_type_order_and_cac
     assert out.counts == {"B": 30, "T": 15, "Unknown": 15}
     assert captured["cache_key"] == "k2"
     assert captured["results"][0] == per_cell_types
+    # Cache stores per-cell confidence as 4th element (not None)
+    assert captured["results"][3] == per_cell_conf
 
 
 def test_prepare_sctype_genesets_requires_tissue_without_custom_markers():
