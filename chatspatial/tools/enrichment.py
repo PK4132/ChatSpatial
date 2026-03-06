@@ -401,7 +401,16 @@ def map_gene_set_database_to_enrichr_library(database_name: str, species: str) -
         ValueError: If database_name is not supported
     """
     if database_name == "KEGG_Pathways":
-        return "KEGG_2021_Human" if species.lower() == "human" else "KEGG_2019_Mouse"
+        species_lower = species.lower()
+        if species_lower == "human":
+            return "KEGG_2021_Human"
+        elif species_lower == "mouse":
+            return "KEGG_2019_Mouse"
+        else:
+            raise ParameterError(
+                f"KEGG_Pathways is only available for 'human' and 'mouse', "
+                f"not '{species}'. Use GO or Reactome databases instead."
+            )
 
     if database_name not in ENRICHR_LIBRARY_MAP:
         available_options = sorted([*ENRICHR_LIBRARY_MAP.keys(), "KEGG_Pathways"])
@@ -1162,6 +1171,7 @@ def perform_enrichr(
     gene_list: list[str],
     gene_sets: Optional[str] = None,
     organism: str = "human",
+    pvalue_cutoff: float = 0.05,
     ctx: Optional["ToolContext"] = None,
 ) -> "EnrichmentResult":
     """Perform enrichment analysis using Enrichr web service.
@@ -1170,6 +1180,7 @@ def perform_enrichr(
         gene_list: List of genes to analyze.
         gene_sets: Enrichr library name. If None, use default libraries.
         organism: Organism ('human' or 'mouse').
+        pvalue_cutoff: Adjusted p-value threshold for significance.
         ctx: MCP tool context for logging.
 
     Returns:
@@ -1196,7 +1207,7 @@ def perform_enrichr(
             gene_sets=gene_sets_list,
             organism=organism.capitalize(),
             outdir=None,
-            cutoff=0.05,
+            cutoff=pvalue_cutoff,
         )
 
         # Get results - enr.results is already a DataFrame
@@ -1270,7 +1281,7 @@ def perform_enrichr(
         return EnrichmentResult(
             method="enrichr",
             n_gene_sets=len(all_results),
-            n_significant=len(all_results[all_results["Adjusted P-value"] < 0.05]),
+            n_significant=len(all_results[all_results["Adjusted P-value"] < pvalue_cutoff]),
             enrichment_scores=filtered_scores,
             pvalues=filtered_pvals,
             adjusted_pvalues=filtered_adj_pvals,
@@ -1660,15 +1671,23 @@ def load_kegg_gene_sets(
     try:
         organism = _get_organism_name(species)
 
-        if species.lower() == "human":
+        species_lower = species.lower()
+        if species_lower == "human":
             gene_sets = gp.get_library("KEGG_2021_Human", organism=organism)
-        else:
+        elif species_lower == "mouse":
             gene_sets = gp.get_library("KEGG_2019_Mouse", organism=organism)
+        else:
+            raise ParameterError(
+                f"KEGG_Pathways is only available for 'human' and 'mouse', "
+                f"not '{species}'. Use GO or Reactome databases instead."
+            )
 
         # Filter by size
         filtered_sets = _filter_gene_sets_by_size(gene_sets, min_size, max_size)
         return filtered_sets
 
+    except ParameterError:
+        raise
     except Exception as e:
         raise ProcessingError(f"Failed to load KEGG pathways: {e}") from e
 
@@ -1930,6 +1949,7 @@ async def analyze_enrichment(
             gene_list=gene_list,
             gene_sets=params.gene_set_database,
             organism=params.species,
+            pvalue_cutoff=params.pvalue_cutoff,
             ctx=ctx,
         )
 

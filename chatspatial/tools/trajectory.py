@@ -184,15 +184,28 @@ def infer_spatial_trajectory_cellrank(
         if has_spatial and spatial_weight > 0:
             spatial_coords = adata.obsm[spatial_key]
             spatial_dist = squareform(pdist(spatial_coords))
-            spatial_sim = np.exp(-spatial_dist / spatial_dist.mean())
-            spatial_kernel = csr_matrix(spatial_sim)
+            dist_mean = spatial_dist.mean()
+            if dist_mean < 1e-10:
+                import logging
 
-            sk = cr.kernels.PrecomputedKernel(spatial_kernel, adata_for_cellrank)
-            sk.compute_transition_matrix()
+                logging.getLogger(__name__).warning(
+                    "Spatial coordinates are nearly identical; "
+                    "disabling spatial kernel."
+                )
+                # Fall back to non-spatial kernel combination
+                combined_kernel = vk_weight * vk + ck_weight * ck
+            else:
+                spatial_sim = np.exp(-spatial_dist / dist_mean)
+                spatial_kernel = csr_matrix(spatial_sim)
 
-            combined_kernel = (1 - spatial_weight) * (
-                vk_weight * vk + ck_weight * ck
-            ) + spatial_weight * sk
+                sk = cr.kernels.PrecomputedKernel(
+                    spatial_kernel, adata_for_cellrank
+                )
+                sk.compute_transition_matrix()
+
+                combined_kernel = (1 - spatial_weight) * (
+                    vk_weight * vk + ck_weight * ck
+                ) + spatial_weight * sk
         else:
             combined_kernel = vk_weight * vk + ck_weight * ck
 
@@ -339,7 +352,16 @@ def infer_pseudotime_palantir(
             raise ParameterError(f"Root cell '{root_cells[0]}' not found in data")
         start_cell = root_cells[0]
     else:
-        start_cell = ms_data.iloc[:, 0].idxmax()
+        # Sign-invariant: pick cell with largest absolute value in first DC
+        start_cell = ms_data.iloc[:, 0].abs().idxmax()
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "No root cell specified; auto-selected '%s' from first "
+            "diffusion component. Specify root_cells for "
+            "reproducible results.",
+            start_cell,
+        )
 
     pr_res = palantir.core.run_palantir(
         ms_data, start_cell, num_waypoints=num_waypoints
@@ -384,7 +406,20 @@ def compute_dpt_trajectory(
                 f"Use valid cell ID from adata.obs_names or omit to auto-select."
             )
     else:
-        adata.uns["iroot"] = 0
+        # Use first diffusion component for principled root selection
+        # (consistent with Palantir heuristic, sign-invariant)
+        if "X_diffmap" in adata.obsm:
+            dc1 = adata.obsm["X_diffmap"][:, 0]
+            adata.uns["iroot"] = int(np.argmax(np.abs(dc1)))
+        else:
+            adata.uns["iroot"] = 0
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "No root cell specified; auto-selected cell %d. "
+            "Specify root_cells for reproducible results.",
+            adata.uns["iroot"],
+        )
 
     try:
         sc.tl.dpt(adata)

@@ -1107,7 +1107,7 @@ async def ensure_unique_var_names_async(
 # =============================================================================
 
 
-def check_is_integer_counts(X: Any, sample_size: int = 512) -> tuple[bool, bool, bool]:
+def check_is_integer_counts(X: Any, sample_size: int = 1000) -> tuple[bool, bool, bool]:
     """Check if a matrix contains integer counts via global random sampling.
 
     Uses unbiased random sampling instead of a fixed sub-block so results
@@ -1247,7 +1247,7 @@ def get_raw_data_source(
     adata: "ad.AnnData",
     prefer_complete_genes: bool = True,
     require_integer_counts: bool = False,
-    sample_size: int = 100,
+    sample_size: int = 1000,
 ) -> RawDataResult:
     """
     Get raw count data from AnnData using a unified priority order.
