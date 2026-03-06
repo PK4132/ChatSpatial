@@ -96,7 +96,7 @@ def test_require_spatial_coords_obs_xy_nan_and_missing_sources(minimal_spatial_a
     adata.obs["x"] = np.arange(adata.n_obs, dtype=float)
     adata.obs["y"] = np.arange(adata.n_obs, dtype=float)
     adata.obs.loc[0, "x"] = np.nan
-    with pytest.raises(DataError, match="obs\\['x'/'y'\\] contain NaN"):
+    with pytest.raises(DataError, match="contain NaN"):
         au.require_spatial_coords(adata)
 
     adata2 = minimal_spatial_adata.copy()

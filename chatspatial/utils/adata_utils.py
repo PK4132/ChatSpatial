@@ -188,8 +188,10 @@ def require_spatial_coords(
     """
     Get validated spatial coordinates array from AnnData.
 
-    This is the primary function for accessing spatial coordinates.
-    Returns the full coordinates array with optional validation.
+    This is the single source of truth for spatial coordinate access and
+    validation. Format unification (obs x/y → obsm['spatial']) is handled
+    upstream by _move_spatial_to_standard() at load time; this function
+    only reads from obsm and validates.
 
     Args:
         adata: AnnData object
@@ -197,7 +199,7 @@ def require_spatial_coords(
             ALTERNATIVE_SPATIAL_KEYS
         validate: If True (default), validates coordinates for:
             - At least 2 dimensions
-            - No NaN values
+            - No NaN or Inf values
             - Not all identical
 
     Returns:
@@ -213,19 +215,16 @@ def require_spatial_coords(
         # Use specific key without validation
         coords = require_spatial_coords(adata, spatial_key="X_spatial", validate=False)
     """
-    # Find spatial key if not specified
+    # Find spatial key if not specified.
+    # Normally obs x/y is already in obsm['spatial'] via _move_spatial_to_standard()
+    # at load time, but handle the case where adata bypassed standardization.
     if spatial_key is None:
         spatial_key = get_spatial_key(adata)
         if spatial_key is None:
-            # Also check obs for x/y columns
-            if "x" in adata.obs and "y" in adata.obs:
-                x = pd.to_numeric(adata.obs["x"], errors="coerce").values
-                y = pd.to_numeric(adata.obs["y"], errors="coerce").values
-                coords = np.column_stack([x, y])
-                if validate and np.any(np.isnan(coords)):
-                    raise DataError("Spatial coordinates in obs['x'/'y'] contain NaN")
-                return coords
-
+            # Last resort: try moving obs x/y to obsm['spatial']
+            _move_spatial_to_standard(adata)
+            spatial_key = get_spatial_key(adata)
+        if spatial_key is None:
             raise DataError(
                 "No spatial coordinates found. Expected in adata.obsm['spatial'] "
                 "or similar key. Available obsm keys: "
@@ -576,9 +575,7 @@ def standardize_adata(adata: "ad.AnnData", copy: bool = True) -> "ad.AnnData":
 
     # Ensure categorical columns for known key types
     all_categorical_keys = set(
-        ALTERNATIVE_CELL_TYPE_KEYS
-        + ALTERNATIVE_CLUSTER_KEYS
-        + ALTERNATIVE_BATCH_KEYS
+        ALTERNATIVE_CELL_TYPE_KEYS + ALTERNATIVE_CLUSTER_KEYS + ALTERNATIVE_BATCH_KEYS
     )
     for key in adata.obs.columns:
         if key in all_categorical_keys:
@@ -588,7 +585,12 @@ def standardize_adata(adata: "ad.AnnData", copy: bool = True) -> "ad.AnnData":
 
 
 def _move_spatial_to_standard(adata: "ad.AnnData") -> None:
-    """Move spatial coordinates to standard obsm['spatial'] location."""
+    """Move spatial coordinates to standard obsm['spatial'] location.
+
+    This function only handles format unification (moving coordinates to
+    the canonical obsm['spatial'] key). It does NOT validate coordinate
+    values — validation is the sole responsibility of require_spatial_coords().
+    """
     if SPATIAL_KEY in adata.obsm:
         return
 
@@ -598,15 +600,14 @@ def _move_spatial_to_standard(adata: "ad.AnnData") -> None:
             adata.obsm[SPATIAL_KEY] = adata.obsm[key]
             return
 
-    # Check obs x/y
+    # Check obs x/y — move unconditionally so downstream validation
+    # (require_spatial_coords) can report precise errors instead of
+    # "no spatial coordinates found".
     if "x" in adata.obs and "y" in adata.obs:
         try:
             x = pd.to_numeric(adata.obs["x"], errors="coerce").values
             y = pd.to_numeric(adata.obs["y"], errors="coerce").values
-            has_matching_shape = x.shape[0] == adata.n_obs and y.shape[0] == adata.n_obs
-            has_finite_values = np.isfinite(x).all() and np.isfinite(y).all()
-            if has_matching_shape and has_finite_values:
-                adata.obsm[SPATIAL_KEY] = np.column_stack([x, y]).astype("float64")
+            adata.obsm[SPATIAL_KEY] = np.column_stack([x, y]).astype("float64")
         except (TypeError, ValueError):
             return
 
