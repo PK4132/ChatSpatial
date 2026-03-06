@@ -321,6 +321,23 @@ async def _prepare_counts(
 # =============================================================================
 
 
+def _dominant_type_counts(proportions: pd.DataFrame) -> dict[str, int]:
+    """Count dominant cell types, excluding all-zero rows.
+
+    All-zero rows (no deconvolution signal) are counted under
+    "unassigned" instead of being falsely attributed to the first
+    cell type column (which is what ``idxmax``/``argmax`` returns
+    for tied-at-zero rows).
+    """
+    row_sums = proportions.sum(axis=1)
+    zero_mask = row_sums == 0
+    dominant = proportions.loc[~zero_mask].idxmax(axis=1)
+    if zero_mask.any():
+        unassigned = pd.Series("unassigned", index=proportions.index[zero_mask])
+        dominant = pd.concat([dominant, unassigned])
+    return dominant.value_counts().to_dict()
+
+
 def create_deconvolution_stats(
     proportions: pd.DataFrame,
     common_genes: list[str],
@@ -339,7 +356,7 @@ def create_deconvolution_stats(
         "genes_used": len(common_genes),
         "common_genes": len(common_genes),
         "mean_proportions": proportions.mean().to_dict(),
-        "dominant_types": proportions.idxmax(axis=1).value_counts().to_dict(),
+        "dominant_types": _dominant_type_counts(proportions),
     }
     stats.update(method_specific_params)
     return stats

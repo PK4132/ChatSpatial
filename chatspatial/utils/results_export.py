@@ -353,15 +353,18 @@ def _extract_co_occurrence(
     data: dict[str, Any], labels: list, cluster_key: str
 ) -> pd.DataFrame | None:
     """
-    Extract co_occurrence results with 3D array format.
+    Extract co_occurrence results preserving per-interval distance structure.
 
     Format: {"occ": (n_clusters, n_clusters, n_intervals), "interval": (n_intervals+1,)}
 
-    Exports the mean co-occurrence across all distance intervals as a 2D matrix.
+    Exports one pair of columns per distance interval so the spatial scale
+    information is retained in the CSV for downstream reproducibility.
+    A summary mean column is also included for convenience.
     """
     import numpy as np
 
     occ = data["occ"]  # Shape: (n_clusters, n_clusters, n_intervals)
+    intervals = data.get("interval")  # Shape: (n_intervals+1,) — bin edges
 
     n_clusters_row, n_clusters_col, n_intervals = occ.shape
 
@@ -369,24 +372,32 @@ def _extract_co_occurrence(
     row_labels = labels[:n_clusters_row] if len(labels) >= n_clusters_row else labels
     col_labels = labels[:n_clusters_col] if len(labels) >= n_clusters_col else labels
 
-    # Export mean co-occurrence across intervals
+    frames: list[pd.DataFrame] = []
+
+    # Per-interval columns: preserve the full distance structure
+    for k in range(n_intervals):
+        if intervals is not None and len(intervals) > k + 1:
+            lo, hi = float(intervals[k]), float(intervals[k + 1])
+            tag = f"d{lo:.1f}-{hi:.1f}"
+        else:
+            tag = f"int{k}"
+        df_k = pd.DataFrame(
+            occ[:, :, k],
+            index=row_labels,
+            columns=[f"occ_{tag}_{c}" for c in col_labels],
+        )
+        frames.append(df_k)
+
+    # Summary mean across all intervals (convenience column)
     mean_occ = np.mean(occ, axis=2)
     df_mean = pd.DataFrame(
         mean_occ,
         index=row_labels,
         columns=[f"occ_mean_{c}" for c in col_labels],
     )
+    frames.append(df_mean)
 
-    # Also export first interval (nearest neighbor) for comparison
-    first_occ = occ[:, :, 0]
-    df_first = pd.DataFrame(
-        first_occ,
-        index=row_labels,
-        columns=[f"occ_nearest_{c}" for c in col_labels],
-    )
-
-    # Combine both metrics
-    result = pd.concat([df_mean, df_first], axis=1)
+    result = pd.concat(frames, axis=1)
     result.index.name = cluster_key
 
     return result

@@ -247,10 +247,14 @@ async def _create_dominant_celltype_map(
     """
     data = await get_deconvolution_data(adata, params.deconv_method, context)
 
-    # Get dominant cell type
-    dominant_idx = data.proportions.values.argmax(axis=1)
-    dominant_types = data.proportions.columns[dominant_idx].values
-    dominant_proportions = data.proportions.values.max(axis=1)
+    # Get dominant cell type (all-zero rows → "unassigned")
+    prop_values = data.proportions.values
+    row_sums = prop_values.sum(axis=1)
+    zero_mask = row_sums == 0
+    dominant_idx = prop_values.argmax(axis=1)
+    dominant_types = data.proportions.columns[dominant_idx].values.copy()
+    dominant_types[zero_mask] = "unassigned"
+    dominant_proportions = prop_values.max(axis=1)
 
     # Mark pure vs mixed spots
     if params.show_mixed_spots:
@@ -259,6 +263,8 @@ async def _create_dominant_celltype_map(
             dominant_types,
             "Mixed",
         )
+        # Zero rows should stay "unassigned", not "Mixed"
+        spot_categories[zero_mask] = "unassigned"
     else:
         spot_categories = dominant_types
 
@@ -348,9 +354,17 @@ async def _create_diversity_map(
     data = await get_deconvolution_data(adata, params.deconv_method, context)
 
     # Calculate Shannon entropy for each spot
+    # All-zero rows (no deconvolution signal) get entropy = 0, not max
+    prop_vals = data.proportions.values
+    row_sums = prop_vals.sum(axis=1)
+    zero_mask = row_sums == 0
+
     epsilon = 1e-10
-    proportions_safe = data.proportions.values + epsilon
+    proportions_safe = prop_vals + epsilon
     spot_entropy = entropy(proportions_safe.T, base=2)
+
+    # Zero-proportion rows: no information → entropy = 0
+    spot_entropy[zero_mask] = 0.0
 
     # Normalize to [0, 1] range
     max_entropy = np.log2(data.proportions.shape[1])

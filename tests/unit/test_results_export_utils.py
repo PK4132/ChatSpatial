@@ -62,20 +62,43 @@ def test_export_analysis_result_writes_csv_and_index_with_sanitized_keys(
     ).exists()
 
 
-def test_extract_squidpy_co_occurrence_computes_mean_and_nearest(
+def test_extract_squidpy_co_occurrence_preserves_per_interval_structure(
     minimal_spatial_adata,
 ):
     adata = minimal_spatial_adata.copy()
     adata.obs["domain"] = pd.Categorical(["A", "B", "A"] * (adata.n_obs // 3))
     occ = np.arange(2 * 2 * 3, dtype=float).reshape(2, 2, 3)
-    data = {"occ": occ}
+    intervals = np.array([0.0, 1.0, 2.0, 3.0])
+    data = {"occ": occ, "interval": intervals}
 
     df = re._extract_squidpy_spatial_result(adata, "domain_co_occurrence", data)
 
     assert df is not None
     assert df.index.name == "domain"
+    # Per-interval columns with distance labels
+    assert any("d0.0-1.0" in c for c in df.columns)
+    assert any("d2.0-3.0" in c for c in df.columns)
+    # Summary mean still present
     assert any(c.startswith("occ_mean_") for c in df.columns)
-    assert any(c.startswith("occ_nearest_") for c in df.columns)
+    # 3 intervals × 2 col_labels + 2 mean cols = 8 columns
+    assert len(df.columns) == 3 * 2 + 2
+
+
+def test_extract_squidpy_co_occurrence_fallback_without_intervals(
+    minimal_spatial_adata,
+):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["domain"] = pd.Categorical(["A", "B", "A"] * (adata.n_obs // 3))
+    occ = np.arange(2 * 2 * 2, dtype=float).reshape(2, 2, 2)
+    data = {"occ": occ}  # No interval key
+
+    df = re._extract_squidpy_spatial_result(adata, "domain_co_occurrence", data)
+
+    assert df is not None
+    # Fallback naming: int0, int1
+    assert any("int0" in c for c in df.columns)
+    assert any("int1" in c for c in df.columns)
+    assert any(c.startswith("occ_mean_") for c in df.columns)
 
 
 def test_extract_from_obsm_supports_lineage_like_object():

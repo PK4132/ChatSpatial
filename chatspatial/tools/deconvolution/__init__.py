@@ -378,10 +378,13 @@ async def _store_results(
     for i, ct in enumerate(cell_types):
         spatial_adata.obs[f"{proportions_key}_{ct}"] = full_proportions[:, i]
 
-    # Add dominant cell type annotation
+    # Add dominant cell type annotation (all-zero rows → "unassigned")
     dominant_key = f"dominant_celltype_{method}"
     cell_types_array = np.array(cell_types)
+    row_sums = full_proportions.sum(axis=1)
+    zero_mask = row_sums == 0
     dominant_types = cell_types_array[np.argmax(full_proportions, axis=1)]
+    dominant_types[zero_mask] = "unassigned"
     spatial_adata.obs[dominant_key] = pd.Categorical(dominant_types)
 
     # Store metadata for provenance tracking
