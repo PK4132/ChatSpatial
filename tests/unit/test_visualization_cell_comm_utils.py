@@ -106,10 +106,19 @@ class _FakePlotnine:
 
 
 def test_parse_lr_pair_supports_common_formats():
-    assert viz_cc._parse_lr_pair("LIG_REC") == ("LIG", "REC")
+    # Canonical "^" separator — always safe
     assert viz_cc._parse_lr_pair("LIG^REC") == ("LIG", "REC")
+    # Single underscore — unambiguous
+    assert viz_cc._parse_lr_pair("LIG_REC") == ("LIG", "REC")
+    # Prefix removal + single dash
     assert viz_cc._parse_lr_pair("complex:LIG-REC") == ("LIG", "REC")
-    assert viz_cc._parse_lr_pair("NO_SEPARATOR") == ("NO", "SEPARATOR")
+    # Multi-underscore (complex names) — cannot safely split
+    assert viz_cc._parse_lr_pair("ITGAL_ICAM1_ITGB2") == (
+        "ITGAL_ICAM1_ITGB2",
+        "ITGAL_ICAM1_ITGB2",
+    )
+    # "^" with complex names — safe because ^ is the canonical separator
+    assert viz_cc._parse_lr_pair("ITGAL^ICAM1_ITGB2") == ("ITGAL", "ICAM1_ITGB2")
 
 
 def test_parse_lr_pair_falls_back_when_no_separator():
@@ -223,9 +232,11 @@ def test_cellchat_3d_to_liana_format_handles_fallback_lr_nan_pval_and_empty_rows
 
 
 def test_matrix_to_liana_format_fallback_to_all_numeric_and_handles_nan_and_keyerror():
+    # Use "|" separator for cell type pairs (safe separator).
+    # Columns without "|" are skipped to avoid wrong splits on cell type names.
     nan_rank = viz_cc._matrix_to_liana_format(
-        results=pd.DataFrame({"A_B": [1.0]}, index=["PAIR_1"]),
-        pvalues=pd.DataFrame({"A_B": [np.nan]}, index=["PAIR_1"]),
+        results=pd.DataFrame({"A|B": [1.0]}, index=["PAIR_1"]),
+        pvalues=pd.DataFrame({"A|B": [np.nan]}, index=["PAIR_1"]),
         method="cellphonedb",
     )
     assert len(nan_rank) == 1
@@ -234,12 +245,23 @@ def test_matrix_to_liana_format_fallback_to_all_numeric_and_handles_nan_and_keye
     assert nan_rank.iloc[0]["magnitude_rank"] == 1.0
 
     keyerr_rank = viz_cc._matrix_to_liana_format(
-        results=pd.DataFrame({"A_B": [0.8]}, index=["PAIR_1"]),
-        pvalues=pd.DataFrame({"A_B": [0.2]}, index=["OTHER_PAIR"]),
+        results=pd.DataFrame({"A|B": [0.8]}, index=["PAIR_1"]),
+        pvalues=pd.DataFrame({"A|B": [0.2]}, index=["OTHER_PAIR"]),
         method="cellphonedb",
     )
     assert len(keyerr_rank) == 1
     assert keyerr_rank.iloc[0]["magnitude_rank"] == 1.0
+
+
+def test_matrix_to_liana_format_skips_underscore_cell_pair_columns():
+    """Columns with '_' but no '|' are skipped — '_' in cell type names is ambiguous."""
+    underscore_cols = viz_cc._matrix_to_liana_format(
+        results=pd.DataFrame({"T_cell_B_cell": [0.5]}, index=["L1_R1"]),
+        pvalues=None,
+        method="cellphonedb",
+    )
+    assert underscore_cols.empty
+
 
 def test_matrix_to_liana_format_returns_empty_for_no_numeric_and_unparsable_pairs():
     no_numeric = viz_cc._matrix_to_liana_format(

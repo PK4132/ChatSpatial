@@ -240,13 +240,15 @@ def _matrix_to_liana_format(
         ligand, receptor = _parse_lr_pair(lr_pair)
 
         for cell_pair in cell_pair_cols:
-            # Parse source and target from cell pair
-            # Format: "CellA|CellB" or "CellA_CellB"
-            if "|" in str(cell_pair):
-                parts = str(cell_pair).split("|")
-            elif "_" in str(cell_pair):
-                parts = str(cell_pair).split("_", 1)
+            # Parse source and target from cell pair.
+            # Only "|" is a safe separator — cell type names commonly
+            # contain "_" (e.g. "T_cell"), so splitting on "_" would
+            # produce wrong source/target assignments.
+            cell_pair_str = str(cell_pair)
+            if "|" in cell_pair_str:
+                parts = cell_pair_str.split("|")
             else:
+                # No safe separator available — skip this column
                 continue
 
             if len(parts) != 2:
@@ -298,11 +300,12 @@ def _matrix_to_liana_format(
 def _parse_lr_pair(lr_pair: str) -> tuple[str, str]:
     """Parse ligand and receptor from LR pair string.
 
-    Handles various formats:
-        - "LIGAND_RECEPTOR"
-        - "LIGAND^RECEPTOR"
-        - "LIGAND-RECEPTOR"
-        - "complex:LIGAND_RECEPTOR" (CellPhoneDB)
+    Uses the same safety rules as ``standardize_lr_pair()`` in
+    ``cell_communication.py``:
+      - ``^`` is the canonical separator (never in gene/complex names)
+      - ``_`` is only used when there is *exactly one* (unambiguous)
+      - ``-`` is only used when there are no ``_`` and exactly one ``-``
+      - Multi-separator strings without ``^`` are left unsplit
 
     Returns:
         Tuple of (ligand, receptor)
@@ -311,14 +314,22 @@ def _parse_lr_pair(lr_pair: str) -> tuple[str, str]:
     if ":" in lr_pair:
         lr_pair = lr_pair.split(":")[-1]
 
-    # Try different separators
-    for sep in ["^", "_", "-"]:
-        if sep in lr_pair:
-            parts = lr_pair.split(sep, 1)
-            if len(parts) == 2:
-                return parts[0].strip(), parts[1].strip()
+    # Canonical separator — always safe
+    if "^" in lr_pair:
+        parts = lr_pair.split("^", 1)
+        return parts[0].strip(), parts[1].strip()
 
-    # Fallback: return as-is for both
+    # Single underscore — unambiguous single-gene ligand/receptor
+    if lr_pair.count("_") == 1:
+        parts = lr_pair.split("_", 1)
+        return parts[0].strip(), parts[1].strip()
+
+    # No underscores, single dash — treat dash as separator
+    if lr_pair.count("_") == 0 and lr_pair.count("-") == 1:
+        parts = lr_pair.split("-", 1)
+        return parts[0].strip(), parts[1].strip()
+
+    # Ambiguous (multi-underscore/dash) — cannot safely split
     return lr_pair, lr_pair
 
 
@@ -859,19 +870,31 @@ def _create_unified_circle_plot(
     if "source" not in df.columns or "target" not in df.columns:
         raise DataNotFoundError("Missing source/target columns in results")
 
-    # Determine score column
+    # Determine score column and whether it needs inversion.
+    # Rank columns (magnitude_rank, specificity_rank): lower = stronger → invert
+    # Expression columns (lr_means): higher = stronger → use directly
     score_col = None
-    for col in ["magnitude_rank", "specificity_rank", "lr_means"]:
+    invert_score = False
+    for col, needs_invert in [
+        ("magnitude_rank", True),
+        ("specificity_rank", True),
+        ("lr_means", False),
+    ]:
         if col in df.columns:
             score_col = col
+            invert_score = needs_invert
             break
 
     # Aggregate interactions by cell type pairs
     if score_col:
-        # Use inverse rank as weight (lower rank = stronger interaction)
         df = df.copy()
-        max_val = df[score_col].max()
-        df["weight"] = max_val - df[score_col] + 1
+        if invert_score:
+            # Rank: lower = stronger → invert to get higher weight for stronger
+            max_val = df[score_col].max()
+            df["weight"] = max_val - df[score_col] + 1
+        else:
+            # Expression: higher = stronger → use directly as weight
+            df["weight"] = df[score_col]
         agg = df.groupby(["source", "target"], sort=False)["weight"].sum().reset_index()
     else:
         # Count interactions
