@@ -624,8 +624,10 @@ def align_spatial_coordinates(
 
     # Store metadata for scientific provenance tracking
     n_batches = len(batches)
+    # Convert keys to strings for H5AD compatibility (mirrors integration metadata)
     batch_sizes = {
-        batch: np.sum(combined_adata.obs[batch_key] == batch) for batch in batches
+        str(batch): int(np.sum(combined_adata.obs[batch_key] == batch))
+        for batch in batches
     }
 
     store_analysis_metadata(
@@ -789,7 +791,7 @@ async def integrate_samples(
     # Align spatial coordinates if requested and available
     # Note: Spatial alignment is optional - BBKNN, Harmony, MNN, Scanorama
     # work on gene expression/PCA space without spatial coordinates
-    if params.align_spatial and "spatial" in combined_adata.obsm:
+    if params.align_spatial and get_spatial_key(combined_adata):
         combined_adata = align_spatial_coordinates(
             combined_adata,
             batch_key=params.batch_key,

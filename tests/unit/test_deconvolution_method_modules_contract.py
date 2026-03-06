@@ -601,12 +601,14 @@ def test_cell2location_build_train_kwargs_variants():
         accelerator="gpu",
         early_stopping=True,
         early_stopping_patience=5,
+        early_stopping_threshold=0.01,
         validation_size=0.2,
         use_aggressive=True,
     )
     assert aggressive["accelerator"] == "gpu"
     assert aggressive["check_val_every_n_epoch"] == 1
     assert aggressive["train_size"] == pytest.approx(0.8)
+    assert aggressive["early_stopping_min_delta"] == 0.01
 
     standard = c2l_module._build_train_kwargs(
         epochs=10,
@@ -615,6 +617,7 @@ def test_cell2location_build_train_kwargs_variants():
         accelerator="cpu",
         early_stopping=False,
         early_stopping_patience=5,
+        early_stopping_threshold=0.0,
         validation_size=0.1,
         use_aggressive=False,
     )
@@ -631,6 +634,7 @@ def test_cell2location_build_train_kwargs_standard_gpu_and_aggressive_no_es():
         accelerator="gpu",
         early_stopping=False,
         early_stopping_patience=5,
+        early_stopping_threshold=0.0,
         validation_size=0.1,
         use_aggressive=False,
     )
@@ -644,6 +648,7 @@ def test_cell2location_build_train_kwargs_standard_gpu_and_aggressive_no_es():
         accelerator="cpu",
         early_stopping=False,
         early_stopping_patience=5,
+        early_stopping_threshold=0.0,
         validation_size=0.2,
         use_aggressive=True,
     )

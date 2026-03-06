@@ -1098,15 +1098,6 @@ class DeconvolutionParameters(BaseModel):
         1.0,
         description="Fraction of spatial data for training. Cell2location only.",
     )
-    cell2location_use_qc_plots: bool = Field(
-        False,
-        description="Generate QC diagnostic plots. Cell2location only.",
-    )
-    cell2location_qc_output_dir: Optional[str] = Field(
-        None,
-        description="Output directory for QC plots. Cell2location only.",
-    )
-
     # Phase 3: Runtime optimization parameters (Cell2location)
     cell2location_early_stopping: bool = Field(
         False,

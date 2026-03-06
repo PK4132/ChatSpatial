@@ -85,6 +85,7 @@ def deconvolve(
     cell2location_train_size: float = 1.0,
     early_stopping: bool = False,
     early_stopping_patience: int = 45,
+    early_stopping_threshold: float = 0.0,
     use_aggressive_training: bool = False,
     validation_size: float = 0.1,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
@@ -157,6 +158,7 @@ def deconvolve(
                 accelerator=accelerator,
                 early_stopping=early_stopping,
                 early_stopping_patience=early_stopping_patience,
+                early_stopping_threshold=early_stopping_threshold,
                 validation_size=validation_size,
                 use_aggressive=use_aggressive_training,
             )
@@ -195,6 +197,7 @@ def deconvolve(
                 accelerator=accelerator,
                 early_stopping=early_stopping,
                 early_stopping_patience=early_stopping_patience,
+                early_stopping_threshold=early_stopping_threshold,
                 validation_size=validation_size,
                 use_aggressive=use_aggressive_training,
             )
@@ -259,6 +262,7 @@ def _build_train_kwargs(
     accelerator: str,
     early_stopping: bool,
     early_stopping_patience: int,
+    early_stopping_threshold: float,
     validation_size: float,
     use_aggressive: bool,
 ) -> dict[str, Any]:
@@ -276,6 +280,7 @@ def _build_train_kwargs(
         if early_stopping:
             kwargs["early_stopping"] = True
             kwargs["early_stopping_patience"] = early_stopping_patience
+            kwargs["early_stopping_min_delta"] = early_stopping_threshold
             kwargs["check_val_every_n_epoch"] = 1
             kwargs["train_size"] = 1.0 - validation_size
         else:
