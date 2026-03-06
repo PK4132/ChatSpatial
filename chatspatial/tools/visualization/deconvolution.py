@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 
 from ...models.data import VisualizationParameters
 from ...utils.adata_utils import (
-    get_analysis_parameter,
+    get_analysis_metadata_field,
     require_spatial_coords,
 )
 from ...utils.exceptions import DataNotFoundError, ParameterError
@@ -136,12 +136,11 @@ async def get_deconvolution_data(
     # Get data from metadata or fall back to convention
     analysis_name = f"deconvolution_{method}"
 
-    # Try to get from stored metadata first
-    proportions_key = get_analysis_parameter(adata, analysis_name, "proportions_key")
-    cell_types = get_analysis_parameter(adata, analysis_name, "cell_types")
-    dominant_type_key = get_analysis_parameter(
-        adata, analysis_name, "dominant_type_key"
-    )
+    # Try to get from stored metadata (these live under "statistics", not "parameters")
+    stats = get_analysis_metadata_field(adata, analysis_name, "statistics") or {}
+    proportions_key = stats.get("proportions_key")
+    cell_types = stats.get("cell_types")
+    dominant_type_key = stats.get("dominant_type_key")
 
     # Fall back to convention-based keys
     if not proportions_key:

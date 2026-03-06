@@ -127,9 +127,13 @@ async def optimize_fig_to_image_with_cache(
         filepath = Path(output_path)
         # Ensure parent directory exists
         filepath.parent.mkdir(parents=True, exist_ok=True)
-        # Ensure correct extension
+        # Ensure extension matches output_format
+        expected_suffix = f".{output_format}"
         if not filepath.suffix:
-            filepath = filepath.with_suffix(f".{output_format}")
+            filepath = filepath.with_suffix(expected_suffix)
+        elif filepath.suffix.lower() != expected_suffix.lower():
+            # Override format to match user-specified extension
+            output_format = filepath.suffix.lstrip(".").lower()
     else:
         # Default path
         output_dir = get_safe_output_path("./visualizations")

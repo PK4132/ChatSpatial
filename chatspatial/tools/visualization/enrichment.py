@@ -20,7 +20,10 @@ if TYPE_CHECKING:
     from ...spatial_mcp_adapter import ToolContext
 
 from ...models.data import VisualizationParameters
-from ...utils.adata_utils import get_analysis_parameter, validate_obs_column
+from ...utils.adata_utils import (
+    get_analysis_metadata_field,
+    validate_obs_column,
+)
 from ...utils.exceptions import DataNotFoundError, ParameterError, ProcessingError
 from .core import (
     create_figure,
@@ -83,7 +86,7 @@ def _get_score_columns(adata: "ad.AnnData") -> list[str]:
 
     # Try to get from stored metadata (first principles: read what was stored)
     for analysis_name in ["enrichment_spatial", "enrichment_ssgsea"]:
-        obs_cols = get_analysis_parameter(adata, analysis_name, "results_keys")
+        obs_cols = get_analysis_metadata_field(adata, analysis_name, "results_keys")
         if obs_cols and isinstance(obs_cols, dict) and "obs" in obs_cols:
             # Filter to only columns that actually exist
             for col in obs_cols["obs"]:

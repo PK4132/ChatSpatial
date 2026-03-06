@@ -219,10 +219,12 @@ def test_get_score_columns_prefers_metadata(minimal_spatial_adata):
     adata.obs["A_score"] = 0.1
     adata.obs["ssgsea_B"] = 0.2
     adata.uns["enrichment_spatial_metadata"] = {
-        "parameters": {"results_keys": {"obs": ["A_score", "missing_score"]}}
+        "parameters": {},
+        "results_keys": {"obs": ["A_score", "missing_score"]},
     }
     adata.uns["enrichment_ssgsea_metadata"] = {
-        "parameters": {"results_keys": {"obs": ["ssgsea_B"]}}
+        "parameters": {},
+        "results_keys": {"obs": ["ssgsea_B"]},
     }
 
     out = viz_enrich._get_score_columns(adata)

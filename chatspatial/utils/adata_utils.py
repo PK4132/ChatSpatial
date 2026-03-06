@@ -800,6 +800,35 @@ def store_analysis_metadata(
     adata.uns[metadata_key] = metadata
 
 
+def get_analysis_metadata_field(
+    adata: "ad.AnnData",
+    analysis_name: str,
+    field_name: str,
+    default: Any = None,
+) -> Any:
+    """Get any top-level field from stored analysis metadata.
+
+    Reads directly from the metadata dict stored by store_analysis_metadata().
+    Use this for top-level fields like ``results_keys``, ``statistics``,
+    ``method``, ``species``, etc.
+
+    For fields nested under ``parameters``, prefer ``get_analysis_parameter()``.
+
+    Args:
+        adata: AnnData object
+        analysis_name: Name of the analysis (e.g., "deconvolution_flashdeconv")
+        field_name: Top-level key (e.g., "results_keys", "statistics")
+        default: Default value if not found
+
+    Returns:
+        Field value or default
+    """
+    metadata_key = f"{analysis_name}_metadata"
+    if metadata_key not in adata.uns:
+        return default
+    return adata.uns[metadata_key].get(field_name, default)
+
+
 def get_analysis_parameter(
     adata: "ad.AnnData",
     analysis_name: str,

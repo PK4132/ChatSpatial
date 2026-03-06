@@ -32,11 +32,12 @@ def _add_deconv_metadata(
     dominant_type_key: str | None = None,
 ) -> None:
     adata.uns[f"deconvolution_{method}_metadata"] = {
-        "parameters": {
+        "parameters": {},
+        "statistics": {
             "proportions_key": proportions_key,
             "cell_types": cell_types,
             "dominant_type_key": dominant_type_key,
-        }
+        },
     }
 
 
