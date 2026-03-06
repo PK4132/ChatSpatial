@@ -26,14 +26,6 @@ class _FakeMCPContext:
         self.errors.append(msg)
 
 
-def test_get_tool_annotations_known_and_unknown_tool():
-    out = adapter.get_tool_annotations("load_data")
-    assert out is adapter.TOOL_ANNOTATIONS["load_data"]
-
-    with pytest.raises(KeyError, match="not found in TOOL_ANNOTATIONS registry"):
-        adapter.get_tool_annotations("unknown_tool")
-
-
 @pytest.mark.asyncio
 async def test_data_manager_list_defaults_and_dataset_exists():
     manager = adapter.DefaultSpatialDataManager()
@@ -41,14 +33,22 @@ async def test_data_manager_list_defaults_and_dataset_exists():
 
     listed = await manager.list_datasets()
     assert listed == [
-        {"id": "d1", "name": "Dataset d1", "type": "unknown", "n_cells": 0, "n_genes": 0}
+        {
+            "id": "d1",
+            "name": "Dataset d1",
+            "type": "unknown",
+            "n_cells": 0,
+            "n_genes": 0,
+        }
     ]
     assert manager.dataset_exists("d1")
     assert not manager.dataset_exists("missing")
 
 
 @pytest.mark.asyncio
-async def test_data_manager_save_and_update_missing_dataset_raise(minimal_spatial_adata):
+async def test_data_manager_save_and_update_missing_dataset_raise(
+    minimal_spatial_adata,
+):
     manager = adapter.DefaultSpatialDataManager()
 
     with pytest.raises(DataNotFoundError, match="Dataset missing not found"):
@@ -59,7 +59,9 @@ async def test_data_manager_save_and_update_missing_dataset_raise(minimal_spatia
 
 
 @pytest.mark.asyncio
-async def test_data_manager_create_dataset_filters_reserved_metadata(minimal_spatial_adata):
+async def test_data_manager_create_dataset_filters_reserved_metadata(
+    minimal_spatial_adata,
+):
     manager = adapter.DefaultSpatialDataManager()
     data_id = await manager.create_dataset(
         minimal_spatial_adata,
@@ -97,14 +99,18 @@ async def test_data_manager_create_dataset_filters_reserved_metadata(minimal_spa
 
 def test_tool_context_debug_and_log_config_delegate_to_logger():
     logger = Mock()
-    ctx = adapter.ToolContext(_data_manager=adapter.DefaultSpatialDataManager(), _logger=logger)
+    ctx = adapter.ToolContext(
+        _data_manager=adapter.DefaultSpatialDataManager(), _logger=logger
+    )
 
     ctx.debug("hello")
     ctx.log_config("TestConfig", {"alpha": 1, "beta": "x"})
 
     assert logger.debug.call_count >= 3
     assert any("hello" in str(call.args[0]) for call in logger.debug.call_args_list)
-    assert any("TestConfig" in str(call.args[0]) for call in logger.debug.call_args_list)
+    assert any(
+        "TestConfig" in str(call.args[0]) for call in logger.debug.call_args_list
+    )
 
 
 @pytest.mark.asyncio

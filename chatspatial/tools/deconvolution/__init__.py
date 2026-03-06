@@ -165,6 +165,21 @@ METHOD_REGISTRY: dict[str, MethodConfig] = {
     ),
 }
 
+# ---------------------------------------------------------------------------
+# Structural consistency: registry keys must equal Literal values in the
+# parameter model.  Any mismatch crashes at import time, preventing silent
+# drift between the two sources.
+# ---------------------------------------------------------------------------
+_literal_methods = set(
+    DeconvolutionParameters.model_fields["method"].annotation.__args__
+)
+assert set(METHOD_REGISTRY) == _literal_methods, (
+    f"METHOD_REGISTRY keys and DeconvolutionParameters.method Literal are out "
+    f"of sync.  Registry-only: {set(METHOD_REGISTRY) - _literal_methods}  "
+    f"Literal-only: {_literal_methods - set(METHOD_REGISTRY)}"
+)
+del _literal_methods  # clean up module namespace
+
 
 # =============================================================================
 # Main Entry Point

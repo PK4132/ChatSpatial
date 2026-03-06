@@ -5,6 +5,7 @@ Main server implementation for ChatSpatial using the Spatial MCP Adapter.
 from typing import Any, Optional, TypeVar
 
 from mcp.server.fastmcp import Context
+from mcp.types import ToolAnnotations
 
 # Initialize runtime configuration (SSOT - all config in one place)
 # This import triggers init_runtime() which configures:
@@ -46,7 +47,6 @@ from .models.data import VisualizationParameters  # noqa: E402
 from .tools.embeddings import EmbeddingParameters  # noqa: E402
 from .spatial_mcp_adapter import ToolContext  # noqa: E402
 from .spatial_mcp_adapter import create_spatial_mcp_server  # noqa: E402
-from .spatial_mcp_adapter import get_tool_annotations  # noqa: E402
 from .utils.exceptions import ParameterError  # noqa: E402
 from .utils.mcp_utils import mcp_tool_error_handler  # noqa: E402
 
@@ -64,7 +64,13 @@ def _resolve_params(params: Optional[P], default_factory: type[P]) -> P:
     return params if params is not None else default_factory()
 
 
-@mcp.tool(annotations=get_tool_annotations("load_data"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    )
+)
 @mcp_tool_error_handler()
 async def load_data(
     data_path: str,
@@ -127,7 +133,13 @@ async def load_data(
     )
 
 
-@mcp.tool(annotations=get_tool_annotations("preprocess_data"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    )
+)
 @mcp_tool_error_handler()
 async def preprocess_data(
     data_id: str,
@@ -160,7 +172,13 @@ async def preprocess_data(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("compute_embeddings"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    )
+)
 @mcp_tool_error_handler()
 async def compute_embeddings(
     data_id: str,
@@ -181,7 +199,13 @@ async def compute_embeddings(
     return result.model_dump()
 
 
-@mcp.tool(annotations=get_tool_annotations("visualize_data"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    )
+)
 @mcp_tool_error_handler()
 async def visualize_data(
     data_id: str,
@@ -207,7 +231,13 @@ async def visualize_data(
         return "Visualization generation failed, please check the data and parameter settings."
 
 
-@mcp.tool(annotations=get_tool_annotations("annotate_cell_types"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    )
+)
 @mcp_tool_error_handler()
 async def annotate_cell_types(
     data_id: str,
@@ -243,7 +273,13 @@ async def annotate_cell_types(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("analyze_spatial_statistics"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
 @mcp_tool_error_handler()
 async def analyze_spatial_statistics(
     data_id: str,
@@ -280,7 +316,13 @@ async def analyze_spatial_statistics(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("find_markers"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
 @mcp_tool_error_handler()
 async def find_markers(
     data_id: str,
@@ -302,7 +344,13 @@ async def find_markers(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("compare_conditions"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
 @mcp_tool_error_handler()
 async def compare_conditions(
     data_id: str,
@@ -324,7 +372,13 @@ async def compare_conditions(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("analyze_cnv"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
 @mcp_tool_error_handler()
 async def analyze_cnv(
     data_id: str,
@@ -346,7 +400,13 @@ async def analyze_cnv(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("analyze_velocity_data"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    )
+)
 @mcp_tool_error_handler()
 async def analyze_velocity_data(
     data_id: str,
@@ -380,7 +440,13 @@ async def analyze_velocity_data(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("analyze_trajectory_data"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    )
+)
 @mcp_tool_error_handler()
 async def analyze_trajectory_data(
     data_id: str,
@@ -414,7 +480,13 @@ async def analyze_trajectory_data(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("integrate_samples"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    )
+)
 @mcp_tool_error_handler()
 async def integrate_samples(
     data_ids: list[str],
@@ -446,7 +518,13 @@ async def integrate_samples(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("deconvolve_data"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=False,
+        openWorldHint=True,
+    )
+)
 @mcp_tool_error_handler()
 async def deconvolve_data(
     data_id: str,
@@ -478,7 +556,13 @@ async def deconvolve_data(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("identify_spatial_domains"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    )
+)
 @mcp_tool_error_handler()
 async def identify_spatial_domains(
     data_id: str,
@@ -510,7 +594,13 @@ async def identify_spatial_domains(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("analyze_cell_communication"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
 @mcp_tool_error_handler()
 async def analyze_cell_communication(
     data_id: str,
@@ -544,7 +634,13 @@ async def analyze_cell_communication(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("analyze_enrichment"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
 @mcp_tool_error_handler()
 async def analyze_enrichment(
     data_id: str,
@@ -577,7 +673,13 @@ async def analyze_enrichment(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("find_spatial_genes"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=True,
+        openWorldHint=False,
+    )
+)
 @mcp_tool_error_handler()
 async def find_spatial_genes(
     data_id: str,
@@ -611,7 +713,13 @@ async def find_spatial_genes(
     return result
 
 
-@mcp.tool(annotations=get_tool_annotations("register_spatial_data"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=False,
+        openWorldHint=False,
+    )
+)
 @mcp_tool_error_handler()
 async def register_spatial_data(
     source_id: str,
@@ -648,7 +756,13 @@ async def register_spatial_data(
 # ============== Data Export/Reload Tools ==============
 
 
-@mcp.tool(annotations=get_tool_annotations("export_data"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
 @mcp_tool_error_handler()
 async def export_data(
     data_id: str,
@@ -691,7 +805,13 @@ async def export_data(
         raise
 
 
-@mcp.tool(annotations=get_tool_annotations("reload_data"))
+@mcp.tool(
+    annotations=ToolAnnotations(
+        readOnlyHint=False,
+        idempotentHint=True,
+        openWorldHint=True,
+    )
+)
 @mcp_tool_error_handler()
 async def reload_data(
     data_id: str,

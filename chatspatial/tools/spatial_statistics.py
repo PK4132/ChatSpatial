@@ -1640,7 +1640,23 @@ _ANALYSIS_REGISTRY: dict[str, _AnalysisConfig] = {
     ),
 }
 
-# Derived constant (computed once at module load)
+# Derived constants (computed once at module load)
 _CLUSTER_REQUIRED_ANALYSES = frozenset(
     name for name, cfg in _ANALYSIS_REGISTRY.items() if cfg.needs_cluster
 )
+
+# ---------------------------------------------------------------------------
+# Structural consistency: registry keys must equal Literal values in the
+# parameter model.  Any mismatch crashes at import time, preventing silent
+# drift between the two sources.
+# ---------------------------------------------------------------------------
+_literal_types = set(
+    SpatialStatisticsParameters.model_fields["analysis_type"].annotation.__args__
+)
+assert set(_ANALYSIS_REGISTRY) == _literal_types, (
+    f"_ANALYSIS_REGISTRY keys and SpatialStatisticsParameters.analysis_type "
+    f"Literal are out of sync.  "
+    f"Registry-only: {set(_ANALYSIS_REGISTRY) - _literal_types}  "
+    f"Literal-only: {_literal_types - set(_ANALYSIS_REGISTRY)}"
+)
+del _literal_types
