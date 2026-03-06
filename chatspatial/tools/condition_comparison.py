@@ -440,9 +440,10 @@ async def _run_global_comparison(
     n_cond1 = cond_counts.get(params.condition1, 0)
     n_cond2 = cond_counts.get(params.condition2, 0)
 
-    if n_cond1 < 2 or n_cond2 < 2:
+    min_spc = params.min_samples_per_condition
+    if n_cond1 < min_spc or n_cond2 < min_spc:
         raise DataError(
-            f"DESeq2 requires at least 2 samples per condition. "
+            f"DESeq2 requires at least {min_spc} samples per condition. "
             f"Found: {params.condition1}={n_cond1}, {params.condition2}={n_cond2}"
         )
 
@@ -530,6 +531,7 @@ async def _run_stratified_comparison(
     cell_types = adata.obs[params.cell_type_key].unique()
     await ctx.info(f"Found {len(cell_types)} cell types")
 
+    min_spc = params.min_samples_per_condition
     cell_type_results: list[CellTypeComparisonResult] = []
     per_ct_results_dfs: list[pd.DataFrame] = []
     total_significant = 0
@@ -563,10 +565,11 @@ async def _run_stratified_comparison(
             n_cond1 = cond_counts.get(params.condition1, 0)
             n_cond2 = cond_counts.get(params.condition2, 0)
 
-            if n_cond1 < 2 or n_cond2 < 2:
+            if n_cond1 < min_spc or n_cond2 < min_spc:
                 await ctx.warning(
                     f"Skipping {ct}: insufficient samples "
-                    f"({params.condition1}={n_cond1}, {params.condition2}={n_cond2})"
+                    f"({params.condition1}={n_cond1}, {params.condition2}={n_cond2}, "
+                    f"minimum={min_spc})"
                 )
                 continue
 
