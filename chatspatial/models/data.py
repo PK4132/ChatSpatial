@@ -475,6 +475,15 @@ class VisualizationParameters(BaseModel):
     gsea_results_key: str = "gsea_results"  # Key in adata.uns for GSEA results
     n_top_pathways: int = 10  # Number of top pathways to show in barplot
 
+    # Analysis method selection
+    analysis_method: Optional[str] = Field(
+        None,
+        description=(
+            "Analysis method to retrieve results for "
+            "(e.g., CCC method name). If None, uses the latest result."
+        ),
+    )
+
     # Batch/integration parameters
     batch_key: str = Field(
         "batch", description="Key in adata.obs for batch/sample identifier"

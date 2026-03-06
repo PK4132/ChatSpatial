@@ -37,6 +37,17 @@ from ..utils.mcp_utils import suppress_output
 from ..utils.results_export import export_analysis_result
 
 
+def _build_velocity_key(params: "RNAVelocityParameters") -> str:
+    """Build a parametric analysis key for RNA velocity results.
+
+    Encodes method + mode so that different scvelo modes (stochastic,
+    dynamical) or scvelo vs velovi coexist in metadata/export/cache.
+    """
+    if params.method == "scvelo":
+        return f"velocity_scvelo_{params.scvelo_mode}"
+    return f"velocity_{params.method}"
+
+
 def _copy_matrix_data(data: Any) -> Any:
     """Return an independent copy of dense/sparse matrix-like data."""
     if hasattr(data, "copy"):
@@ -509,7 +520,7 @@ async def analyze_rna_velocity(
     # Note: velocity layers NOT exported (too large for CSV)
     method_used = velocity_method_used if params.method == "scvelo" else params.method
     results_keys: dict[str, list[str]] = {
-        "uns": ["velocity_method"],
+        "uns": [],
         "obs": [],
         "obsm": [],
     }
@@ -522,14 +533,19 @@ async def analyze_rna_velocity(
     if "X_velovi_latent" in adata.obsm:
         results_keys["obsm"].append("X_velovi_latent")
 
-    # scvelo dynamical mode results
-    if "latent_time" in adata.obs:
+    # Only claim latent_time if THIS run computed it (scvelo dynamical only)
+    if (
+        params.method == "scvelo"
+        and params.scvelo_mode == "dynamical"
+        and "latent_time" in adata.obs
+    ):
         results_keys["obs"].append("latent_time")
 
     # Store metadata for scientific provenance tracking
+    analysis_key = _build_velocity_key(params)
     store_analysis_metadata(
         adata,
-        analysis_name=f"velocity_{method_used}",
+        analysis_name=analysis_key,
         method=method_used,
         parameters={
             "n_top_genes": params.n_top_genes,
@@ -544,7 +560,7 @@ async def analyze_rna_velocity(
     )
 
     # Export results for reproducibility
-    export_analysis_result(adata, data_id, f"velocity_{method_used}")
+    export_analysis_result(adata, data_id, analysis_key)
 
     return RNAVelocityResult(
         data_id=data_id,

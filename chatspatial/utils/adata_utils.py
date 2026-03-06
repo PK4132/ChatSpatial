@@ -1193,14 +1193,33 @@ def ensure_counts_layer(
     if adata.raw is not None:
         # Get raw counts, subsetting to current var_names
         # Note: adata.raw may have full genes while adata has HVG subset
-        adata.layers[layer_name] = adata.raw[:, adata.var_names].X
+        raw_X = adata.raw[:, adata.var_names].X
+        is_int, has_neg, _ = check_is_integer_counts(raw_X)
+        if is_int and not has_neg:
+            adata.layers[layer_name] = raw_X
+            return True
+        # .raw exists but doesn't contain valid integer counts — fall through
+
+    # Fallback: check if adata.X itself is valid integer counts
+    is_int_x, has_neg_x, _ = check_is_integer_counts(adata.X)
+    if is_int_x and not has_neg_x:
+        adata.layers[layer_name] = adata.X.copy()
         return True
 
-    # Cannot create counts layer
-    default_error = (
-        f"Cannot create '{layer_name}' layer: adata.raw is None. "
-        "Load unpreprocessed data or ensure adata.raw is preserved during preprocessing."
-    )
+    # Cannot create counts layer — neither .raw, X, nor layers had valid counts
+    if adata.raw is not None:
+        default_error = (
+            f"Cannot create '{layer_name}' layer: adata.raw and adata.X both "
+            "contain normalized (non-integer) data. Load unpreprocessed data "
+            "or ensure adata.layers['counts'] is set before preprocessing."
+        )
+    else:
+        default_error = (
+            f"Cannot create '{layer_name}' layer: adata.raw is None and "
+            "adata.X contains normalized (non-integer) data. Load "
+            "unpreprocessed data or ensure adata.layers['counts'] is set "
+            "before preprocessing."
+        )
     raise DataNotFoundError(error_message or default_error)
 
 

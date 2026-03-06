@@ -237,3 +237,27 @@ async def test_batch_highlight_respects_explicit_figure_size(minimal_spatial_ada
     assert width == pytest.approx(9.0)
     assert height == pytest.approx(4.0)
     fig.clf()
+
+
+# ---------------------------------------------------------------------------
+# Regression: all-NaN batch column must raise DataError, not ZeroDivisionError
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_batch_highlight_raises_on_all_nan_batch(minimal_spatial_adata):
+    """batch_key with only NaN values must not ZeroDivisionError."""
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = pd.array([pd.NA] * adata.n_obs, dtype=object)
+    adata.obsm["X_umap"] = np.zeros((adata.n_obs, 2))
+
+    with pytest.raises(DataError, match="only missing values"):
+        await viz_integ._create_batch_highlight(
+            adata,
+            VisualizationParameters(
+                plot_type="integration",
+                subtype="highlight",
+                batch_key="batch",
+            ),
+            context=DummyCtx(),
+        )

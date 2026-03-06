@@ -67,18 +67,39 @@ def test_create_deconvolution_stats_has_consistent_summary_fields():
 
 
 @pytest.mark.asyncio
-async def test_prepare_counts_prefers_raw_and_preserves_obsm(minimal_spatial_adata):
+async def test_prepare_counts_uses_counts_layer_over_raw(minimal_spatial_adata):
+    """_prepare_counts should prefer layers['counts'] over .raw."""
     adata = minimal_spatial_adata.copy()
+    counts_val = np.full((adata.n_obs, adata.n_vars), 42.0)
+    adata.layers["counts"] = counts_val
     raw = adata.copy()
-    raw.var["raw_marker"] = "keep"
+    raw.X = np.full_like(counts_val, 99.0)
     adata.raw = raw
     adata.obsm["extra"] = np.ones((adata.n_obs, 2))
 
     out = await _prepare_counts(adata, "Spatial", DummyCtx(), require_int_dtype=False)
-
-    assert out.n_obs == adata.n_obs
+    assert np.allclose(out.X, 42.0), "Should use layers['counts'], not .raw"
     assert "extra" in out.obsm
-    assert "raw_marker" in out.var.columns
+
+
+@pytest.mark.asyncio
+async def test_prepare_counts_falls_back_to_x_when_no_counts_layer(
+    minimal_spatial_adata,
+):
+    """_prepare_counts should fall back to adata.X when no counts layer."""
+    adata = minimal_spatial_adata.copy()
+    # Set .raw to something different to verify it is NOT used
+    raw = adata.copy()
+    raw.X = np.full((adata.n_obs, adata.n_vars), 99.0)
+    adata.raw = raw
+    if "counts" in adata.layers:
+        del adata.layers["counts"]
+
+    original_x = np.asarray(adata.X).copy()
+    out = await _prepare_counts(adata, "Spatial", DummyCtx(), require_int_dtype=False)
+    assert np.allclose(np.asarray(out.X), original_x), (
+        "Should use adata.X, not .raw"
+    )
 
 
 @pytest.mark.asyncio

@@ -57,7 +57,7 @@ async def test_analyze_spatial_statistics_saves_result_with_expected_key(
     assert calls["data_id"] == "d1"
     assert isinstance(calls["params"], SpatialStatisticsParameters)
     assert saved["data_id"] == "d1"
-    assert saved["result_type"] == "spatial_statistics"
+    assert saved["result_type"] == "spatial_statistics_moran"
     assert saved["result"] is result
 
 
@@ -120,7 +120,16 @@ async def test_analyze_enrichment_saves_result_with_expected_key(
             top_depleted_sets=["GO_C"],
         )
 
-    fake_module = SimpleNamespace(analyze_enrichment=fake_enrichment)
+    def _build_enrichment_key(method: str, database=None):
+        if database:
+            db_clean = database.replace(" ", "_").replace("/", "_")
+            return f"enrichment_{method}_{db_clean}"
+        return f"enrichment_{method}"
+
+    fake_module = SimpleNamespace(
+        analyze_enrichment=fake_enrichment,
+        _build_enrichment_key=_build_enrichment_key,
+    )
     monkeypatch.setitem(sys.modules, "chatspatial.tools.enrichment", fake_module)
 
     saved: dict[str, object] = {}
@@ -139,7 +148,7 @@ async def test_analyze_enrichment_saves_result_with_expected_key(
     assert calls["data_id"] == "d5"
     assert isinstance(calls["params"], EnrichmentParameters)
     assert saved["data_id"] == "d5"
-    assert saved["result_type"] == "enrichment"
+    assert saved["result_type"] == "enrichment_pathway_ora_GO_Biological_Process"
     assert saved["result"] is result
 
 

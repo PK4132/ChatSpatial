@@ -50,9 +50,9 @@ async def test_identify_spatial_domains_leiden_contract_with_mocked_backend(
     assert isinstance(result, SpatialDomainResult)
     assert result.data_id == "d1"
     assert result.method == "leiden"
-    assert result.domain_key == "spatial_domains_leiden"
+    assert result.domain_key == "spatial_domains_leiden_res0_5"
     assert sum(result.domain_counts.values()) == adata.n_obs
-    assert "spatial_domains_leiden" in adata.obs
+    assert "spatial_domains_leiden_res0_5" in adata.obs
 
 
 @pytest.mark.integration

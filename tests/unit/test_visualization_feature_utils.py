@@ -9,7 +9,7 @@ import pytest
 
 from chatspatial.models.data import VisualizationParameters
 from chatspatial.tools.visualization import feature as viz_feature
-from chatspatial.utils.exceptions import DataNotFoundError, ParameterError
+from chatspatial.utils.exceptions import DataError, DataNotFoundError, ParameterError
 
 
 class DummyCtx:
@@ -212,11 +212,29 @@ async def test_create_feature_visualization_requires_spatial_coordinates(
     adata = minimal_spatial_adata.copy()
     del adata.obsm["spatial"]
 
-    with pytest.raises(DataNotFoundError, match="Spatial coordinates not found"):
+    with pytest.raises((DataNotFoundError, DataError), match="[Ss]patial coordinates"):
         await viz_feature.create_feature_visualization(
             adata,
             VisualizationParameters(plot_type="feature", basis="spatial", feature="gene_0"),
         )
+
+
+@pytest.mark.asyncio
+async def test_create_feature_visualization_works_with_alternative_spatial_key(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """Visualization should succeed when coords are in X_spatial instead of spatial."""
+    adata = minimal_spatial_adata.copy()
+    coords = adata.obsm.pop("spatial")
+    adata.obsm["X_spatial"] = coords
+
+    monkeypatch.setattr(viz_feature, "auto_spot_size", lambda _a, s, **kw: s or 1.0)
+
+    result = await viz_feature.create_feature_visualization(
+        adata,
+        VisualizationParameters(plot_type="feature", basis="spatial", feature="gene_0"),
+    )
+    assert result is not None
 
 
 @pytest.mark.asyncio

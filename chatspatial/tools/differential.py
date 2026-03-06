@@ -26,6 +26,22 @@ from ..utils.exceptions import (
 from ..utils.results_export import export_analysis_result
 
 
+def _build_de_key(
+    method: str,
+    group1: str | None,
+    group2: str | None,
+) -> str:
+    """Build a parametric analysis key for differential expression.
+
+    Encodes method + comparison so that multiple DE runs on the same
+    dataset coexist in metadata, export, and server cache.
+    """
+    if group1 is None:
+        return f"de_{method}_all_groups"
+    g2 = group2 or "rest"
+    return f"de_{method}_{group1}_vs_{g2}"
+
+
 async def differential_expression(
     data_id: str,
     ctx: ToolContext,
@@ -140,17 +156,22 @@ async def differential_expression(
         # Copy results back to original adata for persistence
         adata.uns["rank_genes_groups"] = adata_filtered.uns["rank_genes_groups"]
 
+        # Per-run copy for provenance (shared key kept for viz)
+        analysis_key = _build_de_key(method, None, None)
+        per_run_key = f"rank_genes_groups_{analysis_key.removeprefix('de_')}"
+        adata.uns[per_run_key] = adata_filtered.uns["rank_genes_groups"]
+
         # Store metadata for scientific provenance tracking
         store_analysis_metadata(
             adata,
-            analysis_name="differential_expression",
+            analysis_name=analysis_key,
             method=method,
             parameters={
                 "group_key": group_key,
                 "comparison_type": "all_groups",
                 "n_top_genes": n_top_genes,
             },
-            results_keys={"uns": ["rank_genes_groups"]},
+            results_keys={"uns": [per_run_key]},
             statistics={
                 "method": method,
                 "n_groups": len(groups),
@@ -161,7 +182,7 @@ async def differential_expression(
         )
 
         # Export results to CSV for reproducibility
-        export_analysis_result(adata, data_id, "differential_expression")
+        export_analysis_result(adata, data_id, analysis_key)
 
         return DifferentialExpressionResult(
             data_id=data_id,
@@ -371,10 +392,15 @@ async def differential_expression(
     # Copy results back to original adata for persistence
     adata.uns["rank_genes_groups"] = temp_adata.uns["rank_genes_groups"]
 
+    # Per-run copy for provenance (shared key kept for viz)
+    analysis_key = _build_de_key(method, group1, group2)
+    per_run_key = f"rank_genes_groups_{analysis_key.removeprefix('de_')}"
+    adata.uns[per_run_key] = temp_adata.uns["rank_genes_groups"]
+
     # Store metadata for scientific provenance tracking
     store_analysis_metadata(
         adata,
-        analysis_name="differential_expression",
+        analysis_name=analysis_key,
         method=method,
         parameters={
             "group_key": group_key,
@@ -384,7 +410,7 @@ async def differential_expression(
             "n_top_genes": n_top_genes,
             "pseudocount": pseudocount,  # Track for reproducibility
         },
-        results_keys={"uns": ["rank_genes_groups"]},
+        results_keys={"uns": [per_run_key]},
         statistics={
             "method": method,
             "group1": group1,
@@ -401,7 +427,7 @@ async def differential_expression(
     )
 
     # Export results to CSV for reproducibility
-    export_analysis_result(adata, data_id, "differential_expression")
+    export_analysis_result(adata, data_id, analysis_key)
 
     return DifferentialExpressionResult(
         data_id=data_id,
@@ -616,12 +642,15 @@ async def _run_pydeseq2(
 
     # Store results as DataFrame directly — anndata supports DataFrames in uns
     # and _extract_from_uns() handles them natively (line 257–258).
-    adata.uns["pydeseq2_results"] = results_df.copy()
+    # Use parametric uns key so multiple pydeseq2 comparisons coexist.
+    analysis_key = _build_de_key("pydeseq2", group1, group2)
+    uns_results_key = f"pydeseq2_results_{group1}_vs_{group2}"
+    adata.uns[uns_results_key] = results_df.copy()
 
     # Store metadata for scientific provenance tracking
     store_analysis_metadata(
         adata,
-        analysis_name="differential_expression",
+        analysis_name=analysis_key,
         method="pydeseq2",
         parameters={
             "group_key": group_key,
@@ -631,7 +660,7 @@ async def _run_pydeseq2(
             "comparison_type": "pseudobulk",
             "n_top_genes": params.n_top_genes,
         },
-        results_keys={"uns": ["pydeseq2_results"]},
+        results_keys={"uns": [uns_results_key]},
         statistics={
             "method": "pydeseq2",
             "group1": group1,
@@ -646,7 +675,7 @@ async def _run_pydeseq2(
     )
 
     # Export results to CSV for reproducibility
-    export_analysis_result(adata, data_id, "differential_expression")
+    export_analysis_result(adata, data_id, analysis_key)
 
     return DifferentialExpressionResult(
         data_id=data_id,

@@ -144,7 +144,9 @@ def test_transform_coordinates_handles_zero_rows_without_nan():
 def test_register_slices_unknown_method_raises_parameter_error(minimal_spatial_adata):
     ad1 = minimal_spatial_adata.copy()
     ad2 = minimal_spatial_adata.copy()
-    params = RegistrationParameters(method="paste").model_copy(update={"method": "unknown"})
+    params = RegistrationParameters(method="paste").model_copy(
+        update={"method": "unknown"}
+    )
 
     with pytest.raises(ParameterError, match="Unknown method"):
         reg.register_slices([ad1, ad2], params)
@@ -188,7 +190,9 @@ def test_register_stalign_invalid_transform_payload_is_wrapped(
     )
     monkeypatch.setattr(reg, "get_device", lambda prefer_gpu=False: "cpu")
 
-    fake_torch = types.SimpleNamespace(float32="float32", tensor=lambda x, dtype=None: np.asarray(x), Tensor=np.ndarray)
+    fake_torch = types.SimpleNamespace(
+        float32="float32", tensor=lambda x, dtype=None: np.asarray(x), Tensor=np.ndarray
+    )
 
     fake_st = types.ModuleType("STalign.STalign")
     fake_st.LDDMM = lambda **_kwargs: {"A": None, "v": None, "xv": None}
@@ -217,7 +221,11 @@ def test_register_stalign_expression_intensity_uses_dense_sum_path(
 
     def _fake_prepare(coords, intensity, image_size):
         del coords, image_size
-        key = "source_intensity" if "source_intensity" not in captured else "target_intensity"
+        key = (
+            "source_intensity"
+            if "source_intensity" not in captured
+            else "target_intensity"
+        )
         captured[key] = np.asarray(intensity)
         return [np.array([0.0]), np.array([0.0])], np.ones((2, 2), dtype=np.float32)
 
@@ -231,7 +239,11 @@ def test_register_stalign_expression_intensity_uses_dense_sum_path(
     )
 
     fake_st = types.ModuleType("STalign.STalign")
-    fake_st.LDDMM = lambda **_kwargs: {"A": np.eye(2), "v": np.zeros((1, 2)), "xv": np.zeros((1, 2))}
+    fake_st.LDDMM = lambda **_kwargs: {
+        "A": np.eye(2),
+        "v": np.zeros((1, 2)),
+        "xv": np.zeros((1, 2)),
+    }
     fake_st.transform_points_source_to_target = lambda xv, v, A, points: points
     pkg = types.ModuleType("STalign")
     pkg.STalign = fake_st
@@ -251,7 +263,9 @@ def test_register_stalign_expression_intensity_uses_dense_sum_path(
     assert np.allclose(captured["target_intensity"], ad2.X.sum(axis=1))
 
 
-def test_prepare_stalign_image_returns_normalized_tensor(monkeypatch: pytest.MonkeyPatch):
+def test_prepare_stalign_image_returns_normalized_tensor(
+    monkeypatch: pytest.MonkeyPatch,
+):
     fake_torch = types.SimpleNamespace(
         float32="float32",
         linspace=lambda start, stop, steps, dtype=None: np.linspace(start, stop, steps),
@@ -303,8 +317,12 @@ def test_register_paste_pairwise_populates_registered_coords(
     monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
 
     out = reg._register_paste([ad1, ad2], RegistrationParameters(method="paste"))
-    np.testing.assert_allclose(out[0].obsm["spatial_registered"], ad1.obsm["spatial"] + 1.0)
-    np.testing.assert_allclose(out[1].obsm["spatial_registered"], ad2.obsm["spatial"] + 2.0)
+    np.testing.assert_allclose(
+        out[0].obsm["spatial_registered"], ad1.obsm["spatial"] + 1.0
+    )
+    np.testing.assert_allclose(
+        out[1].obsm["spatial_registered"], ad2.obsm["spatial"] + 2.0
+    )
     assert out[0].X is ad1.X
     assert out[1].X is ad2.X
 
@@ -319,7 +337,9 @@ def test_register_paste_multi_slice_uses_center_alignment(
     pairwise_calls: list[dict[str, object]] = []
 
     def _pairwise_align(ref_slice, moving_slice, **kwargs):
-        pairwise_calls.append({"ref": ref_slice.n_obs, "moving": moving_slice.n_obs, **kwargs})
+        pairwise_calls.append(
+            {"ref": ref_slice.n_obs, "moving": moving_slice.n_obs, **kwargs}
+        )
         return np.eye(moving_slice.n_obs)
 
     def _center_align(_ref, slices, **_kwargs):
@@ -376,8 +396,8 @@ def test_register_stalign_success_with_uniform_intensity(
 
     fake_st = types.ModuleType("STalign.STalign")
     fake_st.LDDMM = lambda **_kwargs: {"A": "A", "v": "v", "xv": "xv"}
-    fake_st.transform_points_source_to_target = (
-        lambda _xv, _v, _A, points: _to_tensor(np.asarray(points) + 3.0)
+    fake_st.transform_points_source_to_target = lambda _xv, _v, _A, points: _to_tensor(
+        np.asarray(points) + 3.0
     )
 
     st_pkg = types.ModuleType("STalign")
@@ -386,13 +406,17 @@ def test_register_stalign_success_with_uniform_intensity(
     monkeypatch.setitem(sys.modules, "torch", fake_torch)
     monkeypatch.setitem(sys.modules, "STalign", st_pkg)
     monkeypatch.setitem(sys.modules, "STalign.STalign", fake_st)
-    monkeypatch.setattr(reg, "_prepare_stalign_image", lambda *_args, **_kwargs: ([0, 1], "img"))
+    monkeypatch.setattr(
+        reg, "_prepare_stalign_image", lambda *_args, **_kwargs: ([0, 1], "img")
+    )
     monkeypatch.setattr(reg, "get_device", lambda prefer_gpu=False: "cpu")
 
     params = RegistrationParameters(method="stalign", stalign_use_expression=False)
     out = reg._register_stalign([ad1, ad2], params)
 
-    np.testing.assert_allclose(out[0].obsm["spatial_registered"], ad1.obsm["spatial"] + 3.0)
+    np.testing.assert_allclose(
+        out[0].obsm["spatial_registered"], ad1.obsm["spatial"] + 3.0
+    )
     np.testing.assert_allclose(out[1].obsm["spatial_registered"], ad2.obsm["spatial"])
     assert out[0].X is ad1.X
     assert out[1].X is ad2.X
@@ -446,3 +470,271 @@ async def test_register_spatial_slices_mcp_stalign_dependency_branch(
 
     assert out["method"] == "stalign"
     assert requires == ["STalign"]
+
+
+# =============================================================================
+# Issue 1 regression: normalization consistency across pairwise / multi-slice
+# =============================================================================
+
+
+def test_prepare_paste_slices_normalizes_uniformly(minimal_spatial_adata):
+    """_prepare_paste_slices applies normalize_total + log1p to all slices."""
+    import scipy.sparse as sp
+
+    a = minimal_spatial_adata.copy()
+    b = minimal_spatial_adata.copy()
+    genes = list(a.var_names[:5])
+
+    slices = reg._prepare_paste_slices([a, b], genes, "spatial")
+
+    for s in slices:
+        x = s.X.toarray() if sp.issparse(s.X) else s.X
+        assert np.issubdtype(x.dtype, np.floating)
+        assert s.n_vars == len(genes)
+        # After log1p the max should be well below raw integer range
+        assert x.max() < 15
+
+
+def test_prepare_paste_slices_copies_alt_key_to_spatial(minimal_spatial_adata):
+    """When spatial_key != 'spatial', obsm['spatial'] is created for PASTE."""
+    a = minimal_spatial_adata.copy()
+    coords = a.obsm.pop("spatial")
+    a.obsm["X_spatial"] = coords
+    genes = list(a.var_names[:3])
+
+    slices = reg._prepare_paste_slices([a], genes, "X_spatial")
+    s = slices[0]
+
+    assert "spatial" in s.obsm
+    assert "X_spatial" in s.obsm
+    np.testing.assert_array_equal(s.obsm["spatial"], s.obsm["X_spatial"])
+
+
+def test_register_paste_pairwise_normalizes_before_align(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """Pairwise PASTE branch must pass normalized data to pairwise_align."""
+    import scipy.sparse as sp
+
+    ad1 = minimal_spatial_adata.copy()
+    ad2 = minimal_spatial_adata.copy()
+
+    captured = []
+
+    def _pairwise_align(s1, s2, **_kw):
+        # Capture expression data that PASTE receives
+        x1 = s1.X.toarray() if sp.issparse(s1.X) else s1.X
+        captured.append(x1.max())
+        return np.eye(s1.n_obs, s2.n_obs) / s2.n_obs
+
+    def _stack(slices, pis):
+        return slices
+
+    fake_paste = types.ModuleType("paste")
+    fake_paste.pairwise_align = _pairwise_align
+    fake_paste.stack_slices_pairwise = _stack
+    monkeypatch.setitem(sys.modules, "paste", fake_paste)
+
+    reg._register_paste([ad1, ad2], RegistrationParameters(method="paste"))
+
+    assert len(captured) == 1
+    # After normalize_total + log1p, max should be << raw counts
+    assert captured[0] < 15, "Pairwise branch should normalize before PASTE"
+
+
+def test_register_paste_multi_slice_normalizes_before_align(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """Multi-slice PASTE branch must also pass normalized data."""
+    import scipy.sparse as sp
+
+    slices = [minimal_spatial_adata.copy() for _ in range(3)]
+
+    captured = []
+
+    def _pairwise_align(s1, s2, **_kw):
+        x1 = s1.X.toarray() if sp.issparse(s1.X) else s1.X
+        captured.append(x1.max())
+        return np.eye(s1.n_obs, s2.n_obs) / s2.n_obs
+
+    def _center_align(_ref, all_slices, **_kw):
+        return _ref, [np.eye(s.n_obs) for s in all_slices]
+
+    fake_paste = types.ModuleType("paste")
+    fake_paste.pairwise_align = _pairwise_align
+    fake_paste.center_align = _center_align
+    monkeypatch.setitem(sys.modules, "paste", fake_paste)
+    monkeypatch.setattr(reg, "get_ot_backend", lambda _use_gpu: "numpy")
+
+    reg._register_paste(
+        slices,
+        RegistrationParameters(method="paste", use_gpu=False),
+    )
+
+    assert len(captured) >= 1
+    for val in captured:
+        assert val < 15, "Multi-slice branch should normalize before PASTE"
+
+
+# =============================================================================
+# Issue 2 regression: pairwise branch must respect alternative spatial_key
+# =============================================================================
+
+
+def test_register_paste_pairwise_works_with_alt_spatial_key(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """Pairwise PASTE must succeed when coords are in X_spatial, not spatial."""
+    ad1 = minimal_spatial_adata.copy()
+    ad2 = minimal_spatial_adata.copy()
+    # Move coords to alternative key
+    for ad in (ad1, ad2):
+        ad.obsm["X_spatial"] = ad.obsm.pop("spatial")
+
+    def _pairwise_align(s1, s2, **_kw):
+        assert "spatial" in s1.obsm, "PASTE needs obsm['spatial']"
+        assert "spatial" in s2.obsm, "PASTE needs obsm['spatial']"
+        return np.eye(s1.n_obs, s2.n_obs) / s2.n_obs
+
+    def _stack(slices, pis):
+        return slices
+
+    fake_paste = types.ModuleType("paste")
+    fake_paste.pairwise_align = _pairwise_align
+    fake_paste.stack_slices_pairwise = _stack
+    monkeypatch.setitem(sys.modules, "paste", fake_paste)
+
+    result = reg._register_paste(
+        [ad1, ad2], RegistrationParameters(method="paste"), spatial_key="X_spatial"
+    )
+
+    assert "spatial_registered" in result[0].obsm
+    assert "spatial_registered" in result[1].obsm
+
+
+def test_register_paste_multi_slice_works_with_alt_spatial_key(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """Multi-slice PASTE must succeed when coords are in X_spatial."""
+    slices = [minimal_spatial_adata.copy() for _ in range(3)]
+    for ad in slices:
+        ad.obsm["X_spatial"] = ad.obsm.pop("spatial")
+
+    def _pairwise_align(s1, s2, **_kw):
+        assert "spatial" in s1.obsm
+        assert "spatial" in s2.obsm
+        return np.eye(s1.n_obs, s2.n_obs) / s2.n_obs
+
+    def _center_align(_ref, all_slices, **_kw):
+        return _ref, [np.eye(s.n_obs) for s in all_slices]
+
+    fake_paste = types.ModuleType("paste")
+    fake_paste.pairwise_align = _pairwise_align
+    fake_paste.center_align = _center_align
+    monkeypatch.setitem(sys.modules, "paste", fake_paste)
+    monkeypatch.setattr(reg, "get_ot_backend", lambda _use_gpu: "numpy")
+
+    result = reg._register_paste(
+        slices,
+        RegistrationParameters(method="paste", use_gpu=False),
+        spatial_key="X_spatial",
+    )
+
+    for r in result:
+        assert "spatial_registered" in r.obsm
+
+
+# ---------------------------------------------------------------------------
+# Regression: registration metadata must include method-specific parameters
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_register_mcp_metadata_contains_paste_params(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """store_analysis_metadata must record PASTE-specific params for provenance."""
+    source = minimal_spatial_adata.copy()
+    target = minimal_spatial_adata.copy()
+    ctx = DummyCtx({"src": source, "tgt": target})
+
+    # Stub out dependencies
+    monkeypatch.setattr(reg, "require", lambda *_a, **_k: None)
+
+    def _fake_register(slices, params):
+        for s in slices:
+            s.obsm["spatial_registered"] = s.obsm["spatial"]
+        return slices
+
+    monkeypatch.setattr(reg, "register_slices", _fake_register)
+
+    captured_params: list[dict] = []
+    orig_store = reg.store_analysis_metadata
+
+    def _capture_store(_adata, **kwargs):
+        captured_params.append(kwargs.get("parameters", {}))
+
+    monkeypatch.setattr(reg, "store_analysis_metadata", _capture_store)
+    monkeypatch.setattr(reg, "export_analysis_result", lambda *_a, **_k: None)
+
+    params = RegistrationParameters(
+        method="paste",
+        paste_alpha=0.3,
+        paste_n_components=20,
+        paste_numItermax=100,
+        use_gpu=False,
+    )
+    result = await reg.register_spatial_slices_mcp("src", "tgt", ctx, params)
+    assert result["registration_completed"] is True
+
+    # Both source and target metadata calls must have method-specific params
+    assert len(captured_params) == 2
+    for p in captured_params:
+        assert p["paste_alpha"] == 0.3
+        assert p["paste_n_components"] == 20
+        assert p["paste_numItermax"] == 100
+        assert p["use_gpu"] is False
+        assert "stalign_niter" not in p  # no cross-method leakage
+
+
+@pytest.mark.asyncio
+async def test_register_mcp_metadata_contains_stalign_params(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """store_analysis_metadata must record STalign-specific params."""
+    source = minimal_spatial_adata.copy()
+    target = minimal_spatial_adata.copy()
+    ctx = DummyCtx({"src": source, "tgt": target})
+
+    monkeypatch.setattr(reg, "require", lambda *_a, **_k: None)
+
+    def _fake_register(slices, params):
+        for s in slices:
+            s.obsm["spatial_registered"] = s.obsm["spatial"]
+        return slices
+
+    monkeypatch.setattr(reg, "register_slices", _fake_register)
+
+    captured_params: list[dict] = []
+
+    def _capture_store(_adata, **kwargs):
+        captured_params.append(kwargs.get("parameters", {}))
+
+    monkeypatch.setattr(reg, "store_analysis_metadata", _capture_store)
+    monkeypatch.setattr(reg, "export_analysis_result", lambda *_a, **_k: None)
+
+    params = RegistrationParameters(
+        method="stalign",
+        stalign_niter=80,
+        stalign_a=300.0,
+        stalign_use_expression=False,
+    )
+    result = await reg.register_spatial_slices_mcp("src", "tgt", ctx, params)
+    assert result["registration_completed"] is True
+
+    assert len(captured_params) == 2
+    for p in captured_params:
+        assert p["stalign_niter"] == 80
+        assert p["stalign_a"] == 300.0
+        assert p["stalign_use_expression"] is False
+        assert "paste_alpha" not in p

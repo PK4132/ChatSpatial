@@ -26,6 +26,21 @@ from ..utils.exceptions import (
 )
 from ..utils.results_export import export_analysis_result
 
+
+def _build_cnv_key(params: "CNVParameters") -> str:
+    """Build a parametric analysis key for CNV results.
+
+    Encodes method + reference categories so that runs with different
+    reference baselines coexist in metadata/export/cache.
+    """
+    method = params.method
+    if params.reference_categories:
+        # Sort for deterministic key regardless of input order
+        cats = "_".join(sorted(params.reference_categories))
+        return f"cnv_{method}_{cats}"
+    return f"cnv_{method}"
+
+
 # Numbat availability is checked lazily in _infer_cnv_numbat to avoid
 # import-time failures when rpy2/R is not installed
 
@@ -132,6 +147,14 @@ async def _infer_cnv_infercnvpy(
 
     # Check if gene position information is available
     if "chromosome" not in adata_cnv.var.columns:
+        if params.exclude_chromosomes:
+            await ctx.warning(
+                f"exclude_chromosomes={params.exclude_chromosomes} was specified "
+                "but no chromosome annotation exists in adata.var. "
+                "infercnvpy will use its built-in gene position database; "
+                "however, chromosome exclusion requires pre-existing "
+                "annotation and will be ignored for this run."
+            )
         await ctx.warning(
             "No chromosome information found in adata.var. "
             "Attempting to infer from gene names..."
@@ -270,7 +293,26 @@ async def _infer_cnv_infercnvpy(
     if cnv_score_key == "X_cnv" and "X_cnv" in adata_cnv.obsm:
         adata.obsm["X_cnv"] = adata_cnv.obsm["X_cnv"]
     elif cnv_score_key == "cnv" and "cnv" in adata_cnv.layers:
-        adata.layers["cnv"] = adata_cnv.layers["cnv"]
+        import scipy.sparse as sp_sparse
+
+        cnv_layer = adata_cnv.layers["cnv"]
+        if adata_cnv.n_vars == adata.n_vars:
+            # No gene filtering — direct copy
+            adata.layers["cnv"] = cnv_layer
+        else:
+            # Genes were filtered (e.g., exclude_chromosomes).
+            # Pad to original shape; excluded genes get CNV score of 0.
+            gene_mask = np.isin(adata.var_names, adata_cnv.var_names)
+            if sp_sparse.issparse(cnv_layer):
+                full = sp_sparse.lil_matrix(
+                    (adata.n_obs, adata.n_vars), dtype=cnv_layer.dtype
+                )
+                full[:, gene_mask] = cnv_layer
+                adata.layers["cnv"] = full.tocsr()
+            else:
+                full = np.zeros((adata.n_obs, adata.n_vars), dtype=cnv_layer.dtype)
+                full[:, gene_mask] = cnv_layer
+                adata.layers["cnv"] = full
 
     # Store CNV metadata (required for infercnvpy plotting functions)
     if "cnv" in adata_cnv.uns:
@@ -283,7 +325,9 @@ async def _infer_cnv_infercnvpy(
         adata.uns["dendrogram_cnv_clusters"] = adata_cnv.uns["dendrogram_cnv_clusters"]
 
     # Store CNV analysis parameters in adata.uns for reference
-    adata.uns["cnv_analysis"] = {
+    analysis_key = _build_cnv_key(params)
+    cnv_summary_key = f"cnv_analysis_{analysis_key.removeprefix('cnv_')}"
+    adata.uns[cnv_summary_key] = {
         "reference_key": params.reference_key,
         "reference_categories": list(params.reference_categories),  # Convert to list
         "window_size": params.window_size,
@@ -292,7 +336,7 @@ async def _infer_cnv_infercnvpy(
     }
 
     # Build results keys for metadata
-    results_keys: dict = {"uns": ["cnv", "cnv_analysis"]}
+    results_keys: dict = {"uns": ["cnv", cnv_summary_key]}
     if cnv_score_key == "X_cnv":
         results_keys["obsm"] = ["X_cnv"]
     elif cnv_score_key == "cnv":
@@ -305,7 +349,7 @@ async def _infer_cnv_infercnvpy(
     # Store metadata for scientific provenance tracking
     store_analysis_metadata(
         adata,
-        analysis_name="cnv_infercnvpy",
+        analysis_name=analysis_key,
         method="infercnvpy",
         parameters={
             "reference_key": params.reference_key,
@@ -318,7 +362,7 @@ async def _infer_cnv_infercnvpy(
     )
 
     # Export results for reproducibility
-    export_analysis_result(adata, data_id, "cnv_infercnvpy")
+    export_analysis_result(adata, data_id, analysis_key)
 
     return CNVResult(
         data_id=data_id,
@@ -459,8 +503,7 @@ def _infer_cnv_numbat(
                 ro.globalenv["skip_nj"] = params.numbat_skip_nj
 
                 # Run Numbat via R (inside context!)
-                ro.r(
-                    """
+                ro.r("""
                     library(numbat)
                     library(dplyr)
 
@@ -506,8 +549,7 @@ def _infer_cnv_numbat(
                     }, error = function(e) {
                         stop(paste("Numbat execution failed:", e$message))
                     })
-                    """
-                )
+                    """)
 
         # Read results from output files (Numbat saves to TSV files, not R objects)
         import pandas as pd
@@ -619,7 +661,9 @@ def _infer_cnv_numbat(
         }
 
         # Store analysis parameters
-        adata.uns["cnv_analysis"] = {
+        analysis_key = _build_cnv_key(params)
+        cnv_summary_key = f"cnv_analysis_{analysis_key.removeprefix('cnv_')}"
+        adata.uns[cnv_summary_key] = {
             "method": "numbat",
             "reference_key": params.reference_key,
             "reference_categories": list(params.reference_categories),
@@ -632,7 +676,7 @@ def _infer_cnv_numbat(
 
         # Build results keys for metadata
         results_keys: dict[str, list[str]] = {
-            "uns": ["cnv_analysis"],
+            "uns": [cnv_summary_key],
             "obsm": ["X_cnv_numbat"],
             "obs": ["numbat_clone", "numbat_p_cnv", "numbat_compartment"],
         }
@@ -644,7 +688,7 @@ def _infer_cnv_numbat(
         # Store metadata for scientific provenance tracking
         store_analysis_metadata(
             adata,
-            analysis_name="cnv_numbat",
+            analysis_name=analysis_key,
             method="numbat",
             parameters={
                 "reference_key": params.reference_key,
@@ -659,7 +703,7 @@ def _infer_cnv_numbat(
         )
 
         # Export results for reproducibility
-        export_analysis_result(adata, data_id, "cnv_numbat")
+        export_analysis_result(adata, data_id, analysis_key)
 
     except Exception as e:
         raise ProcessingError(

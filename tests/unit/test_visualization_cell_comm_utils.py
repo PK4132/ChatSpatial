@@ -882,3 +882,106 @@ def test_plotnine_to_matplotlib_success_and_error_wrap():
             _FakePlotnine(should_fail=True),
             VisualizationParameters(plot_type="communication"),
         )
+
+
+@pytest.mark.asyncio
+async def test_get_cell_communication_data_uses_per_method_key(minimal_spatial_adata):
+    """When method is specified, per-method uns snapshot should be used."""
+    adata = minimal_spatial_adata.copy()
+
+    # Store two methods: liana (shared/latest) and cellphonedb (older, per-method)
+    cpdb_storage = CCCStorage(
+        method="cellphonedb",
+        analysis_type="cluster",
+        species="human",
+        database="cellphonedb",
+        lr_pairs=["L1^R1"],
+        top_lr_pairs=["L1^R1"],
+        n_pairs=1,
+        n_significant=1,
+        results=pd.DataFrame({"T|B": [0.8]}, index=["L1_R1"]),
+        pvalues=pd.DataFrame({"T|B": [0.05]}, index=["L1_R1"]),
+    )
+    liana_storage = CCCStorage(
+        method="liana",
+        analysis_type="cluster",
+        species="human",
+        database="consensus",
+        lr_pairs=["L2^R2"],
+        top_lr_pairs=["L2^R2"],
+        n_pairs=1,
+        n_significant=1,
+        results=pd.DataFrame({"T|B": [0.5]}, index=["L2_R2"]),
+        pvalues=pd.DataFrame({"T|B": [0.1]}, index=["L2_R2"]),
+    )
+
+    # Simulate dual-write: shared slot has liana (latest)
+    store_ccc_results(adata, liana_storage)
+    # Per-method snapshots
+    adata.uns["ccc_cellphonedb"] = cpdb_storage.to_dict()
+    adata.uns["ccc_liana"] = liana_storage.to_dict()
+
+    # Without method → shared (liana)
+    data_latest = await viz_cc.get_cell_communication_data(adata)
+    assert data_latest.method == "liana"
+
+    # With method → per-method (cellphonedb)
+    data_cpdb = await viz_cc.get_cell_communication_data(adata, method="cellphonedb")
+    assert data_cpdb.method == "cellphonedb"
+
+    # With method → per-method (liana)
+    data_liana = await viz_cc.get_cell_communication_data(adata, method="liana")
+    assert data_liana.method == "liana"
+
+
+@pytest.mark.asyncio
+async def test_create_cell_communication_visualization_passes_analysis_method(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """create_cell_communication_visualization must forward analysis_method to get_cell_communication_data."""
+    adata = minimal_spatial_adata.copy()
+    captured: dict[str, object] = {}
+
+    async def _fake_get(_adata, method=None, context=None):
+        captured["method"] = method
+        return _mock_cc_data(_mock_liana_results())
+
+    monkeypatch.setattr(viz_cc, "get_cell_communication_data", _fake_get)
+    monkeypatch.setattr(
+        viz_cc, "_create_unified_dotplot", lambda *_a, **_k: plt.figure()
+    )
+
+    # With analysis_method set
+    params = VisualizationParameters(
+        plot_type="communication", analysis_method="cellphonedb"
+    )
+    await viz_cc.create_cell_communication_visualization(adata, params)
+    assert captured["method"] == "cellphonedb"
+
+    # Without analysis_method (None)
+    params_none = VisualizationParameters(plot_type="communication")
+    await viz_cc.create_cell_communication_visualization(adata, params_none)
+    assert captured["method"] is None
+
+
+@pytest.mark.asyncio
+async def test_get_cell_communication_data_per_method_spatial_obsm(minimal_spatial_adata):
+    """Per-method obsm keys should be used when method is specified."""
+    adata = minimal_spatial_adata.copy()
+    _store_cluster_ccc(adata)
+    adata.uns["ccc_cellphonedb"] = adata.uns["ccc"].copy()
+
+    # Shared obsm: ones
+    adata.obsm["ccc_spatial_scores"] = np.ones((adata.n_obs, 2))
+    # Per-method obsm: twos
+    adata.obsm["ccc_spatial_scores_cellphonedb"] = np.full((adata.n_obs, 2), 2.0)
+
+    data_shared = await viz_cc.get_cell_communication_data(adata)
+    assert data_shared.spatial_scores is not None
+    assert data_shared.spatial_scores[0, 0] == pytest.approx(1.0)
+
+    data_method = await viz_cc.get_cell_communication_data(
+        adata, method="cellphonedb"
+    )
+    assert data_method.spatial_scores is not None
+    assert data_method.spatial_scores[0, 0] == pytest.approx(2.0)

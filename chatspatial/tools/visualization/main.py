@@ -124,7 +124,12 @@ async def visualize_data(
         # Validate AnnData object - basic validation
         if adata.n_obs < 5:
             raise DataNotFoundError("Dataset has too few cells (minimum 5 required)")
-        if adata.n_vars < 5:
+
+        # Only enforce gene count for plot types that read adata.X / var.
+        # Integration, deconvolution, cnv, trajectory, statistics, etc.
+        # rely on obsm/obs/uns and work fine with few genes.
+        _gene_dependent_types = {"feature", "expression"}
+        if params.plot_type in _gene_dependent_types and adata.n_vars < 5:
             raise DataNotFoundError("Dataset has too few genes (minimum 5 required)")
 
         # Set matplotlib style for better visualizations

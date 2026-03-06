@@ -106,11 +106,11 @@ async def test_identify_spatial_domains_leiden_happy_path_stores_metadata(
         SpatialDomainParameters(method="leiden", refine_domains=False),
     )
     assert out.method == "leiden"
-    assert out.domain_key == "spatial_domains_leiden"
+    assert out.domain_key == "spatial_domains_leiden_res0_5"
     assert out.refined_domain_key is None
-    assert captured["analysis_name"] == "spatial_domains_leiden"
+    assert captured["analysis_name"] == "spatial_domains_leiden_res0_5"
     assert captured["results_keys"] == {
-        "obs": ["spatial_domains_leiden"],
+        "obs": ["spatial_domains_leiden_res0_5"],
         "obsm": ["X_fake"],
     }
 
@@ -973,7 +973,8 @@ async def test_identify_spatial_domains_dispatches_non_clustering_methods(
 
     assert called["value"] is True
     assert out.method == method
-    assert out.domain_key == f"spatial_domains_{method}"
+    # Non-clustering methods use n_domains suffix (default n_domains=7)
+    assert out.domain_key == f"spatial_domains_{method}_n7"
 
 
 @pytest.mark.asyncio
@@ -1007,9 +1008,12 @@ async def test_identify_spatial_domains_refinement_success_updates_metadata(
         SpatialDomainParameters(method="leiden", refine_domains=True),
     )
 
-    assert out.refined_domain_key == "spatial_domains_leiden_refined"
+    assert out.refined_domain_key == "spatial_domains_leiden_res0_5_refined"
     assert captured["results_keys"] == {
-        "obs": ["spatial_domains_leiden", "spatial_domains_leiden_refined"]
+        "obs": [
+            "spatial_domains_leiden_res0_5",
+            "spatial_domains_leiden_res0_5_refined",
+        ]
     }
 
 

@@ -262,14 +262,27 @@ async def analyze_cell_communication(
         # === Store results in unified structure ===
         store_ccc_results(adata, storage)
 
+        # Per-method snapshot so earlier metadata remains valid
+        method_ccc_key = f"ccc_{params.method}"
+        adata.uns[method_ccc_key] = storage.to_dict()
+
         # === Store spatial data in obsm if applicable ===
         if (
             storage.analysis_type == "spatial"
             and "spatial_scores" in storage.method_data
         ):
+            # Shared keys for viz backward compatibility
             adata.obsm[CCC_SPATIAL_SCORES_KEY] = storage.method_data["spatial_scores"]
             if "spatial_pvals" in storage.method_data:
                 adata.obsm[CCC_SPATIAL_PVALS_KEY] = storage.method_data["spatial_pvals"]
+
+            # Per-method copies for provenance (metadata points here)
+            method_scores_key = f"ccc_spatial_scores_{params.method}"
+            adata.obsm[method_scores_key] = storage.method_data["spatial_scores"]
+            method_pvals_key: str | None = None
+            if "spatial_pvals" in storage.method_data:
+                method_pvals_key = f"ccc_spatial_pvals_{params.method}"
+                adata.obsm[method_pvals_key] = storage.method_data["spatial_pvals"]
 
         # === Store scientific metadata for reproducibility ===
         from ..utils.adata_utils import store_analysis_metadata
@@ -277,14 +290,15 @@ async def analyze_cell_communication(
 
         obsm_keys: list[str] = []
         if storage.analysis_type == "spatial":
-            obsm_keys.append(CCC_SPATIAL_SCORES_KEY)
-            if CCC_SPATIAL_PVALS_KEY in adata.obsm:
-                obsm_keys.append(CCC_SPATIAL_PVALS_KEY)
+            obsm_keys.append(f"ccc_spatial_scores_{params.method}")
+            pvals_key = f"ccc_spatial_pvals_{params.method}"
+            if pvals_key in adata.obsm:
+                obsm_keys.append(pvals_key)
 
         results_keys: dict[str, list[str]] = {
             "obs": [],
             "obsm": obsm_keys,
-            "uns": [CCC_UNS_KEY],
+            "uns": [method_ccc_key],
         }
 
         store_analysis_metadata(
@@ -319,7 +333,7 @@ async def analyze_cell_communication(
             top_lr_pairs=storage.top_lr_pairs,
             n_autocrine_loops=storage.autocrine.n_loops,
             top_autocrine_loops=storage.autocrine.top_pairs,
-            results_key=CCC_UNS_KEY,
+            results_key=method_ccc_key,
             statistics=storage.statistics,
         )
 

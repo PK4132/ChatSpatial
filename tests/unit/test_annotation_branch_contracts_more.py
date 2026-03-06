@@ -481,7 +481,67 @@ async def test_tangram_copies_gene_predictions_back_to_original_adata(
         reference_adata=ref,
     )
 
+    # Default tangram_ct_pred_key is "tangram_ct_pred", so gene_pred_key
+    # is "tangram_gene_predictions" (no suffix when called directly).
     assert "tangram_gene_predictions" in adata.obsm
+
+
+@pytest.mark.asyncio
+async def test_tangram_gene_predictions_uses_parametrized_key_with_suffix(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """When tangram_ct_pred_key has a suffix, gene_predictions key follows."""
+    adata = minimal_spatial_adata.copy()
+    adata.raw = adata.copy()
+    ref = minimal_spatial_adata.copy()
+    ref.obs["ctype"] = pd.Categorical(["B"] * ref.n_obs)
+
+    fake_tg = ModuleType("tangram")
+    fake_tg.pp_adatas = lambda *_a, **_k: None
+    fake_tg.map_cells_to_space = lambda *_a, **_k: SimpleNamespace(
+        uns={"training_history": {"main_loss": [1.0]}}
+    )
+    fake_tg.project_genes = lambda *_a, **_k: SimpleNamespace(
+        X=np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    )
+    fake_tg.project_cell_annotations = (
+        lambda _ad_map, adata_sp, annotation: adata_sp.obsm.__setitem__(
+            "tangram_ct_pred",
+            pd.DataFrame(
+                {"B": np.ones(adata_sp.n_obs, dtype=float)},
+                index=adata_sp.obs_names,
+            ),
+        )
+    )
+    monkeypatch.setitem(__import__("sys").modules, "tangram", fake_tg)
+
+    async def _no_dupes(*_args, **_kwargs):
+        return 0
+
+    monkeypatch.setattr(ann, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(ann, "ensure_unique_var_names_async", _no_dupes)
+    monkeypatch.setattr(ann, "get_device", lambda prefer_gpu=False: "cpu")
+    monkeypatch.setattr(ann, "shallow_copy_adata", lambda x: x)
+
+    await ann._annotate_with_tangram(
+        adata,
+        AnnotationParameters(
+            method="tangram",
+            cell_type_key="ctype",
+            tangram_project_genes=True,
+            training_genes=["gene_0", "gene_1"],
+        ),
+        DummyWarnCtx(),
+        "cell_type_tangram_myref",
+        "confidence_tangram_myref",
+        reference_adata=ref,
+        tangram_ct_pred_key="tangram_ct_pred_tangram_myref",
+    )
+
+    # The gene_predictions key should use the same suffix
+    assert "tangram_gene_predictions_tangram_myref" in adata.obsm
+    # The shared key should NOT be present (parametrized replaces it)
+    assert "tangram_gene_predictions" not in adata.obsm
 
 
 @pytest.mark.asyncio
@@ -740,11 +800,14 @@ async def test_annotate_cell_types_dispatch_metadata_for_tangram_scanvi_and_mllm
     monkeypatch.setattr("chatspatial.utils.adata_utils.store_analysis_metadata", _capture_metadata)
     monkeypatch.setattr("chatspatial.utils.results_export.export_analysis_result", lambda *_a, **_k: [])
 
-    async def _fake_tangram(_adata, _params, _ctx, output_key, confidence_key, reference_adata):
+    async def _fake_tangram(
+        _adata, _params, _ctx, output_key, confidence_key,
+        reference_adata, tangram_ct_pred_key="tangram_ct_pred",
+    ):
         del reference_adata
         _adata.obs[output_key] = ["B"] * _adata.n_obs
         _adata.obs[confidence_key] = [0.9] * _adata.n_obs
-        _adata.obsm["tangram_ct_pred"] = pd.DataFrame(
+        _adata.obsm[tangram_ct_pred_key] = pd.DataFrame(
             {"B": np.ones(_adata.n_obs)}, index=_adata.obs_names
         )
         return ann.AnnotationMethodOutput(
@@ -796,14 +859,15 @@ async def test_annotate_cell_types_dispatch_metadata_for_tangram_scanvi_and_mllm
     )
 
     assert out_t.tangram_mapping_score == 0.77
-    assert out_s.confidence_key == "confidence_scanvi"
+    # scanvi with reference_data_id="r" → suffix "scanvi_r"
+    assert out_s.confidence_key == "confidence_scanvi_r"
     assert out_m.confidence_key is None
 
     tangram_meta = next(c for c in captured_calls if c["method"] == "tangram")
     scanvi_meta = next(c for c in captured_calls if c["method"] == "scanvi")
     mllm_meta = next(c for c in captured_calls if c["method"] == "mllmcelltype")
 
-    assert tangram_meta["results_keys"]["obsm"] == ["tangram_ct_pred"]
+    assert tangram_meta["results_keys"]["obsm"] == ["tangram_ct_pred_tangram_r"]
     assert "learning_rate" in tangram_meta["parameters"]
     assert "mapping_score" in tangram_meta["statistics"]
     assert "n_latent" in scanvi_meta["parameters"]

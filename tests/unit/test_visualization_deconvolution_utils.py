@@ -604,3 +604,54 @@ async def test_create_card_imputation_missing_feature_error(minimal_spatial_adat
             ),
             context=None,
         )
+
+
+@pytest.mark.asyncio
+async def test_create_card_imputation_zero_sum_rows_labeled_unassigned(
+    minimal_spatial_adata,
+):
+    """Zero-signal locations must be labeled 'unassigned', not the first cell type."""
+    adata = minimal_spatial_adata.copy()
+    n = adata.n_obs
+    proportions = pd.DataFrame(
+        {
+            "T": np.linspace(0.1, 0.9, n),
+            "B": np.linspace(0.9, 0.1, n),
+        }
+    )
+    # Set first two rows to all zeros
+    proportions.iloc[0] = 0.0
+    proportions.iloc[1] = 0.0
+
+    adata.uns["card_imputation"] = {
+        "proportions": proportions,
+        "coordinates": pd.DataFrame(
+            {"x": np.linspace(0, 10, n), "y": np.linspace(0, 5, n)}
+        ),
+        "resolution_increase": 2.0,
+    }
+
+    fig = await viz_deconv._create_card_imputation(
+        adata,
+        VisualizationParameters(
+            plot_type="deconvolution",
+            subtype="imputation",
+            feature="dominant",
+        ),
+        context=None,
+    )
+    legend_labels = [t.get_text() for t in fig.axes[0].get_legend().texts]
+    assert "unassigned" in legend_labels
+
+    # Verify unassigned gets gray color
+    legend_patches = fig.axes[0].get_legend().legend_handles
+    unassigned_patch = None
+    for patch, label in zip(legend_patches, legend_labels):
+        if label == "unassigned":
+            unassigned_patch = patch
+            break
+    assert unassigned_patch is not None
+    # Check the facecolor is gray (#CCCCCC = (0.8, 0.8, 0.8, alpha))
+    fc = unassigned_patch.get_facecolor()
+    assert abs(fc[0] - 0.8) < 0.01 and abs(fc[1] - 0.8) < 0.01
+    fig.clf()

@@ -154,7 +154,10 @@ def export_analysis_result(
     method = metadata.get("method", "unknown")
 
     if not results_keys:
-        logger.debug(f"No results_keys in metadata for {analysis_name}")
+        # No CSV-exportable keys (e.g. bbknn modifies only the neighbors
+        # graph).  Still record the analysis in _index.json so the audit
+        # trail is complete.
+        _update_index(data_id, analysis_name, method, metadata, exported_files=[])
         return []
 
     analysis_dir = get_analysis_dir(data_id, analysis_name)
@@ -177,9 +180,8 @@ def export_analysis_result(
             except Exception as e:
                 logger.warning(f"Failed to export {key} from {location}: {e}")
 
-    # Update index
-    if exported_files:
-        _update_index(data_id, analysis_name, method, metadata, exported_files)
+    # Always update index for audit trail, even when no files were exported
+    _update_index(data_id, analysis_name, method, metadata, exported_files)
 
     return exported_files
 
@@ -204,9 +206,9 @@ def _extract_as_dataframe(
     - var: gene-level statistics
     - obsm: cell-level matrices
     """
-    # Special case: scanpy rank_genes_groups
-    if key == "rank_genes_groups" and location == "uns":
-        return _extract_rank_genes_groups(adata)
+    # Special case: scanpy rank_genes_groups (shared or per-run copy)
+    if key.startswith("rank_genes_groups") and location == "uns":
+        return _extract_rank_genes_groups(adata, key)
 
     # uns location
     if location == "uns":
@@ -232,15 +234,32 @@ def _extract_as_dataframe(
     return None
 
 
-def _extract_rank_genes_groups(adata: "AnnData") -> pd.DataFrame | None:
+def _extract_rank_genes_groups(
+    adata: "AnnData", key: str = "rank_genes_groups"
+) -> pd.DataFrame | None:
     """Extract differential expression results using scanpy's built-in function."""
     try:
         import scanpy as sc
 
-        if "rank_genes_groups" not in adata.uns:
+        if key not in adata.uns:
             return None
 
-        # Get results for all groups
+        # scanpy's get function requires key="rank_genes_groups" in adata.uns.
+        # For per-run copies, temporarily alias to the expected key.
+        if key != "rank_genes_groups":
+            original = adata.uns.get("rank_genes_groups")
+            adata.uns["rank_genes_groups"] = adata.uns[key]
+            try:
+                df = sc.get.rank_genes_groups_df(adata, group=None)
+            finally:
+                # Restore or remove
+                if original is not None:
+                    adata.uns["rank_genes_groups"] = original
+                else:
+                    del adata.uns["rank_genes_groups"]
+            return df
+
+        # Standard path
         df = sc.get.rank_genes_groups_df(adata, group=None)
         return df
     except Exception as e:
@@ -261,7 +280,11 @@ def _extract_from_uns(adata: "AnnData", key: str) -> pd.DataFrame | None:
 
     # Special case: unified CCC storage (mixed dict with DataFrames, lists, etc.)
     # Extract the "results" DataFrame which is the core scientific output.
-    if key == "ccc" and isinstance(data, dict) and "results" in data:
+    if (
+        (key == "ccc" or key.startswith("ccc_"))
+        and isinstance(data, dict)
+        and "results" in data
+    ):
         results = data["results"]
         if isinstance(results, pd.DataFrame):
             return results.copy()
@@ -290,6 +313,27 @@ def _extract_from_uns(adata: "AnnData", key: str) -> pd.DataFrame | None:
 
     logger.debug(f"Unsupported data type in uns[{key}]: {type(data)}")
     return None
+
+
+def _match_labels(all_labels: list, observed_labels: list, n: int) -> list:
+    """Pick the label list whose length matches the matrix dimension *n*.
+
+    Preference order: all categories → observed-only → integer fallback.
+    This prevents shape mismatches when squidpy matrices include unused
+    categorical levels.
+    """
+    if len(all_labels) == n:
+        return all_labels
+    if len(observed_labels) == n:
+        return observed_labels
+    logger.warning(
+        "Matrix dimension %d matches neither all categories (%d) "
+        "nor observed categories (%d); using integer indices.",
+        n,
+        len(all_labels),
+        len(observed_labels),
+    )
+    return list(range(n))
 
 
 def _extract_squidpy_spatial_result(
@@ -322,29 +366,28 @@ def _extract_squidpy_spatial_result(
         logger.warning(f"Cluster key '{cluster_key}' not found in adata.obs")
         return None
 
-    # Use actually observed values in their order of appearance, not
-    # cat.categories which may include unused levels in wrong order.
+    # Squidpy builds matrices using ALL categorical levels (including
+    # unobserved ones).  We need both the full set and the observed
+    # subset so we can pick whichever matches the matrix dimensions.
     cluster_col = adata.obs[cluster_key]
     if hasattr(cluster_col, "cat"):
-        labels = [c for c in cluster_col.cat.categories if (cluster_col == c).any()]
+        all_labels = list(cluster_col.cat.categories)
+        observed_labels = [c for c in all_labels if (cluster_col == c).any()]
     else:
-        labels = list(cluster_col.unique())
+        all_labels = observed_labels = list(cluster_col.unique())
 
     # Handle co_occurrence special case (3D array with intervals)
     if "occ" in data and isinstance(data["occ"], np.ndarray) and data["occ"].ndim == 3:
-        return _extract_co_occurrence(data, labels, cluster_key)
+        return _extract_co_occurrence(data, all_labels, observed_labels, cluster_key)
 
     # Handle nhood_enrichment and similar 2D matrix results
     result_dfs = []
 
     for metric_name, metric_data in data.items():
         if isinstance(metric_data, np.ndarray) and metric_data.ndim == 2:
-            # Create DataFrame with cluster labels
             n_rows, n_cols = metric_data.shape
-
-            # Ensure labels match dimensions
-            row_labels = labels[:n_rows] if len(labels) >= n_rows else labels
-            col_labels = labels[:n_cols] if len(labels) >= n_cols else labels
+            row_labels = _match_labels(all_labels, observed_labels, n_rows)
+            col_labels = _match_labels(all_labels, observed_labels, n_cols)
 
             df = pd.DataFrame(
                 metric_data,
@@ -362,7 +405,10 @@ def _extract_squidpy_spatial_result(
 
 
 def _extract_co_occurrence(
-    data: dict[str, Any], labels: list, cluster_key: str
+    data: dict[str, Any],
+    all_labels: list,
+    observed_labels: list,
+    cluster_key: str,
 ) -> pd.DataFrame | None:
     """
     Extract co_occurrence results preserving per-interval distance structure.
@@ -380,9 +426,8 @@ def _extract_co_occurrence(
 
     n_clusters_row, n_clusters_col, n_intervals = occ.shape
 
-    # Ensure labels match dimensions
-    row_labels = labels[:n_clusters_row] if len(labels) >= n_clusters_row else labels
-    col_labels = labels[:n_clusters_col] if len(labels) >= n_clusters_col else labels
+    row_labels = _match_labels(all_labels, observed_labels, n_clusters_row)
+    col_labels = _match_labels(all_labels, observed_labels, n_clusters_col)
 
     frames: list[pd.DataFrame] = []
 
@@ -525,12 +570,23 @@ def _infer_obsm_columns(adata: "AnnData", key: str, n_cols: int) -> list[str]:
             if len(ct_list) == n_cols:
                 return ct_list
 
-    # CCC spatial scores/pvals: uns["ccc"]["lr_pairs"]
+    # CCC spatial scores/pvals: try per-method uns first, then shared
     if "spatial_scores" in key or "spatial_pvals" in key:
-        if "ccc" in adata.uns and "lr_pairs" in adata.uns["ccc"]:
+        # Extract method from key like "ccc_spatial_scores_liana"
+        # Pattern: ccc_spatial_{scores|pvals}_{method}
+        lr_pairs: list[str] | None = None
+        parts = key.split("_")
+        # key = "ccc_spatial_scores_method" → parts[3:] = ["method"]
+        if len(parts) > 3:
+            method_name = "_".join(parts[3:])
+            method_ccc_key = f"ccc_{method_name}"
+            if method_ccc_key in adata.uns and "lr_pairs" in adata.uns[method_ccc_key]:
+                lr_pairs = list(adata.uns[method_ccc_key]["lr_pairs"])
+        # Fallback to shared key
+        if lr_pairs is None and "ccc" in adata.uns and "lr_pairs" in adata.uns["ccc"]:
             lr_pairs = list(adata.uns["ccc"]["lr_pairs"])
-            if len(lr_pairs) == n_cols:
-                return lr_pairs
+        if lr_pairs is not None and len(lr_pairs) == n_cols:
+            return lr_pairs
 
     # Default: numeric indices
     return [f"{key}_{i}" for i in range(n_cols)]

@@ -595,7 +595,7 @@ def plot_spatial_feature(
     feature: Optional[str] = None,
     values: Optional[np.ndarray] = None,
     params: Optional[VisualizationParameters] = None,
-    spatial_key: str = "spatial",
+    spatial_key: Optional[str] = None,
     show_colorbar: bool = True,
     title: Optional[str] = None,
 ) -> Optional[plt.cm.ScalarMappable]:
@@ -616,6 +616,12 @@ def plot_spatial_feature(
     """
     if params is None:
         params = VisualizationParameters()
+
+    # Auto-detect spatial key if not specified (supports X_spatial, etc.)
+    if spatial_key is None:
+        from ...utils.adata_utils import get_spatial_key
+
+        spatial_key = get_spatial_key(adata) or "spatial"
 
     # Calculate spot size (auto or user-specified)
     spot_size = auto_spot_size(adata, params.spot_size, basis=spatial_key)

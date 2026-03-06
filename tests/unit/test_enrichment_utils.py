@@ -18,6 +18,7 @@ from chatspatial.models.analysis import EnrichmentResult
 from chatspatial.models.data import EnrichmentParameters
 from chatspatial.tools import enrichment as enrichment_module
 from chatspatial.tools.enrichment import (
+    _build_enrichment_key,
     _compute_std_sparse_compatible,
     _convert_gene_format_for_matching,
     _filter_gene_sets_by_size,
@@ -352,7 +353,8 @@ async def test_perform_spatial_enrichment_partial_failure_still_returns_success(
     # Gene sets keyed by method to avoid cross-analysis overwrite
     assert "enrichment_spatial_gene_sets" in adata.uns
     assert list(adata.uns["enrichment_spatial_gene_sets"].keys()) == ["sig_ok"]
-    assert captured["analysis_name"] == "enrichment_spatial"
+    # Parametrized: includes database when provided
+    assert captured["analysis_name"] == "enrichment_spatial_KEGG_Pathways"
     assert captured["results_keys"]["obs"] == ["sig_ok_score"]
     assert any("Failed to process 1 gene sets" in msg for msg in ctx.warnings)
 
@@ -705,7 +707,10 @@ def test_perform_gsea_with_ranking_key_persists_results(monkeypatch: pytest.Monk
     assert set(out.gene_set_statistics) == {"GS_A"}
     assert "gsea_results" in adata.uns
     assert "enrichment_gsea_gene_sets" in adata.uns
-    assert captured["analysis_name"] == "enrichment_gsea"
+    # Parametrized: includes database when provided
+    assert captured["analysis_name"] == "enrichment_gsea_KEGG_Pathways"
+    # Per-run results key coexists with shared key
+    assert "gsea_results_gsea_KEGG_Pathways" in adata.uns
 
 
 def test_perform_ssgsea_success_populates_obs_and_uns(monkeypatch: pytest.MonkeyPatch, minimal_spatial_adata):
@@ -752,7 +757,11 @@ def test_perform_ssgsea_success_populates_obs_and_uns(monkeypatch: pytest.Monkey
     assert "ssgsea_GS_A" in adata.obs.columns
     assert "ssgsea_GS_B" in adata.obs.columns
     assert "enrichment_ssgsea_gene_sets" in adata.uns
+    # Parametrized: no database → falls back to method-only key
     assert captured["analysis_name"] == "enrichment_ssgsea"
+
+    # With database, the key includes database name
+    # (tested separately in test_enrichment_branch_contracts.py)
 
 
 def test_perform_ssgsea_invalid_result_format_raises_processing_error(
@@ -776,3 +785,101 @@ def test_perform_ssgsea_invalid_result_format_raises_processing_error(
             adata=adata,
             gene_sets={"GS_A": ["gene_0", "gene_1"]},
         )
+
+
+def test_build_enrichment_key_with_database():
+    key = _build_enrichment_key("gsea", "KEGG_Pathways")
+    assert key == "enrichment_gsea_KEGG_Pathways"
+
+
+def test_build_enrichment_key_without_database():
+    key = _build_enrichment_key("ora", None)
+    assert key == "enrichment_ora"
+
+
+def test_build_enrichment_key_sanitizes_spaces_and_slashes():
+    key = _build_enrichment_key("gsea", "GO Biological/Process")
+    assert key == "enrichment_gsea_GO_Biological_Process"
+
+
+def test_perform_gsea_without_database_uses_method_only_key(
+    monkeypatch: pytest.MonkeyPatch, minimal_spatial_adata
+):
+    """When database is None, analysis_name falls back to enrichment_gsea."""
+    adata = minimal_spatial_adata.copy()
+    adata.var["rank_metric"] = np.linspace(1.0, 0.1, adata.n_vars)
+
+    class _Res:
+        def __init__(self):
+            self.res2d = pd.DataFrame(
+                {
+                    "Term": ["GS_A"],
+                    "ES": [0.5],
+                    "NES": [1.7],
+                    "NOM p-val": [0.01],
+                    "FDR q-val": [0.2],
+                    "Matched_size": [12],
+                    "Lead_genes": ["gene_0;gene_1"],
+                }
+            )
+
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        enrichment_module.gp,
+        "prerank",
+        lambda **kwargs: _Res(),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        enrichment_module,
+        "store_analysis_metadata",
+        lambda _adata, **kwargs: captured.update(kwargs),
+    )
+    monkeypatch.setattr(
+        enrichment_module,
+        "export_analysis_result",
+        lambda *_a, **_k: None,
+    )
+
+    enrichment_module.perform_gsea(
+        adata=adata,
+        gene_sets={"GS_A": ["gene_0", "gene_1"]},
+        ranking_key="rank_metric",
+        data_id="d1",
+        database=None,
+    )
+
+    assert captured["analysis_name"] == "enrichment_gsea"
+    # Per-run key without database suffix
+    assert "gsea_results_gsea" in adata.uns
+
+
+def test_perform_ora_parametrized_key_with_database(
+    monkeypatch: pytest.MonkeyPatch, minimal_spatial_adata
+):
+    """ORA with database produces parametrized analysis key."""
+    adata = minimal_spatial_adata.copy()
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        enrichment_module,
+        "store_analysis_metadata",
+        lambda _adata, **kwargs: captured.update(kwargs),
+    )
+    monkeypatch.setattr(
+        enrichment_module,
+        "export_analysis_result",
+        lambda *_a, **_k: None,
+    )
+
+    enrichment_module.perform_ora(
+        adata=adata,
+        gene_sets={"GS_A": adata.var_names[:3].tolist()},
+        gene_list=adata.var_names[:3].tolist(),
+        min_size=1,
+        max_size=100,
+        database="GO_Biological_Process",
+        data_id="d1",
+    )
+
+    assert captured["analysis_name"] == "enrichment_ora_GO_Biological_Process"
+    assert "ora_results_ora_GO_Biological_Process" in adata.uns

@@ -34,6 +34,19 @@ _GSEA_FDR_THRESHOLD = 0.25
 
 logger = logging.getLogger(__name__)
 
+
+def _build_enrichment_key(method: str, database: str | None) -> str:
+    """Build parametric analysis key for enrichment.
+
+    Encodes method + database so multiple enrichment runs coexist.
+    """
+    if database:
+        # Sanitize database name for use as key (replace spaces, slashes)
+        db_clean = database.replace(" ", "_").replace("/", "_")
+        return f"enrichment_{method}_{db_clean}"
+    return f"enrichment_{method}"
+
+
 # Preferred/legacy library candidates to keep versioning deterministic while
 # remaining backward-compatible with environments missing the latest release.
 GENESET_LIBRARY_CANDIDATES: dict[str, tuple[str, ...]] = {
@@ -588,16 +601,25 @@ def perform_gsea(
         )
 
         # Save results to adata.uns for visualization
-        # Store full results DataFrame for visualization
+        # Store full results DataFrame for visualization (shared key for viz compat)
         adata.uns["gsea_results"] = results_df
 
-        # Store gene set membership keyed by method to avoid cross-analysis overwrite
+        # Per-run parametrized key so multiple database runs coexist
+        analysis_key = _build_enrichment_key("gsea", database)
+        per_run_key = f"gsea_results_{analysis_key.removeprefix('enrichment_')}"
+        adata.uns[per_run_key] = results_df
+
+        # Store gene set membership (shared for compat + per-run for provenance)
         adata.uns["enrichment_gsea_gene_sets"] = gene_sets
+        per_run_gs_key = (
+            f"enrichment_gsea_gene_sets_{analysis_key.removeprefix('enrichment_')}"
+        )
+        adata.uns[per_run_gs_key] = gene_sets
 
         # Store metadata for scientific provenance tracking
         store_analysis_metadata(
             adata,
-            analysis_name="enrichment_gsea",
+            analysis_name=analysis_key,
             method="gsea",
             parameters={
                 "permutation_num": permutation_num,
@@ -606,7 +628,9 @@ def perform_gsea(
                 "max_size": max_size,
                 "ranking_key": ranking_key,
             },
-            results_keys={"uns": ["gsea_results", "enrichment_gsea_gene_sets"]},
+            results_keys={
+                "uns": [per_run_key, per_run_gs_key],
+            },
             statistics={
                 "n_gene_sets": len(gene_sets),
                 "n_significant": len(
@@ -619,7 +643,7 @@ def perform_gsea(
 
         # Export results to CSV for reproducibility
         if data_id is not None:
-            export_analysis_result(adata, data_id, "enrichment_gsea")
+            export_analysis_result(adata, data_id, analysis_key)
 
         # Filter all result dictionaries to only significant pathways (reduces MCP response size)
         # Uses method-based FDR threshold: GSEA = 0.25 (Subramanian et al. 2005)
@@ -833,10 +857,20 @@ def perform_ora(
     ora_df["NES"] = ora_df["odds_ratio"]  # Use odds_ratio as score for visualization
     ora_df = ora_df.sort_values("pvalue")
 
+    # Shared key for visualization compatibility
     adata.uns["ora_results"] = ora_df
 
-    # Store gene set membership keyed by method to avoid cross-analysis overwrite
+    # Per-run parametrized key so multiple database runs coexist
+    analysis_key = _build_enrichment_key("ora", database)
+    per_run_key = f"ora_results_{analysis_key.removeprefix('enrichment_')}"
+    adata.uns[per_run_key] = ora_df
+
+    # Store gene set membership (shared for compat + per-run for provenance)
     adata.uns["enrichment_ora_gene_sets"] = gene_sets
+    per_run_gs_key = (
+        f"enrichment_ora_gene_sets_{analysis_key.removeprefix('enrichment_')}"
+    )
+    adata.uns[per_run_gs_key] = gene_sets
 
     # Count significant using the user-supplied pvalue_threshold (not a hardcoded 0.05)
     n_significant = sum(
@@ -846,7 +880,7 @@ def perform_ora(
     # Store metadata for scientific provenance tracking
     store_analysis_metadata(
         adata,
-        analysis_name="enrichment_ora",
+        analysis_name=analysis_key,
         method="ora",
         parameters={
             "pvalue_threshold": pvalue_threshold,
@@ -855,7 +889,9 @@ def perform_ora(
             "max_size": max_size,
             "n_query_genes": len(query_genes),
         },
-        results_keys={"uns": ["ora_results", "enrichment_ora_gene_sets"]},
+        results_keys={
+            "uns": [per_run_key, per_run_gs_key],
+        },
         statistics={
             "n_gene_sets": len(gene_sets),
             "n_significant": n_significant,
@@ -867,7 +903,7 @@ def perform_ora(
 
     # Export results to CSV for reproducibility
     if data_id is not None:
-        export_analysis_result(adata, data_id, "enrichment_ora")
+        export_analysis_result(adata, data_id, analysis_key)
 
     # Filter result dicts to significant pathways (reduces MCP response size)
     # Use the user-supplied pvalue_threshold for consistency
@@ -1056,20 +1092,28 @@ def perform_ssgsea(
             for gs_name in scores_df.index:
                 adata.obs[f"ssgsea_{gs_name}"] = scores_T[gs_name].values
 
-            # Store gene set membership keyed by method to avoid cross-analysis overwrite
+            # Per-run parametrized key so multiple database runs coexist
+            analysis_key = _build_enrichment_key("ssgsea", database)
+
+            # Store gene set membership (shared for compat + per-run for provenance)
             adata.uns["enrichment_ssgsea_gene_sets"] = gene_sets
+            per_run_gs_key = f"enrichment_ssgsea_gene_sets_{analysis_key.removeprefix('enrichment_')}"
+            adata.uns[per_run_gs_key] = gene_sets
 
             # Store metadata for scientific provenance tracking
             obs_keys = [f"ssgsea_{gs_name}" for gs_name in scores_df.index]
             store_analysis_metadata(
                 adata,
-                analysis_name="enrichment_ssgsea",
+                analysis_name=analysis_key,
                 method="ssgsea",
                 parameters={
                     "min_size": min_size,
                     "max_size": max_size,
                 },
-                results_keys={"obs": obs_keys, "uns": ["enrichment_ssgsea_gene_sets"]},
+                results_keys={
+                    "obs": obs_keys,
+                    "uns": [per_run_gs_key],
+                },
                 statistics={
                     "n_gene_sets": len(gene_sets),
                     "n_samples": adata.n_obs,
@@ -1080,7 +1124,7 @@ def perform_ssgsea(
 
             # Export results for reproducibility
             if data_id is not None:
-                export_analysis_result(adata, data_id, "enrichment_ssgsea")
+                export_analysis_result(adata, data_id, analysis_key)
 
         # Get top gene sets by mean enrichment
         sorted_by_mean = sorted(
@@ -1408,13 +1452,20 @@ async def perform_spatial_enrichment(
             "n_genes": len(validated_gene_sets[sig_name]),
         }
 
-    # Store gene set membership keyed by method to avoid cross-analysis overwrite
+    # Per-run parametrized key so multiple database runs coexist
+    analysis_key = _build_enrichment_key("spatial", database)
+
+    # Store gene set membership (shared for compat + per-run for provenance)
     adata.uns["enrichment_spatial_gene_sets"] = validated_gene_sets
+    per_run_gs_key = (
+        f"enrichment_spatial_gene_sets_{analysis_key.removeprefix('enrichment_')}"
+    )
+    adata.uns[per_run_gs_key] = validated_gene_sets
 
     # Store metadata for scientific provenance tracking
     store_analysis_metadata(
         adata,
-        analysis_name="enrichment_spatial",
+        analysis_name=analysis_key,
         method="spatial_enrichmap",
         parameters={
             "spatial_key": spatial_key,
@@ -1425,7 +1476,7 @@ async def perform_spatial_enrichment(
         },
         results_keys={
             "obs": score_columns,
-            "uns": ["enrichment_spatial_gene_sets"],
+            "uns": [per_run_gs_key],
         },
         statistics={
             "n_gene_sets": len(validated_gene_sets),
@@ -1437,7 +1488,7 @@ async def perform_spatial_enrichment(
     )
 
     # Export results for reproducibility
-    export_analysis_result(adata, data_id, "enrichment_spatial")
+    export_analysis_result(adata, data_id, analysis_key)
 
     # Create enrichment scores (use max score per gene set)
     enrichment_scores = {

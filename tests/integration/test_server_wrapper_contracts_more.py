@@ -73,8 +73,20 @@ async def test_compute_embeddings_returns_model_dump_and_passes_params(
     )
     monkeypatch.setitem(sys.modules, "chatspatial.tools.embeddings", fake_module)
 
+    saved: dict[str, object] = {}
+
+    async def fake_save_result(data_id: str, result_type: str, result):
+        saved["data_id"] = data_id
+        saved["result_type"] = result_type
+        saved["result"] = result
+
+    monkeypatch.setattr(data_manager, "save_result", fake_save_result)
+
     embed_params = EmbeddingParameters(
-        clustering_method="louvain", n_pcs=22, n_neighbors=9, force=True,
+        clustering_method="louvain",
+        n_pcs=22,
+        n_neighbors=9,
+        force=True,
     )
     result = await compute_embeddings("d1", params=embed_params)
 
@@ -86,6 +98,10 @@ async def test_compute_embeddings_returns_model_dump_and_passes_params(
     assert params.n_pcs == 22
     assert params.n_neighbors == 9
     assert params.force is True
+    # Verify embeddings result is cached
+    assert saved["data_id"] == "d1"
+    assert saved["result_type"] == "embeddings"
+    assert saved["result"] == result
 
 
 @pytest.mark.integration
@@ -130,7 +146,9 @@ async def test_compare_conditions_saves_result_with_expected_key(
         )
 
     fake_module = SimpleNamespace(compare_conditions=fake_compare)
-    monkeypatch.setitem(sys.modules, "chatspatial.tools.condition_comparison", fake_module)
+    monkeypatch.setitem(
+        sys.modules, "chatspatial.tools.condition_comparison", fake_module
+    )
 
     saved: dict[str, object] = {}
 
@@ -152,7 +170,7 @@ async def test_compare_conditions_saves_result_with_expected_key(
     assert isinstance(result, ConditionComparisonResult)
     assert calls["data_id"] == "d2"
     assert saved["data_id"] == "d2"
-    assert saved["result_type"] == "condition_comparison"
+    assert saved["result_type"] == "condition_comparison_treated_vs_control"
     assert saved["result"] is result
 
 
@@ -171,7 +189,9 @@ async def test_analyze_cnv_saves_result_with_expected_key(
             n_genes_analyzed=100,
         )
 
-    fake_module = SimpleNamespace(infer_cnv=fake_cnv)
+    from chatspatial.tools.cnv_analysis import _build_cnv_key
+
+    fake_module = SimpleNamespace(infer_cnv=fake_cnv, _build_cnv_key=_build_cnv_key)
     monkeypatch.setitem(sys.modules, "chatspatial.tools.cnv_analysis", fake_module)
 
     saved: dict[str, object] = {}
@@ -182,11 +202,13 @@ async def test_analyze_cnv_saves_result_with_expected_key(
 
     monkeypatch.setattr(data_manager, "save_result", fake_save_result)
 
-    cnv_params = CNVParameters(reference_key="cell_type", reference_categories=["immune"])
+    cnv_params = CNVParameters(
+        reference_key="cell_type", reference_categories=["immune"]
+    )
     result = await analyze_cnv("d3", params=cnv_params)
     assert isinstance(result, CNVResult)
     assert saved["data_id"] == "d3"
-    assert saved["result_type"] == "cnv_analysis"
+    assert saved["result_type"] == "cnv_infercnvpy_immune"
 
 
 @pytest.mark.integration
@@ -196,7 +218,9 @@ async def test_velocity_and_trajectory_wrappers_save_expected_result_keys(
 ):
     async def fake_velocity(data_id, ctx, params):
         assert isinstance(params, RNAVelocityParameters)
-        return RNAVelocityResult(data_id=data_id, velocity_computed=True, mode="stochastic")
+        return RNAVelocityResult(
+            data_id=data_id, velocity_computed=True, mode="stochastic"
+        )
 
     async def fake_trajectory(data_id, ctx, params):
         assert isinstance(params, TrajectoryParameters)
@@ -209,8 +233,24 @@ async def test_velocity_and_trajectory_wrappers_save_expected_result_keys(
             spatial_weight=0.0,
         )
 
-    monkeypatch.setitem(sys.modules, "chatspatial.tools.velocity", SimpleNamespace(analyze_rna_velocity=fake_velocity))
-    monkeypatch.setitem(sys.modules, "chatspatial.tools.trajectory", SimpleNamespace(analyze_trajectory=fake_trajectory))
+    from chatspatial.tools.trajectory import _build_trajectory_key
+    from chatspatial.tools.velocity import _build_velocity_key
+
+    monkeypatch.setitem(
+        sys.modules,
+        "chatspatial.tools.velocity",
+        SimpleNamespace(
+            analyze_rna_velocity=fake_velocity, _build_velocity_key=_build_velocity_key
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "chatspatial.tools.trajectory",
+        SimpleNamespace(
+            analyze_trajectory=fake_trajectory,
+            _build_trajectory_key=_build_trajectory_key,
+        ),
+    )
 
     saved_calls: list[tuple[str, str]] = []
 
@@ -224,8 +264,8 @@ async def test_velocity_and_trajectory_wrappers_save_expected_result_keys(
 
     assert isinstance(velocity_result, RNAVelocityResult)
     assert isinstance(trajectory_result, TrajectoryResult)
-    assert ("d4", "rna_velocity") in saved_calls
-    assert ("d4", "trajectory") in saved_calls
+    assert ("d4", "velocity_scvelo_stochastic") in saved_calls
+    assert ("d4", "trajectory_cellrank_sw0_5") in saved_calls
 
 
 @pytest.mark.integration
@@ -261,10 +301,15 @@ async def test_preprocess_and_annotation_wrappers_materialize_default_params(
         "chatspatial.tools.preprocessing",
         SimpleNamespace(preprocess_data=fake_preprocess),
     )
+    from chatspatial.tools.annotation import _build_annotation_suffix
+
     monkeypatch.setitem(
         sys.modules,
         "chatspatial.tools.annotation",
-        SimpleNamespace(annotate_cell_types=fake_annotate),
+        SimpleNamespace(
+            annotate_cell_types=fake_annotate,
+            _build_annotation_suffix=_build_annotation_suffix,
+        ),
     )
 
     saved_calls: list[tuple[str, str]] = []
@@ -280,7 +325,8 @@ async def test_preprocess_and_annotation_wrappers_materialize_default_params(
     assert isinstance(prep_result, PreprocessingResult)
     assert isinstance(ann_result, AnnotationResult)
     assert ("d_default", "preprocessing") in saved_calls
-    assert ("d_default", "annotation") in saved_calls
+    # Default tangram without reference → suffix is just "tangram"
+    assert ("d_default", "annotation_tangram") in saved_calls
 
 
 @pytest.mark.integration
@@ -309,10 +355,15 @@ async def test_domains_and_spatial_genes_wrappers_materialize_default_params(
             results_key=f"spatial_genes_{params.method}",
         )
 
+    from chatspatial.tools.spatial_domains import _build_domain_suffix
+
     monkeypatch.setitem(
         sys.modules,
         "chatspatial.tools.spatial_domains",
-        SimpleNamespace(identify_spatial_domains=fake_domains),
+        SimpleNamespace(
+            identify_spatial_domains=fake_domains,
+            _build_domain_suffix=_build_domain_suffix,
+        ),
     )
     monkeypatch.setitem(
         sys.modules,
@@ -332,8 +383,9 @@ async def test_domains_and_spatial_genes_wrappers_materialize_default_params(
 
     assert isinstance(domain_result, SpatialDomainResult)
     assert isinstance(spatial_gene_result, SpatialVariableGenesResult)
-    assert ("d_defaults", "spatial_domains") in saved_calls
-    assert ("d_defaults", "spatial_genes") in saved_calls
+    # Default spagcn with n_domains=7 → suffix is "spagcn_n7"
+    assert ("d_defaults", "spatial_domains_spagcn_n7") in saved_calls
+    assert ("d_defaults", "spatial_genes_flashs") in saved_calls
 
 
 @pytest.mark.integration
@@ -381,10 +433,36 @@ async def test_deconvolution_domains_comm_and_spatial_genes_save_expected_keys(
             results_key=f"spatial_genes_{params.method}",
         )
 
-    monkeypatch.setitem(sys.modules, "chatspatial.tools.deconvolution", SimpleNamespace(deconvolve_spatial_data=fake_deconv))
-    monkeypatch.setitem(sys.modules, "chatspatial.tools.spatial_domains", SimpleNamespace(identify_spatial_domains=fake_domains))
-    monkeypatch.setitem(sys.modules, "chatspatial.tools.cell_communication", SimpleNamespace(analyze_cell_communication=fake_comm))
-    monkeypatch.setitem(sys.modules, "chatspatial.tools.spatial_genes", SimpleNamespace(identify_spatial_genes=fake_spatial_genes))
+    from chatspatial.tools.spatial_domains import _build_domain_suffix
+
+    from chatspatial.tools.deconvolution import _build_deconvolution_key
+
+    monkeypatch.setitem(
+        sys.modules,
+        "chatspatial.tools.deconvolution",
+        SimpleNamespace(
+            deconvolve_spatial_data=fake_deconv,
+            _build_deconvolution_key=_build_deconvolution_key,
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "chatspatial.tools.spatial_domains",
+        SimpleNamespace(
+            identify_spatial_domains=fake_domains,
+            _build_domain_suffix=_build_domain_suffix,
+        ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "chatspatial.tools.cell_communication",
+        SimpleNamespace(analyze_cell_communication=fake_comm),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "chatspatial.tools.spatial_genes",
+        SimpleNamespace(identify_spatial_genes=fake_spatial_genes),
+    )
 
     saved_calls: list[tuple[str, str]] = []
 
@@ -415,7 +493,8 @@ async def test_deconvolution_domains_comm_and_spatial_genes_save_expected_keys(
     assert isinstance(domain_result, SpatialDomainResult)
     assert isinstance(comm_result, CellCommunicationResult)
     assert isinstance(spatial_gene_result, SpatialVariableGenesResult)
-    assert ("d5", "deconvolution") in saved_calls
-    assert ("d5", "spatial_domains") in saved_calls
-    assert ("d5", "cell_communication") in saved_calls
-    assert ("d5", "spatial_genes") in saved_calls
+    assert ("d5", "deconvolution_flashdeconv_ref_1") in saved_calls
+    # leiden with default resolution=0.5 → suffix "leiden_res0_5"
+    assert ("d5", "spatial_domains_leiden_res0_5") in saved_calls
+    assert ("d5", "cell_communication_liana") in saved_calls
+    assert ("d5", "spatial_genes_flashs") in saved_calls

@@ -11,7 +11,11 @@ from scipy import sparse
 
 from chatspatial.models.data import CNVParameters
 from chatspatial.tools import cnv_analysis as cnv
-from chatspatial.utils.exceptions import DependencyError, ParameterError, ProcessingError
+from chatspatial.utils.exceptions import (
+    DependencyError,
+    ParameterError,
+    ProcessingError,
+)
 
 
 class DummyCtx:
@@ -27,7 +31,9 @@ class DummyCtx:
 
 
 @pytest.mark.asyncio
-async def test_infer_cnv_rejects_unknown_method_via_runtime_guard(minimal_spatial_adata):
+async def test_infer_cnv_rejects_unknown_method_via_runtime_guard(
+    minimal_spatial_adata,
+):
     adata = minimal_spatial_adata.copy()
     adata.obs["cell_type"] = ["A"] * 30 + ["B"] * 30
     params = CNVParameters(
@@ -85,9 +91,9 @@ async def test_infer_cnv_infercnvpy_success_sparse_stats_and_metadata(
     assert "mean_cnv" in out.statistics
     assert "std_cnv" in out.statistics
     assert "median_cnv" in out.statistics
-    assert "cnv_analysis" in adata.uns
-    assert captured["analysis_name"] == "cnv_infercnvpy"
-    assert captured["results_keys"]["uns"] == ["cnv", "cnv_analysis"]
+    assert "cnv_analysis_infercnvpy_A" in adata.uns
+    assert captured["analysis_name"] == "cnv_infercnvpy_A"
+    assert captured["results_keys"]["uns"] == ["cnv", "cnv_analysis_infercnvpy_A"]
     assert captured["results_keys"]["obsm"] == ["X_cnv"]
 
 
@@ -179,22 +185,34 @@ async def test_infer_cnv_rejects_missing_reference_categories(minimal_spatial_ad
         )
 
 
-def test_infer_cnv_numbat_requires_allele_dataframe(minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch):
+def test_infer_cnv_numbat_requires_allele_dataframe(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
     adata = minimal_spatial_adata.copy()
     adata.obs["cell_type"] = ["A"] * 30 + ["B"] * 30
 
     fake_ro = ModuleType("rpy2.robjects")
     fake_ro.r = lambda *_a, **_k: None
     monkeypatch.setitem(__import__("sys").modules, "rpy2.robjects", fake_ro)
-    monkeypatch.setitem(__import__("sys").modules, "anndata2ri", ModuleType("anndata2ri"))
+    monkeypatch.setitem(
+        __import__("sys").modules, "anndata2ri", ModuleType("anndata2ri")
+    )
 
     fake_openrlib = ModuleType("rpy2.rinterface_lib")
-    fake_openrlib.openrlib = SimpleNamespace(rlock=SimpleNamespace(__enter__=lambda self: self, __exit__=lambda self, exc_type, exc, tb: False))
+    fake_openrlib.openrlib = SimpleNamespace(
+        rlock=SimpleNamespace(
+            __enter__=lambda self: self, __exit__=lambda self, exc_type, exc, tb: False
+        )
+    )
     monkeypatch.setitem(__import__("sys").modules, "rpy2.rinterface_lib", fake_openrlib)
 
     fake_robj = ModuleType("rpy2.robjects")
     fake_robj.r = lambda *_a, **_k: None
-    fake_robj.conversion = SimpleNamespace(localconverter=lambda *_a, **_k: SimpleNamespace(__enter__=lambda self: None, __exit__=lambda self, exc_type, exc, tb: False))
+    fake_robj.conversion = SimpleNamespace(
+        localconverter=lambda *_a, **_k: SimpleNamespace(
+            __enter__=lambda self: None, __exit__=lambda self, exc_type, exc, tb: False
+        )
+    )
     fake_robj.default_converter = object()
     fake_robj.numpy2ri = SimpleNamespace(converter=object(), deactivate=lambda: None)
     fake_robj.pandas2ri = SimpleNamespace(converter=object(), deactivate=lambda: None)
@@ -213,7 +231,9 @@ def test_infer_cnv_numbat_requires_allele_dataframe(minimal_spatial_adata, monke
         )
 
 
-def test_infer_cnv_numbat_dependency_error_when_rpy2_missing(minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch):
+def test_infer_cnv_numbat_dependency_error_when_rpy2_missing(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
     from chatspatial.utils.exceptions import DependencyError
 
     adata = minimal_spatial_adata.copy()
@@ -295,15 +315,21 @@ def _install_fake_rpy2_stack(monkeypatch: pytest.MonkeyPatch):
 
     fake_openrlib_mod = ModuleType("rpy2.rinterface_lib")
     fake_openrlib_mod.openrlib = SimpleNamespace(rlock=_CM())
-    monkeypatch.setitem(__import__("sys").modules, "rpy2.rinterface_lib", fake_openrlib_mod)
+    monkeypatch.setitem(
+        __import__("sys").modules, "rpy2.rinterface_lib", fake_openrlib_mod
+    )
 
     fake_robj = ModuleType("rpy2.robjects")
     fake_robj.r = lambda *_a, **_k: None
     fake_robj.globalenv = {}
     fake_robj.conversion = SimpleNamespace(localconverter=lambda *_a, **_k: _CM())
     fake_robj.default_converter = _Converter()
-    fake_robj.numpy2ri = SimpleNamespace(converter=_Converter(), deactivate=lambda: None)
-    fake_robj.pandas2ri = SimpleNamespace(converter=_Converter(), deactivate=lambda: None)
+    fake_robj.numpy2ri = SimpleNamespace(
+        converter=_Converter(), deactivate=lambda: None
+    )
+    fake_robj.pandas2ri = SimpleNamespace(
+        converter=_Converter(), deactivate=lambda: None
+    )
     monkeypatch.setitem(__import__("sys").modules, "rpy2.robjects", fake_robj)
 
     # Also patch top-level package so `import rpy2.robjects` resolves to fake
@@ -374,8 +400,16 @@ async def test_infer_cnv_infercnvpy_cluster_and_dendrogram_failures_emit_warning
     monkeypatch.setattr(cnv, "export_analysis_result", lambda *_a, **_k: [])
     monkeypatch.setattr(cnv, "store_analysis_metadata", lambda *_a, **_k: None)
 
-    monkeypatch.setattr(cnv.sc.pp, "neighbors", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("nb fail")))
-    monkeypatch.setattr(cnv.sc.tl, "dendrogram", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("dendro fail")))
+    monkeypatch.setattr(
+        cnv.sc.pp,
+        "neighbors",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("nb fail")),
+    )
+    monkeypatch.setattr(
+        cnv.sc.tl,
+        "dendrogram",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("dendro fail")),
+    )
 
     out = await cnv.infer_cnv(
         "d7",
@@ -476,7 +510,9 @@ def _install_fake_rpy2_stack_with_runner(
 
     fake_openrlib_mod = ModuleType("rpy2.rinterface_lib")
     fake_openrlib_mod.openrlib = SimpleNamespace(rlock=_CM())
-    monkeypatch.setitem(__import__("sys").modules, "rpy2.rinterface_lib", fake_openrlib_mod)
+    monkeypatch.setitem(
+        __import__("sys").modules, "rpy2.rinterface_lib", fake_openrlib_mod
+    )
 
     fake_robj = ModuleType("rpy2.robjects")
     fake_robj.globalenv = {}
@@ -489,8 +525,12 @@ def _install_fake_rpy2_stack_with_runner(
     fake_robj.r = _fake_r
     fake_robj.conversion = SimpleNamespace(localconverter=lambda *_a, **_k: _CM())
     fake_robj.default_converter = _Converter()
-    fake_robj.numpy2ri = SimpleNamespace(converter=_Converter(), deactivate=lambda: None)
-    fake_robj.pandas2ri = SimpleNamespace(converter=_Converter(), deactivate=lambda: None)
+    fake_robj.numpy2ri = SimpleNamespace(
+        converter=_Converter(), deactivate=lambda: None
+    )
+    fake_robj.pandas2ri = SimpleNamespace(
+        converter=_Converter(), deactivate=lambda: None
+    )
     monkeypatch.setitem(__import__("sys").modules, "rpy2.robjects", fake_robj)
 
     # Also patch top-level package so `import rpy2.robjects` resolves to fake
@@ -550,6 +590,7 @@ async def test_infer_cnv_numbat_success_parses_outputs_and_writes_metadata(
     _install_fake_rpy2_stack_with_runner(monkeypatch, _runner)
     monkeypatch.setattr(cnv, "export_analysis_result", lambda *_a, **_k: [])
     monkeypatch.setattr(cnv, "store_analysis_metadata", lambda *_a, **_k: None)
+
     def _mkdtemp_success(prefix, dir):
         _ = prefix, dir
         p = tmp_path / "numbat_out"
@@ -600,6 +641,7 @@ def test_infer_cnv_numbat_missing_output_files_raises_processing_error(
         return None
 
     _install_fake_rpy2_stack_with_runner(monkeypatch, _runner)
+
     def _mkdtemp_missing(prefix, dir):
         _ = prefix, dir
         p = tmp_path / "numbat_out_missing"
@@ -642,12 +684,15 @@ async def test_infer_cnv_infercnvpy_cluster_and_dendrogram_success_copies_output
     monkeypatch.setitem(__import__("sys").modules, "infercnvpy", fake_infercnvpy)
     monkeypatch.setattr(cnv, "require", lambda *_a, **_k: None)
     monkeypatch.setattr(cnv, "export_analysis_result", lambda *_a, **_k: [])
-    monkeypatch.setattr(cnv, "store_analysis_metadata", lambda _adata, **kwargs: captured.update(kwargs))
+    monkeypatch.setattr(
+        cnv, "store_analysis_metadata", lambda _adata, **kwargs: captured.update(kwargs)
+    )
     monkeypatch.setattr(cnv.sc.pp, "neighbors", lambda *_a, **_k: None)
 
     def _fake_leiden(adata_obj, key_added="cnv_clusters"):
         adata_obj.obs[key_added] = pd.Categorical(
-            ["c0"] * (adata_obj.n_obs // 2) + ["c1"] * (adata_obj.n_obs - adata_obj.n_obs // 2)
+            ["c0"] * (adata_obj.n_obs // 2)
+            + ["c1"] * (adata_obj.n_obs - adata_obj.n_obs // 2)
         )
 
     monkeypatch.setattr(cnv.sc.tl, "leiden", _fake_leiden)
@@ -691,7 +736,9 @@ async def test_infer_cnv_infercnvpy_uses_cnv_layer_when_obsm_missing_and_no_chro
     fake_infercnvpy = ModuleType("infercnvpy")
 
     def _fake_infercnv(adata_obj, **_kwargs):
-        adata_obj.layers["cnv"] = np.ones((adata_obj.n_obs, adata_obj.n_vars), dtype=float)
+        adata_obj.layers["cnv"] = np.ones(
+            (adata_obj.n_obs, adata_obj.n_vars), dtype=float
+        )
         adata_obj.uns["cnv"] = {"ok": True}
 
     fake_infercnvpy.tl = SimpleNamespace(infercnv=_fake_infercnv)
@@ -882,7 +929,11 @@ def test_infer_cnv_numbat_cleanup_failure_is_swallowed(
         return str(p)
 
     monkeypatch.setattr(__import__("tempfile"), "mkdtemp", _mkdtemp)
-    monkeypatch.setattr(__import__("shutil"), "rmtree", lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("rm fail")))
+    monkeypatch.setattr(
+        __import__("shutil"),
+        "rmtree",
+        lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("rm fail")),
+    )
 
     with pytest.raises(ProcessingError, match="Numbat output file not found"):
         cnv._infer_cnv_numbat(
@@ -895,3 +946,152 @@ def test_infer_cnv_numbat_cleanup_failure_is_swallowed(
             ),
             DummyCtx(adata),
         )
+
+
+# =============================================================================
+# Issue 1 regression: layers["cnv"] shape mismatch after exclude_chromosomes
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_infer_cnv_layers_cnv_padded_after_exclude_chromosomes(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """When exclude_chromosomes filters genes, layers['cnv'] must be padded to
+    match original adata shape instead of crashing with ValueError."""
+    adata = minimal_spatial_adata.copy()
+    adata.obs["cell_type"] = ["A"] * 30 + ["B"] * 30
+    # 20 genes on chr1/chr2, 4 on chrM (will be excluded)
+    adata.var["chromosome"] = ["chr1"] * 10 + ["chr2"] * 10 + ["chrM"] * 4
+    original_n_vars = adata.n_vars  # 24
+
+    fake_infercnvpy = ModuleType("infercnvpy")
+
+    def _fake_infercnv(adata_obj, **_kwargs):
+        # infercnvpy puts results in layers["cnv"] (gene-level, not window)
+        adata_obj.layers["cnv"] = np.ones(
+            (adata_obj.n_obs, adata_obj.n_vars), dtype=np.float32
+        )
+        adata_obj.uns["cnv"] = {"ok": True}
+
+    fake_infercnvpy.tl = SimpleNamespace(infercnv=_fake_infercnv)
+    monkeypatch.setitem(__import__("sys").modules, "infercnvpy", fake_infercnvpy)
+    monkeypatch.setattr(cnv, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(cnv, "export_analysis_result", lambda *_a, **_k: [])
+    monkeypatch.setattr(cnv, "store_analysis_metadata", lambda *_a, **_k: None)
+
+    # This used to raise ValueError: incorrect shape
+    out = await cnv.infer_cnv(
+        "d_pad",
+        DummyCtx(adata),
+        CNVParameters(
+            method="infercnvpy",
+            reference_key="cell_type",
+            reference_categories=["A"],
+            exclude_chromosomes=["chrM"],
+            cluster_cells=False,
+            dendrogram=False,
+        ),
+    )
+
+    assert out.cnv_score_key == "cnv"
+    assert "cnv" in adata.layers
+    # Layer must match original shape
+    assert adata.layers["cnv"].shape == (adata.n_obs, original_n_vars)
+    # chrM columns (indices 20-23) should be zero-padded
+    cnv_layer = adata.layers["cnv"]
+    if hasattr(cnv_layer, "toarray"):
+        cnv_layer = cnv_layer.toarray()
+    # Analyzed genes (chr1+chr2) should have value 1.0
+    assert cnv_layer[:, :20].sum() > 0
+    # Excluded genes (chrM) should be zero
+    np.testing.assert_array_equal(cnv_layer[:, 20:], 0.0)
+
+
+@pytest.mark.asyncio
+async def test_infer_cnv_layers_cnv_sparse_padded_after_exclude(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """Same padding must work when infercnvpy returns sparse layers['cnv']."""
+    adata = minimal_spatial_adata.copy()
+    adata.obs["cell_type"] = ["A"] * 30 + ["B"] * 30
+    adata.var["chromosome"] = ["chr1"] * 10 + ["chr2"] * 10 + ["chrM"] * 4
+
+    fake_infercnvpy = ModuleType("infercnvpy")
+
+    def _fake_infercnv(adata_obj, **_kwargs):
+        adata_obj.layers["cnv"] = sparse.csr_matrix(
+            np.ones((adata_obj.n_obs, adata_obj.n_vars), dtype=np.float32)
+        )
+        adata_obj.uns["cnv"] = {"ok": True}
+
+    fake_infercnvpy.tl = SimpleNamespace(infercnv=_fake_infercnv)
+    monkeypatch.setitem(__import__("sys").modules, "infercnvpy", fake_infercnvpy)
+    monkeypatch.setattr(cnv, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(cnv, "export_analysis_result", lambda *_a, **_k: [])
+    monkeypatch.setattr(cnv, "store_analysis_metadata", lambda *_a, **_k: None)
+
+    out = await cnv.infer_cnv(
+        "d_sparse_pad",
+        DummyCtx(adata),
+        CNVParameters(
+            method="infercnvpy",
+            reference_key="cell_type",
+            reference_categories=["A"],
+            exclude_chromosomes=["chrM"],
+            cluster_cells=False,
+            dendrogram=False,
+        ),
+    )
+
+    assert out.cnv_score_key == "cnv"
+    cnv_layer = adata.layers["cnv"]
+    assert cnv_layer.shape == (adata.n_obs, adata.n_vars)
+    assert sparse.issparse(cnv_layer)
+    dense = cnv_layer.toarray()
+    np.testing.assert_array_equal(dense[:, 20:], 0.0)
+
+
+# =============================================================================
+# Issue 2 regression: exclude_chromosomes silently ignored without annotation
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_infer_cnv_warns_when_exclude_chromosomes_without_annotation(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """When no chromosome column exists, exclude_chromosomes must trigger warning."""
+    adata = minimal_spatial_adata.copy()
+    adata.obs["cell_type"] = ["A"] * 30 + ["B"] * 30
+    if "chromosome" in adata.var.columns:
+        del adata.var["chromosome"]
+
+    ctx = DummyCtx(adata)
+
+    fake_infercnvpy = ModuleType("infercnvpy")
+
+    def _fake_infercnv(adata_obj, **_kwargs):
+        adata_obj.obsm["X_cnv"] = np.ones((adata_obj.n_obs, 3), dtype=float)
+        adata_obj.uns["cnv"] = {"ok": True}
+
+    fake_infercnvpy.tl = SimpleNamespace(infercnv=_fake_infercnv)
+    monkeypatch.setitem(__import__("sys").modules, "infercnvpy", fake_infercnvpy)
+    monkeypatch.setattr(cnv, "require", lambda *_a, **_k: None)
+    monkeypatch.setattr(cnv, "export_analysis_result", lambda *_a, **_k: [])
+    monkeypatch.setattr(cnv, "store_analysis_metadata", lambda *_a, **_k: None)
+
+    await cnv.infer_cnv(
+        "d_warn",
+        ctx,
+        CNVParameters(
+            method="infercnvpy",
+            reference_key="cell_type",
+            reference_categories=["A"],
+            exclude_chromosomes=["chrM"],
+            cluster_cells=False,
+            dendrogram=False,
+        ),
+    )
+
+    assert any("exclude_chromosomes" in w and "ignored" in w for w in ctx.warnings)

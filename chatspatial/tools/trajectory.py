@@ -38,6 +38,23 @@ from ..utils.exceptions import (
 from ..utils.mcp_utils import suppress_output
 
 
+def _build_trajectory_key(params: "TrajectoryParameters") -> str:
+    """Build a parametric analysis key for trajectory results.
+
+    Encodes method + the parameter most likely to change between runs:
+    - cellrank: spatial_weight (0=expression only, 1=spatial only)
+    - palantir/dpt: first root cell (different roots → different trajectories)
+    """
+    method = params.method
+    if method == "cellrank":
+        sw = f"{params.spatial_weight:.1f}".replace(".", "_")
+        return f"trajectory_cellrank_sw{sw}"
+    if params.root_cells:
+        root_tag = params.root_cells[0]
+        return f"trajectory_{method}_{root_tag}"
+    return f"trajectory_{method}"
+
+
 def prepare_gam_model_for_visualization(
     adata: "ad.AnnData",
     genes: list[str],
@@ -260,6 +277,17 @@ def infer_spatial_trajectory_cellrank(
             adata.obsm["fate_probabilities"] = adata_for_cellrank.obsm[
                 "fate_probabilities"
             ]
+            # Also write CellRank-standard alias so viz doesn't need to
+            adata.obsm["to_terminal_states"] = adata.obsm[
+                "fate_probabilities"
+            ]
+        if (
+            "to_terminal_states" in adata_for_cellrank.obsm
+            and "to_terminal_states" not in adata.obsm
+        ):
+            adata.obsm["to_terminal_states"] = (
+                adata_for_cellrank.obsm["to_terminal_states"]
+            )
 
         # Note: With optimized storage, velovi data is stored as individual arrays
         # in uns (velovi_velocity, velovi_Ms, etc.) rather than a full adata copy.
@@ -437,6 +465,21 @@ async def analyze_trajectory(
                 )
             pseudotime_key = "pseudotime"
             method_used = "cellrank"
+
+            # Per-run suffix for CellRank result coexistence
+            sw_str = f"{params.spatial_weight:.1f}".replace(".", "_")
+            cellrank_suffix = f"cellrank_sw{sw_str}"
+
+            # Save per-run copies for provenance (shared keys kept for viz)
+            if "pseudotime" in adata.obs.columns:
+                adata.obs[f"pseudotime_{cellrank_suffix}"] = adata.obs["pseudotime"]
+            for _ck in ("terminal_states", "macrostates"):
+                if _ck in adata.obs.columns:
+                    adata.obs[f"{_ck}_{cellrank_suffix}"] = adata.obs[_ck]
+            if "fate_probabilities" in adata.obsm:
+                adata.obsm[f"fate_probabilities_{cellrank_suffix}"] = adata.obsm[
+                    "fate_probabilities"
+                ]
         except Exception as e:
             raise ProcessingError(f"CellRank trajectory inference failed: {e}") from e
 
@@ -477,14 +520,20 @@ async def analyze_trajectory(
 
     results_keys_dict: dict[str, Any] = {"obs": [pseudotime_key], "obsm": [], "uns": []}
 
+    # For CellRank, use per-run keys in results_keys for provenance accuracy
+    if method_used == "cellrank":
+        sw_str = f"{params.spatial_weight:.1f}".replace(".", "_")
+        cellrank_suffix = f"cellrank_sw{sw_str}"
+        results_keys_dict["obs"] = [f"pseudotime_{cellrank_suffix}"]
+
     if method_used == "cellrank":
         for obs_key in ("terminal_states", "macrostates"):
-            if obs_key in adata.obs.columns:
-                results_keys_dict["obs"].append(obs_key)
-        if "fate_probabilities" in adata.obsm:
-            results_keys_dict["obsm"].append("fate_probabilities")
-        if "velocity_method" in adata.uns:
-            results_keys_dict["uns"].append("velocity_method")
+            suffixed = f"{obs_key}_{cellrank_suffix}"
+            if suffixed in adata.obs.columns:
+                results_keys_dict["obs"].append(suffixed)
+        fate_suffixed = f"fate_probabilities_{cellrank_suffix}"
+        if fate_suffixed in adata.obsm:
+            results_keys_dict["obsm"].append(fate_suffixed)
     elif method_used == "palantir":
         results_keys_dict["obsm"].append("palantir_branch_probs")
     elif method_used == "dpt":
@@ -514,9 +563,10 @@ async def analyze_trajectory(
         "pseudotime_key": pseudotime_key,
     }
 
+    analysis_key = _build_trajectory_key(params)
     store_analysis_metadata(
         adata,
-        analysis_name=f"trajectory_{method_used}",
+        analysis_name=analysis_key,
         method=method_used,
         parameters=parameters_dict,
         results_keys=results_keys_dict,
@@ -524,7 +574,7 @@ async def analyze_trajectory(
     )
 
     # Export results for reproducibility
-    export_analysis_result(adata, data_id, f"trajectory_{method_used}")
+    export_analysis_result(adata, data_id, analysis_key)
 
     return TrajectoryResult(
         data_id=data_id,

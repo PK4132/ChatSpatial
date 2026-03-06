@@ -43,7 +43,9 @@ async def test_deconvolve_spatial_data_requires_nonempty_data_id():
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_deconvolve_spatial_data_requires_reference_data_id(minimal_spatial_adata):
+async def test_deconvolve_spatial_data_requires_reference_data_id(
+    minimal_spatial_adata,
+):
     spatial = minimal_spatial_adata.copy()
     spatial.obs["cell_type"] = ["A"] * 30 + ["B"] * 30
     ctx = DummyCtx({"d1": spatial})
@@ -59,7 +61,9 @@ async def test_deconvolve_spatial_data_requires_reference_data_id(minimal_spatia
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_deconvolve_spatial_data_rejects_empty_spatial_dataset(minimal_spatial_adata):
+async def test_deconvolve_spatial_data_rejects_empty_spatial_dataset(
+    minimal_spatial_adata,
+):
     spatial = minimal_spatial_adata[:0, :].copy()
     reference = minimal_spatial_adata.copy()
     reference.obs["cell_type"] = ["A"] * 30 + ["B"] * 30
@@ -84,7 +88,9 @@ async def test_deconvolve_spatial_data_dispatch_contract_with_mocks(
     reference.obs["cell_type"] = ["A"] * 30 + ["B"] * 30
     ctx = DummyCtx({"d1": spatial, "ref": reference})
 
-    monkeypatch.setattr(deconv_module, "_check_method_availability", lambda *a, **k: None)
+    monkeypatch.setattr(
+        deconv_module, "_check_method_availability", lambda *a, **k: None
+    )
 
     prepared = PreparedDeconvolutionData(
         spatial=spatial,
@@ -109,7 +115,9 @@ async def test_deconvolve_spatial_data_dispatch_contract_with_mocks(
         )
         return props, {"n_spots": data.spatial.n_obs, "genes_used": data.n_genes}
 
-    async def fake_store(spatial_adata, proportions, stats, method, data_id, ctx):
+    async def fake_store(
+        spatial_adata, proportions, stats, method, data_id, ctx, **_kw
+    ):
         calls["stored"] = (method, data_id, len(proportions))
         return DeconvolutionResult(
             data_id=data_id,
@@ -122,7 +130,9 @@ async def test_deconvolve_spatial_data_dispatch_contract_with_mocks(
             genes_used=stats["genes_used"],
         )
 
-    monkeypatch.setattr(deconv_module, "prepare_deconvolution", fake_prepare_deconvolution)
+    monkeypatch.setattr(
+        deconv_module, "prepare_deconvolution", fake_prepare_deconvolution
+    )
     monkeypatch.setattr(deconv_module, "_dispatch_method", fake_dispatch)
     monkeypatch.setattr(deconv_module, "_store_results", fake_store)
 
@@ -171,3 +181,83 @@ async def test_store_results_persists_expected_keys_and_calls_set_adata(
     assert "deconvolution_flashdeconv" in adata.obsm
     assert "dominant_celltype_flashdeconv" in adata.obs
     assert "d1" in ctx.updated
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_store_results_includes_unassigned_when_zero_sum_rows_exist(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """When some spots have all-zero proportions, 'unassigned' must appear
+    in cell_types and n_cell_types to match the actual label space."""
+    adata = minimal_spatial_adata.copy()
+    ctx = DummyCtx({"d1": adata})
+
+    captured: dict[str, object] = {}
+    monkeypatch.setattr(
+        deconv_module,
+        "store_analysis_metadata",
+        lambda _adata, **kwargs: captured.update(kwargs),
+    )
+    monkeypatch.setattr(deconv_module, "export_analysis_result", lambda *a, **k: None)
+
+    # First row all-zero → "unassigned"
+    proportions = pd.DataFrame(
+        {
+            "T": np.concatenate([[0.0], np.full(adata.n_obs - 1, 0.6)]),
+            "B": np.concatenate([[0.0], np.full(adata.n_obs - 1, 0.4)]),
+        },
+        index=adata.obs_names,
+    )
+    stats = {"n_spots": adata.n_obs, "genes_used": adata.n_vars}
+
+    result = await _store_results(
+        spatial_adata=adata,
+        proportions=proportions,
+        stats=stats,
+        method="flashdeconv",
+        data_id="d1",
+        ctx=ctx,
+    )
+
+    # Result object must include "unassigned"
+    assert "unassigned" in result.cell_types
+    assert result.n_cell_types == 3  # T, B, unassigned
+
+    # Metadata statistics must be consistent
+    assert "unassigned" in captured["statistics"]["cell_types"]
+    assert captured["statistics"]["n_cell_types"] == 3
+
+    # obs label must match
+    dominant = adata.obs["dominant_celltype_flashdeconv"]
+    assert "unassigned" in dominant.values
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_store_results_no_unassigned_when_all_rows_have_signal(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """When no zero-sum rows exist, 'unassigned' should NOT be in cell_types."""
+    adata = minimal_spatial_adata.copy()
+    ctx = DummyCtx({"d1": adata})
+
+    monkeypatch.setattr(deconv_module, "store_analysis_metadata", lambda *a, **k: None)
+    monkeypatch.setattr(deconv_module, "export_analysis_result", lambda *a, **k: None)
+
+    proportions = pd.DataFrame(
+        {"T": np.full(adata.n_obs, 0.6), "B": np.full(adata.n_obs, 0.4)},
+        index=adata.obs_names,
+    )
+
+    result = await _store_results(
+        spatial_adata=adata,
+        proportions=proportions,
+        stats={"n_spots": adata.n_obs, "genes_used": adata.n_vars},
+        method="flashdeconv",
+        data_id="d1",
+        ctx=ctx,
+    )
+
+    assert "unassigned" not in result.cell_types
+    assert result.n_cell_types == 2

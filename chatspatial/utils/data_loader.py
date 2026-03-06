@@ -452,7 +452,9 @@ async def load_spatial_data(
     import anndata as ad
 
     if adata.raw is None:
-        adata.raw = ad.AnnData(X=adata.X.copy(), var=adata.var)
+        is_int, has_neg, _ = check_is_integer_counts(adata.X)
+        if is_int and not has_neg:
+            adata.raw = ad.AnnData(X=adata.X.copy(), var=adata.var)
 
     # Create layers["counts"] from the best available raw-count source.
     # Priority: adata.X (same shape guaranteed) > adata.raw (must match n_vars).
@@ -462,15 +464,34 @@ async def load_spatial_data(
         if is_int_x and not has_neg_x:
             # adata.X is raw counts — copy directly (shape always compatible)
             adata.layers["counts"] = adata.X.copy()
-        elif adata.raw is not None and adata.raw.X.shape[1] == adata.n_vars:
-            # X is normalized but .raw exists with matching gene count
-            is_int_raw, has_neg_raw, _ = check_is_integer_counts(adata.raw.X)
-            if is_int_raw and not has_neg_raw:
-                adata.layers["counts"] = adata.raw.X.copy()
+        elif adata.raw is not None:
+            # X is normalized but .raw may have raw counts.
+            # Must verify var_names match exactly (same genes, same order)
+            # to avoid silently misaligning gene columns.
+            raw_adata = adata.raw.to_adata()
+            raw_vars = raw_adata.var_names
+            cur_vars = adata.var_names
+
+            if len(raw_vars) == len(cur_vars) and set(raw_vars) == set(cur_vars):
+                is_int_raw, has_neg_raw, _ = check_is_integer_counts(raw_adata.X)
+                if is_int_raw and not has_neg_raw:
+                    if (raw_vars == cur_vars).all():
+                        # Same order — direct copy
+                        adata.layers["counts"] = raw_adata.X.copy()
+                    else:
+                        # Same genes, different order — reindex to match
+                        adata.layers["counts"] = raw_adata[:, cur_vars].X.copy()
+                else:
+                    logger.info(
+                        "Neither adata.X nor adata.raw contain raw integer "
+                        "counts. Skipping layers['counts'] creation."
+                    )
             else:
                 logger.info(
-                    "Neither adata.X nor adata.raw contain raw integer "
-                    "counts. Skipping layers['counts'] creation."
+                    "adata.raw has different genes than current adata "
+                    "(%d vs %d). Skipping layers['counts'] creation.",
+                    len(raw_vars),
+                    len(cur_vars),
                 )
         else:
             logger.info(

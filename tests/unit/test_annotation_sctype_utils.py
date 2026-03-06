@@ -104,9 +104,13 @@ async def test_annotate_with_sctype_cache_hit_short_circuits_pipeline(
     monkeypatch: pytest.MonkeyPatch,
 ):
     adata = minimal_spatial_adata.copy()
-    params = AnnotationParameters(method="sctype", sctype_tissue="Brain", sctype_use_cache=True)
+    params = AnnotationParameters(
+        method="sctype", sctype_tissue="Brain", sctype_use_cache=True
+    )
 
-    cached_cell_types = ["T"] * (adata.n_obs // 2) + ["B"] * (adata.n_obs - adata.n_obs // 2)
+    cached_cell_types = ["T"] * (adata.n_obs // 2) + ["B"] * (
+        adata.n_obs - adata.n_obs // 2
+    )
     cached_counts = {"T": adata.n_obs // 2, "B": adata.n_obs - adata.n_obs // 2}
 
     def _validate_should_not_run(*_args, **_kwargs):
@@ -117,7 +121,12 @@ async def test_annotate_with_sctype_cache_hit_short_circuits_pipeline(
     monkeypatch.setattr(
         ann,
         "_load_cached_sctype_results",
-        lambda *_args, **_kwargs: (cached_cell_types, cached_counts, {"T": 0.8, "B": 0.7}, None),
+        lambda *_args, **_kwargs: (
+            cached_cell_types,
+            cached_counts,
+            {"T": 0.8, "B": 0.7},
+            None,
+        ),
     )
 
     def _should_not_run(*_args, **_kwargs):
@@ -147,16 +156,22 @@ async def test_annotate_with_sctype_cache_miss_preserves_cell_type_order_and_cac
     monkeypatch: pytest.MonkeyPatch,
 ):
     adata = minimal_spatial_adata.copy()
-    params = AnnotationParameters(method="sctype", sctype_tissue="Brain", sctype_use_cache=True)
+    params = AnnotationParameters(
+        method="sctype", sctype_tissue="Brain", sctype_use_cache=True
+    )
 
     captured: dict[str, object] = {}
 
     per_cell_types = ["B", "T", "B", "Unknown"] * (adata.n_obs // 4)
     per_cell_conf = [0.9, 0.8, 0.7, 0.0] * (adata.n_obs // 4)
 
-    monkeypatch.setattr(ann, "validate_r_environment", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        ann, "validate_r_environment", lambda *_args, **_kwargs: object()
+    )
     monkeypatch.setattr(ann, "_get_sctype_cache_key", lambda *_args, **_kwargs: "k2")
-    monkeypatch.setattr(ann, "_load_cached_sctype_results", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        ann, "_load_cached_sctype_results", lambda *_args, **_kwargs: None
+    )
     monkeypatch.setattr(ann, "_load_sctype_functions", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(ann, "_prepare_sctype_genesets", lambda *_args, **_kwargs: "GS")
     monkeypatch.setattr(
@@ -198,7 +213,9 @@ def test_prepare_sctype_genesets_requires_tissue_without_custom_markers():
         match="sctype_tissue is required when not using custom markers",
     ):
         ann._prepare_sctype_genesets(
-            AnnotationParameters(method="sctype", sctype_tissue=None, sctype_custom_markers=None),
+            AnnotationParameters(
+                method="sctype", sctype_tissue=None, sctype_custom_markers=None
+            ),
             DummyCtx(),
         )
 
@@ -239,14 +256,31 @@ def test_convert_custom_markers_normalizes_and_filters(monkeypatch: pytest.Monke
                 return lambda **kwargs: kwargs
             raise KeyError(name)
 
-    robjects = type("RObj", (), {"default_converter": _Conv(), "StrVector": lambda self, xs: list(xs), "r": _R()})()
+    robjects = type(
+        "RObj",
+        (),
+        {
+            "default_converter": _Conv(),
+            "StrVector": lambda self, xs: list(xs),
+            "r": _R(),
+        },
+    )()
     pandas2ri = type("P2", (), {"converter": _Conv()})()
     openrlib = type("OL", (), {"rlock": _Lock()})()
 
     monkeypatch.setattr(
         ann,
         "validate_r_environment",
-        lambda _ctx: (robjects, pandas2ri, None, None, lambda _c: _LCtx(), None, openrlib, None),
+        lambda _ctx: (
+            robjects,
+            pandas2ri,
+            None,
+            None,
+            lambda _c: _LCtx(),
+            None,
+            openrlib,
+            None,
+        ),
     )
 
     markers = {
@@ -263,7 +297,9 @@ def test_convert_custom_markers_normalizes_and_filters(monkeypatch: pytest.Monke
     assert out["gs_positive"]["B"] == ["MS4A1"]
 
 
-def test_load_sctype_functions_runs_install_and_load_scripts(monkeypatch: pytest.MonkeyPatch):
+def test_load_sctype_functions_runs_install_and_load_scripts(
+    monkeypatch: pytest.MonkeyPatch,
+):
     calls: list[str] = []
     monkeypatch.setenv("CHATSPATIAL_ALLOW_RUNTIME_R_INSTALL", "1")
     monkeypatch.setenv("CHATSPATIAL_ALLOW_REMOTE_R_SOURCE", "1")
@@ -307,11 +343,15 @@ def test_load_sctype_functions_runs_install_and_load_scripts(monkeypatch: pytest
     assert any("gene_sets_prepare.R" in script for script in calls)
 
 
-def test_load_sctype_functions_rejects_remote_by_default(monkeypatch: pytest.MonkeyPatch):
+def test_load_sctype_functions_rejects_remote_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+):
     monkeypatch.delenv("CHATSPATIAL_ALLOW_REMOTE_R_SOURCE", raising=False)
     monkeypatch.delenv("CHATSPATIAL_SCTYPE_R_DIR", raising=False)
 
-    with pytest.raises(ann.ParameterError, match="remote R script sourcing is disabled"):
+    with pytest.raises(
+        ann.ParameterError, match="remote R script sourcing is disabled"
+    ):
         ann._load_sctype_functions(DummyCtx())
 
 
@@ -319,7 +359,9 @@ def test_prepare_sctype_genesets_uses_custom_markers_short_circuit(
     monkeypatch: pytest.MonkeyPatch,
 ):
     sentinel = {"gs_positive": {"T": ["CD3D"]}, "gs_negative": {"T": []}}
-    monkeypatch.setattr(ann, "_convert_custom_markers_to_gs", lambda *_a, **_k: sentinel)
+    monkeypatch.setattr(
+        ann, "_convert_custom_markers_to_gs", lambda *_a, **_k: sentinel
+    )
 
     out = ann._prepare_sctype_genesets(
         AnnotationParameters(
@@ -402,7 +444,9 @@ def test_prepare_sctype_genesets_loads_database_and_returns_gs_list(
 
 
 def test_prepare_sctype_genesets_rejects_remote_db_by_default():
-    with pytest.raises(ann.ParameterError, match="remote database download is disabled"):
+    with pytest.raises(
+        ann.ParameterError, match="remote database download is disabled"
+    ):
         ann._prepare_sctype_genesets(
             AnnotationParameters(method="sctype", sctype_tissue="Brain"),
             DummyCtx(),
@@ -413,7 +457,9 @@ def test_run_sctype_scoring_converts_r_matrix_to_dataframe(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):
     adata = minimal_spatial_adata.copy()
-    params = AnnotationParameters(method="sctype", sctype_tissue="Brain", sctype_scaled=False)
+    params = AnnotationParameters(
+        method="sctype", sctype_tissue="Brain", sctype_scaled=False
+    )
     assigned: dict[str, object] = {}
 
     class _Conv:
@@ -474,7 +520,9 @@ def test_run_sctype_scoring_converts_r_matrix_to_dataframe(
         ),
     )
 
-    out = ann._run_sctype_scoring(adata, gs_list={"ok": True}, params=params, ctx=DummyCtx())
+    out = ann._run_sctype_scoring(
+        adata, gs_list={"ok": True}, params=params, ctx=DummyCtx()
+    )
 
     assert list(out.index) == ["T", "B"]
     assert list(out.columns) == ["cell_1", "cell_2"]
@@ -485,7 +533,9 @@ def test_run_sctype_scoring_preserves_dataframe_and_relabels_axes(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):
     adata = minimal_spatial_adata.copy()
-    params = AnnotationParameters(method="sctype", sctype_tissue="Brain", sctype_scaled=False)
+    params = AnnotationParameters(
+        method="sctype", sctype_tissue="Brain", sctype_scaled=False
+    )
 
     class _Conv:
         def __add__(self, _other):
@@ -549,13 +599,17 @@ def test_run_sctype_scoring_preserves_dataframe_and_relabels_axes(
         ),
     )
 
-    out = ann._run_sctype_scoring(adata, gs_list={"ok": True}, params=params, ctx=DummyCtx())
+    out = ann._run_sctype_scoring(
+        adata, gs_list={"ok": True}, params=params, ctx=DummyCtx()
+    )
 
     assert list(out.index) == ["TypeA", "TypeB"]
     assert list(out.columns) == ["cell_a", "cell_b"]
 
 
-def test_load_cached_sctype_results_returns_memory_cache_hit(monkeypatch: pytest.MonkeyPatch):
+def test_load_cached_sctype_results_returns_memory_cache_hit(
+    monkeypatch: pytest.MonkeyPatch,
+):
     expected = (["T"], {"T": 1}, {"T": 0.9}, None)
     monkeypatch.setattr(ann, "_SCTYPE_CACHE", {"hit": expected})
     out = ann._load_cached_sctype_results("hit", DummyCtx())
@@ -619,7 +673,9 @@ async def test_cache_sctype_results_failure_is_non_fatal(
     monkeypatch.setattr(ann, "_SCTYPE_CACHE_DIR", blocked)
     monkeypatch.setattr(ann, "_SCTYPE_CACHE", {})
 
-    await ann._cache_sctype_results("k", (["T"], {"T": 1}, {"T": 0.9}, None), DummyCtx())
+    await ann._cache_sctype_results(
+        "k", (["T"], {"T": 1}, {"T": 0.9}, None), DummyCtx()
+    )
     assert ann._SCTYPE_CACHE == {}
 
 
@@ -632,8 +688,12 @@ async def test_cache_sctype_results_respects_lru_capacity(
     monkeypatch.setattr(ann, "_SCTYPE_CACHE_MAX_ITEMS", 1)
     monkeypatch.setattr(ann, "_SCTYPE_CACHE_TTL_SECONDS", 0)
 
-    await ann._cache_sctype_results("k1", (["T"], {"T": 1}, {"T": 0.9}, None), DummyCtx())
-    await ann._cache_sctype_results("k2", (["B"], {"B": 1}, {"B": 0.8}, None), DummyCtx())
+    await ann._cache_sctype_results(
+        "k1", (["T"], {"T": 1}, {"T": 0.9}, None), DummyCtx()
+    )
+    await ann._cache_sctype_results(
+        "k2", (["B"], {"B": 1}, {"B": 0.8}, None), DummyCtx()
+    )
 
     assert "k1" not in ann._SCTYPE_CACHE
     assert "k2" in ann._SCTYPE_CACHE
@@ -645,10 +705,14 @@ async def test_annotate_with_sctype_requires_tissue_or_custom_markers(
 ):
     monkeypatch.setattr(ann, "validate_r_environment", lambda *_a, **_k: object())
 
-    with pytest.raises(ann.ParameterError, match="Either sctype_tissue or sctype_custom_markers"):
+    with pytest.raises(
+        ann.ParameterError, match="Either sctype_tissue or sctype_custom_markers"
+    ):
         await ann._annotate_with_sctype(
             minimal_spatial_adata.copy(),
-            AnnotationParameters(method="sctype", sctype_tissue=None, sctype_custom_markers=None),
+            AnnotationParameters(
+                method="sctype", sctype_tissue=None, sctype_custom_markers=None
+            ),
             DummyCtx(),
             "cell_type_sctype",
             "confidence_sctype",
@@ -669,3 +733,60 @@ async def test_annotate_with_sctype_rejects_invalid_tissue(
             "cell_type_sctype",
             "confidence_sctype",
         )
+
+
+# =============================================================================
+# Issue 1 regression: legacy cache with scalar mapping_score
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_annotate_with_sctype_cache_hit_scalar_mapping_score_no_crash(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Legacy cache entries store mapping_score as a scalar float, not a
+    per-cell list. The code must not call len() on a float."""
+    adata = minimal_spatial_adata.copy()
+    params = AnnotationParameters(
+        method="sctype", sctype_tissue="Brain", sctype_use_cache=True
+    )
+
+    cached_cell_types = ["T"] * (adata.n_obs // 2) + ["B"] * (
+        adata.n_obs - adata.n_obs // 2
+    )
+    cached_counts = {
+        "T": adata.n_obs // 2,
+        "B": adata.n_obs - adata.n_obs // 2,
+    }
+
+    # Legacy cache: 4th element is a scalar float (old mapping_score), not a list
+    monkeypatch.setattr(ann, "_get_sctype_cache_key", lambda *_a, **_k: "legacy")
+    monkeypatch.setattr(
+        ann,
+        "_load_cached_sctype_results",
+        lambda *_a, **_k: (
+            cached_cell_types,
+            cached_counts,
+            {"T": 0.8, "B": 0.7},
+            0.95,  # scalar float — legacy format
+        ),
+    )
+
+    # Pipeline should NOT run
+    monkeypatch.setattr(
+        ann,
+        "_load_sctype_functions",
+        lambda *_a, **_k: (_ for _ in ()).throw(
+            AssertionError("pipeline should not run")
+        ),
+    )
+
+    out = await ann._annotate_with_sctype(
+        adata, params, DummyCtx(), "cell_type_sctype", "confidence_sctype"
+    )
+
+    assert out.cell_types == ["T", "B"]
+    assert "confidence_sctype" in adata.obs
+    # Confidence should fall back to per-type mean, not crash
+    assert adata.obs["confidence_sctype"].iloc[0] == 0.8  # T-cell confidence

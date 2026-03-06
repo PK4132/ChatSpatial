@@ -42,6 +42,23 @@ from ..utils.mcp_utils import suppress_output
 from ..utils.results_export import export_analysis_result
 
 
+def _build_domain_suffix(
+    method: str,
+    resolution: float,
+    n_domains: int,
+) -> str:
+    """Build a parametric suffix for spatial domain output keys.
+
+    Encodes the parameter that most meaningfully distinguishes runs:
+    - leiden/louvain: resolution (e.g. ``leiden_res0_5``)
+    - other methods: n_domains (e.g. ``spagcn_n7``)
+    """
+    if method in ("leiden", "louvain"):
+        res_str = f"{resolution:.1f}".replace(".", "_")
+        return f"{method}_res{res_str}"
+    return f"{method}_n{n_domains}"
+
+
 async def identify_spatial_domains(
     data_id: str,
     ctx: "ToolContext",
@@ -211,7 +228,9 @@ async def identify_spatial_domains(
             )
 
         # Store domain labels in original adata
-        domain_key = f"spatial_domains_{params.method}"
+        # Suffix encodes method + distinguishing param for coexistence
+        suffix = _build_domain_suffix(params.method, params.resolution, params.n_domains)
+        domain_key = f"spatial_domains_{suffix}"
         adata.obs[domain_key] = domain_labels
         ensure_categorical(adata, domain_key)
 
@@ -251,9 +270,10 @@ async def identify_spatial_domains(
             results_keys["obs"].append(refined_domain_key)
 
         # Store metadata for scientific provenance tracking
+        analysis_key = f"spatial_domains_{suffix}"
         store_analysis_metadata(
             adata,
-            analysis_name=f"spatial_domains_{params.method}",
+            analysis_name=analysis_key,
             method=params.method,
             parameters={
                 "n_domains": params.n_domains,
@@ -265,7 +285,7 @@ async def identify_spatial_domains(
         )
 
         # Export results for reproducibility
-        export_analysis_result(adata, data_id, f"spatial_domains_{params.method}")
+        export_analysis_result(adata, data_id, analysis_key)
 
         # COW FIX: No need to update data_store - changes already reflected via direct reference
         # All modifications to adata.obs/obsm/obsp are in-place and preserved

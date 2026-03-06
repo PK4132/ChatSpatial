@@ -259,12 +259,29 @@ def test_infer_obsm_columns_prefers_metadata_and_falls_back(minimal_spatial_adat
     cols_deconv = re._infer_obsm_columns(adata, "deconvolution_spotlight", 2)
     assert cols_deconv == ["T", "B"]
 
-    # CCC spatial: uns["ccc"]["lr_pairs"]
+    # CCC spatial (shared key): uns["ccc"]["lr_pairs"]
     adata.uns["ccc"] = {"lr_pairs": ["A^B", "B^C"]}
     cols_scores = re._infer_obsm_columns(adata, "ccc_spatial_scores", 2)
     assert cols_scores == ["A^B", "B^C"]
     cols_pvals = re._infer_obsm_columns(adata, "ccc_spatial_pvals", 2)
     assert cols_pvals == ["A^B", "B^C"]
+
+    # CCC spatial (per-method key): uns["ccc_liana"]["lr_pairs"] takes priority
+    adata.uns["ccc_liana"] = {"lr_pairs": ["X^Y", "Y^Z"]}
+    cols_method = re._infer_obsm_columns(
+        adata, "ccc_spatial_scores_liana", 2
+    )
+    assert cols_method == ["X^Y", "Y^Z"]
+    cols_method_pvals = re._infer_obsm_columns(
+        adata, "ccc_spatial_pvals_liana", 2
+    )
+    assert cols_method_pvals == ["X^Y", "Y^Z"]
+
+    # CCC spatial (per-method key missing → falls back to shared)
+    cols_fallback = re._infer_obsm_columns(
+        adata, "ccc_spatial_scores_cellphonedb", 2
+    )
+    assert cols_fallback == ["A^B", "B^C"]
 
     # Fallback: numeric indices
     cols_default = re._infer_obsm_columns(adata, "x_embed", 3)
@@ -336,3 +353,88 @@ def test_extract_squidpy_matrix_filters_unused_categories(
     # Columns are prefixed with metric name: zscore_A, zscore_B
     assert list(df.columns) == ["zscore_A", "zscore_B"]
     assert list(df.index) == ["A", "B"]
+
+
+def test_extract_rank_genes_groups_per_run_key(
+    minimal_spatial_adata,
+) -> None:
+    """Per-run rank_genes_groups_* key should export correctly, not crash."""
+    import scanpy as sc
+
+    adata = minimal_spatial_adata.copy()
+    sc.tl.rank_genes_groups(adata, groupby="group", method="wilcoxon")
+
+    # Create per-run copy (simulates what find_markers does)
+    per_run_key = "rank_genes_groups_wilcoxon_all_groups"
+    adata.uns[per_run_key] = adata.uns["rank_genes_groups"]
+
+    df = re._extract_as_dataframe(adata, "uns", per_run_key, "test")
+    assert df is not None
+    assert isinstance(df, pd.DataFrame)
+    assert len(df) > 0
+
+
+def test_extract_rank_genes_groups_per_run_key_restores_original(
+    minimal_spatial_adata,
+) -> None:
+    """Per-run key export must restore the original rank_genes_groups entry."""
+    import scanpy as sc
+
+    adata = minimal_spatial_adata.copy()
+    sc.tl.rank_genes_groups(adata, groupby="group", method="wilcoxon")
+    original_rgg = adata.uns["rank_genes_groups"]
+
+    per_run_key = "rank_genes_groups_wilcoxon_all_groups"
+    adata.uns[per_run_key] = adata.uns["rank_genes_groups"]
+
+    re._extract_as_dataframe(adata, "uns", per_run_key, "test")
+    # Original key must still be intact
+    assert adata.uns["rank_genes_groups"] is original_rgg
+
+
+def test_extract_ccc_per_method_key(
+    minimal_spatial_adata,
+) -> None:
+    """Per-method ccc_<method> key should extract results DataFrame."""
+    adata = minimal_spatial_adata.copy()
+
+    results_df = pd.DataFrame(
+        {"source": ["A", "B"], "target": ["C", "D"], "score": [0.5, 0.8]}
+    )
+    ccc_storage = {
+        "results": results_df,
+        "lr_pairs": ["A_C", "B_D"],
+        "statistics": {"n_pairs": 2},
+    }
+    adata.uns["ccc_liana"] = ccc_storage
+
+    df = re._extract_as_dataframe(
+        adata, "uns", "ccc_liana", "test"
+    )
+    assert df is not None
+    assert isinstance(df, pd.DataFrame)
+    assert "source" in df.columns
+    assert len(df) == 2
+
+
+def test_export_analysis_result_updates_index_when_all_exports_fail(
+    minimal_spatial_adata, monkeypatch, tmp_path: Path
+) -> None:
+    """Audit trail must be recorded even when every export raises an exception."""
+    _patch_home(monkeypatch, tmp_path)
+    monkeypatch.setenv("CHATSPATIAL_EXPORT_RESULTS", "1")
+    adata = minimal_spatial_adata.copy()
+    adata.uns["fail_metadata"] = {
+        "method": "fail_method",
+        "results_keys": {"obs": ["nonexistent_key_a", "nonexistent_key_b"]},
+    }
+
+    result = re.export_analysis_result(adata, "d_fail", "fail")
+    assert result == []
+
+    # Index should still have been written for the audit trail
+    index_path = re.get_results_dir("d_fail") / "_index.json"
+    assert index_path.exists()
+    loaded = json.loads(index_path.read_text(encoding="utf-8"))
+    assert "fail" in loaded["analyses"]
+    assert loaded["analyses"]["fail"]["method"] == "fail_method"

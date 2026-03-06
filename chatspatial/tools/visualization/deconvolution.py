@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 from ...models.data import VisualizationParameters
 from ...utils.adata_utils import (
     get_analysis_metadata_field,
+    get_spatial_key,
     require_spatial_coords,
 )
 from ...utils.exceptions import DataNotFoundError, ParameterError
@@ -606,7 +607,7 @@ async def _create_spatial_multi_deconvolution(
             if pd.isna(proportions_values).any():
                 proportions_values = pd.Series(proportions_values).fillna(0).values
 
-            if "spatial" in adata.obsm:
+            if get_spatial_key(adata) is not None:
                 plot_spatial_feature(
                     adata, values=proportions_values, ax=ax, params=params
                 )
@@ -679,13 +680,20 @@ async def _create_card_imputation(
     ax = axes[0]
 
     if feature == "dominant":
-        # Show dominant cell types
+        # Show dominant cell types (all-zero rows → "unassigned")
+        row_sums = imputed_proportions.sum(axis=1)
+        zero_mask = row_sums == 0
         dominant_types = imputed_proportions.idxmax(axis=1)
+        if zero_mask.any():
+            dominant_types = dominant_types.copy()
+            dominant_types[zero_mask] = "unassigned"
         unique_types = dominant_types.unique()
 
         # Use centralized colormap utility
         colors = get_category_colors(len(unique_types), params.colormap)
         color_map = {ct: colors[i] for i, ct in enumerate(unique_types)}
+        if "unassigned" in color_map:
+            color_map["unassigned"] = "#CCCCCC"
         point_colors = [color_map[ct] for ct in dominant_types]
 
         ax.scatter(

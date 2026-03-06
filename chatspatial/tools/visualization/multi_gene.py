@@ -21,6 +21,7 @@ from ...utils.adata_utils import (
     ensure_unique_var_names,
     get_gene_expression,
     get_genes_expression,
+    get_spatial_key,
     require_spatial_coords,
 )
 from ...utils.exceptions import DataNotFoundError, ParameterError, ProcessingError
@@ -308,7 +309,7 @@ async def create_lr_pairs_visualization(
             receptor_expr = np.sqrt(receptor_expr)
 
         # Plot ligand
-        if ax_idx < len(axes) and "spatial" in adata.obsm:
+        if ax_idx < len(axes) and get_spatial_key(adata) is not None:
             ax = axes[ax_idx]
             plot_spatial_feature(
                 adata,
@@ -333,7 +334,7 @@ async def create_lr_pairs_visualization(
             ax_idx += 1
 
         # Plot receptor
-        if ax_idx < len(axes) and "spatial" in adata.obsm:
+        if ax_idx < len(axes) and get_spatial_key(adata) is not None:
             ax = axes[ax_idx]
             plot_spatial_feature(
                 adata,

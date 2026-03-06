@@ -459,3 +459,43 @@ async def test_getis_ord_default_gene_selection_single_panel_title_and_missing_p
     )
     assert "No Data" in fig_missing.axes[0].get_title()
     fig_missing.clf()
+
+
+# ---------------------------------------------------------------------------
+# Regression: mixed-type cluster labels must not TypeError on sorted()
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_co_occurrence_mixed_type_labels_no_type_error(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """Object column with str+int labels must not raise TypeError."""
+    adata = minimal_spatial_adata.copy()
+    # Mix str and int labels
+    labels = ["A"] * 20 + [1] * 20 + ["B"] * 20
+    adata.obs["mixed_cluster"] = labels  # plain object column, not categorical
+    adata.uns["mixed_cluster_co_occurrence"] = {"dummy": True}
+
+    monkeypatch.setattr(viz_ss, "require", lambda *_a, **_k: None)
+
+    def _co(*_args, **kwargs):
+        plt.figure()
+
+    monkeypatch.setitem(
+        sys.modules,
+        "squidpy",
+        _fake_squidpy_module(co_occurrence=_co),
+    )
+
+    # Before fix: TypeError from sorted() on mixed types
+    fig = await viz_ss._create_co_occurrence_visualization(
+        adata,
+        VisualizationParameters(
+            plot_type="statistics",
+            subtype="co_occurrence",
+            cluster_key="mixed_cluster",
+        ),
+    )
+    assert fig is not None
+    fig.clf()

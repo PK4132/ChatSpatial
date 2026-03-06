@@ -523,8 +523,10 @@ def test_check_is_integer_counts_and_ensure_counts_layer(minimal_spatial_adata):
     adata3 = minimal_spatial_adata.copy()
     adata3.raw = None
     adata3.layers.clear()
-    with pytest.raises(DataNotFoundError, match="Cannot create 'counts' layer"):
-        au.ensure_counts_layer(adata3)
+    # X contains integer counts (Poisson) → should create layer from X
+    created = au.ensure_counts_layer(adata3)
+    assert created is True
+    assert "counts" in adata3.layers
 
 
 def test_get_raw_data_source_skips_normalized_raw_and_falls_back_to_counts(
@@ -654,3 +656,87 @@ def test_get_raw_data_source_raw_error_and_counts_skip_path(
     monkeypatch.setattr(adata.raw, "to_adata", lambda: (_ for _ in ()).throw(RuntimeError("raw bad")))
     out = au.get_raw_data_source(adata, prefer_complete_genes=True, require_integer_counts=True)
     assert out.source == "current"
+
+
+def test_ensure_counts_layer_rejects_normalized_raw_falls_back_to_x(
+    minimal_spatial_adata,
+):
+    """When .raw has normalized data but X has integer counts, use X fallback."""
+    adata = minimal_spatial_adata.copy()
+    # Create a .raw with normalized (non-integer) data
+    raw_norm = adata.copy()
+    raw_norm.X = np.asarray(raw_norm.X, dtype=float) + 0.5  # non-integer
+    adata.raw = raw_norm
+    # Remove any existing counts layer
+    if "counts" in adata.layers:
+        del adata.layers["counts"]
+
+    # X still has integer counts (Poisson) → fallback should succeed
+    created = au.ensure_counts_layer(adata)
+    assert created is True
+    assert "counts" in adata.layers
+    np.testing.assert_array_equal(
+        np.asarray(adata.layers["counts"]),
+        np.asarray(adata.X),
+    )
+
+
+def test_ensure_counts_layer_accepts_integer_raw(minimal_spatial_adata):
+    """ensure_counts_layer should accept .raw that contains valid integer counts."""
+    adata = minimal_spatial_adata.copy()
+    raw_int = adata.copy()
+    raw_int.X = np.abs(np.round(np.asarray(raw_int.X))).astype(float)
+    adata.raw = raw_int
+    if "counts" in adata.layers:
+        del adata.layers["counts"]
+
+    created = au.ensure_counts_layer(adata)
+    assert created is True
+    assert "counts" in adata.layers
+
+
+def test_ensure_counts_layer_raises_when_no_valid_source(
+    minimal_spatial_adata,
+):
+    """ensure_counts_layer raises when no raw, no counts, and X is normalized."""
+    adata = minimal_spatial_adata.copy()
+    adata.raw = None
+    adata.layers.clear()
+    adata.X = np.asarray(adata.X, dtype=float) + 0.5  # normalized
+    with pytest.raises(DataNotFoundError):
+        au.ensure_counts_layer(adata)
+
+
+def test_ensure_counts_layer_falls_back_to_x_when_raw_absent(
+    minimal_spatial_adata,
+):
+    """ensure_counts_layer should use X when .raw is None and X is integer counts."""
+    adata = minimal_spatial_adata.copy()
+    adata.raw = None
+    if "counts" in adata.layers:
+        del adata.layers["counts"]
+    # Ensure X is integer
+    adata.X = np.abs(np.round(np.asarray(adata.X))).astype(float)
+
+    created = au.ensure_counts_layer(adata)
+    assert created is True
+    assert "counts" in adata.layers
+    np.testing.assert_array_equal(
+        np.asarray(adata.layers["counts"]),
+        np.asarray(adata.X),
+    )
+
+
+def test_ensure_counts_layer_raises_when_raw_and_x_both_normalized(
+    minimal_spatial_adata,
+):
+    """ensure_counts_layer raises when both .raw and X contain normalized data."""
+    adata = minimal_spatial_adata.copy()
+    raw_norm = adata.copy()
+    raw_norm.X = np.asarray(raw_norm.X, dtype=float) + 0.5
+    adata.raw = raw_norm
+    adata.X = np.asarray(adata.X, dtype=float) + 0.5  # also normalized
+    if "counts" in adata.layers:
+        del adata.layers["counts"]
+    with pytest.raises(DataNotFoundError):
+        au.ensure_counts_layer(adata)

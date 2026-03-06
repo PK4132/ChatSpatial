@@ -10,7 +10,12 @@ import pytest
 
 from chatspatial.models.data import AnnotationParameters
 from chatspatial.tools import annotation as ann
-from chatspatial.utils.exceptions import DataError, DataNotFoundError, ParameterError, ProcessingError
+from chatspatial.utils.exceptions import (
+    DataError,
+    DataNotFoundError,
+    ParameterError,
+    ProcessingError,
+)
 
 
 class DummyCtx:
@@ -122,7 +127,9 @@ async def test_annotate_cell_types_loads_reference_for_singler(
     ctx = DummyCtx({"query": adata, "ref": ref})
     seen: dict[str, object] = {}
 
-    async def _fake_singler(_adata, _params, _ctx, output_key, confidence_key, reference_adata):
+    async def _fake_singler(
+        _adata, _params, _ctx, output_key, confidence_key, reference_adata
+    ):
         seen["reference_adata"] = reference_adata
         _adata.obs[output_key] = ["B"] * _adata.n_obs
         return ann.AnnotationMethodOutput(
@@ -148,7 +155,8 @@ async def test_annotate_cell_types_loads_reference_for_singler(
         AnnotationParameters(method="singler", reference_data_id="ref"),
     )
     assert seen["reference_adata"] is ref
-    assert out.confidence_key == "confidence_singler"
+    # singler + reference_data_id="ref" → suffix "singler_ref"
+    assert out.confidence_key == "confidence_singler_ref"
     assert ctx.calls == ["query", "ref"]
 
 
@@ -165,7 +173,9 @@ async def test_annotate_cell_types_passes_through_parameter_error(
     monkeypatch.setattr(ann, "_annotate_with_cellassign", _raise_param)
 
     with pytest.raises(ParameterError, match="invalid marker_genes"):
-        await ann.annotate_cell_types("d1", ctx, AnnotationParameters(method="cellassign"))
+        await ann.annotate_cell_types(
+            "d1", ctx, AnnotationParameters(method="cellassign")
+        )
 
 
 @pytest.mark.asyncio
@@ -181,7 +191,9 @@ async def test_annotate_cell_types_wraps_unexpected_errors(
     monkeypatch.setattr(ann, "_annotate_with_mllmcelltype", _raise_unexpected)
 
     with pytest.raises(ProcessingError, match="Annotation failed: boom"):
-        await ann.annotate_cell_types("d1", ctx, AnnotationParameters(method="mllmcelltype"))
+        await ann.annotate_cell_types(
+            "d1", ctx, AnnotationParameters(method="mllmcelltype")
+        )
 
 
 @pytest.mark.asyncio
@@ -207,7 +219,9 @@ async def test_annotate_with_tangram_requires_reference_data_id(
 async def test_annotate_with_scanvi_requires_reference_data_id(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):
-    monkeypatch.setattr(ann, "validate_scvi_tools", lambda *_args, **_kwargs: SimpleNamespace())
+    monkeypatch.setattr(
+        ann, "validate_scvi_tools", lambda *_args, **_kwargs: SimpleNamespace()
+    )
     ctx = DummyCtx({"d1": minimal_spatial_adata.copy()})
 
     with pytest.raises(ParameterError, match="scANVI requires reference_data_id"):
@@ -229,7 +243,6 @@ async def test_annotate_with_cellassign_requires_marker_genes(
     fake_scvi_external = ModuleType("scvi.external")
     fake_scvi_external.CellAssign = object
     monkeypatch.setitem(__import__("sys").modules, "scvi.external", fake_scvi_external)
-
 
     ctx = DummyCtx({"d1": minimal_spatial_adata.copy()})
     with pytest.raises(ParameterError, match="CellAssign requires marker genes"):
@@ -269,7 +282,9 @@ async def test_annotate_with_mllmcelltype_consensus_without_models_raises_parame
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):
     adata = minimal_spatial_adata.copy()
-    adata.obs["leiden"] = pd.Categorical(["0"] * (adata.n_obs // 2) + ["1"] * (adata.n_obs - adata.n_obs // 2))
+    adata.obs["leiden"] = pd.Categorical(
+        ["0"] * (adata.n_obs // 2) + ["1"] * (adata.n_obs - adata.n_obs // 2)
+    )
 
     monkeypatch.setattr(ann, "require", lambda *_args, **_kwargs: None)
     monkeypatch.setitem(
@@ -320,7 +335,9 @@ async def test_annotate_with_singler_custom_reference_success_deterministic_orde
 ):
     adata = minimal_spatial_adata.copy()
     ref = minimal_spatial_adata.copy()
-    ref.obs["ctype"] = pd.Categorical(["B"] * (ref.n_obs // 2) + ["T"] * (ref.n_obs - ref.n_obs // 2))
+    ref.obs["ctype"] = pd.Categorical(
+        ["B"] * (ref.n_obs // 2) + ["T"] * (ref.n_obs - ref.n_obs // 2)
+    )
 
     class _SingleResults:
         def __init__(self, n_obs: int):
@@ -361,7 +378,9 @@ async def test_annotate_with_singler_custom_reference_success_deterministic_orde
     ctx = DummyWarnCtx({"q": adata, "r": ref})
     out = await ann._annotate_with_singler(
         adata,
-        AnnotationParameters(method="singler", reference_data_id="r", cell_type_key="ctype"),
+        AnnotationParameters(
+            method="singler", reference_data_id="r", cell_type_key="ctype"
+        ),
         ctx,
         "cell_type_singler",
         "confidence_singler",
@@ -383,7 +402,9 @@ async def test_annotate_with_tangram_success_extracts_score_and_copies_back(
     adata = minimal_spatial_adata.copy()
     adata.raw = adata.copy()
     ref = minimal_spatial_adata.copy()
-    ref.obs["ctype"] = pd.Categorical(["B"] * (ref.n_obs // 2) + ["T"] * (ref.n_obs - ref.n_obs // 2))
+    ref.obs["ctype"] = pd.Categorical(
+        ["B"] * (ref.n_obs // 2) + ["T"] * (ref.n_obs - ref.n_obs // 2)
+    )
 
     fake_tg = ModuleType("tangram")
     fake_tg.pp_adatas = lambda *_args, **_kwargs: None
@@ -430,6 +451,7 @@ async def test_annotate_with_tangram_success_extracts_score_and_copies_back(
     assert pytest.approx(out.tangram_mapping_score, rel=1e-6) == 0.905
     assert set(out.cell_types) == {"B", "T"}
     assert "cell_type_tangram" in adata.obs.columns
+    # Default tangram_ct_pred_key when no suffix override is given
     assert "tangram_ct_pred" in adata.obsm
 
 
@@ -479,7 +501,9 @@ async def test_annotate_with_scanvi_direct_training_success(
 ):
     adata = minimal_spatial_adata.copy()
     ref = minimal_spatial_adata.copy()
-    ref.obs["ctype"] = pd.Categorical(["B"] * (ref.n_obs // 2) + ["T"] * (ref.n_obs - ref.n_obs // 2))
+    ref.obs["ctype"] = pd.Categorical(
+        ["B"] * (ref.n_obs // 2) + ["T"] * (ref.n_obs - ref.n_obs // 2)
+    )
 
     class _FakeSCANVIModel:
         @staticmethod
@@ -496,8 +520,12 @@ async def test_annotate_with_scanvi_direct_training_success(
             if soft:
                 return pd.DataFrame(
                     {
-                        "B": [0.8 if i % 2 == 0 else 0.2 for i in range(self._adata.n_obs)],
-                        "T": [0.2 if i % 2 == 0 else 0.8 for i in range(self._adata.n_obs)],
+                        "B": [
+                            0.8 if i % 2 == 0 else 0.2 for i in range(self._adata.n_obs)
+                        ],
+                        "T": [
+                            0.2 if i % 2 == 0 else 0.8 for i in range(self._adata.n_obs)
+                        ],
                     },
                     index=self._adata.obs_names,
                 )
@@ -519,7 +547,9 @@ async def test_annotate_with_scanvi_direct_training_success(
     monkeypatch.setattr(
         ann,
         "find_common_genes",
-        lambda ref_genes, qry_genes: list(ref_genes)[: min(len(ref_genes), len(qry_genes))],
+        lambda ref_genes, qry_genes: list(ref_genes)[
+            : min(len(ref_genes), len(qry_genes))
+        ],
     )
     monkeypatch.setattr(ann, "shallow_copy_adata", lambda x: x.copy())
     monkeypatch.setattr(ann, "ensure_counts_layer", lambda *_args, **_kwargs: None)
@@ -570,8 +600,12 @@ async def test_annotate_with_cellassign_probability_output_success(
             # Return probability dataframe to exercise confidence path.
             return pd.DataFrame(
                 {
-                    self._marker_cols[0]: [0.8 if i % 2 == 0 else 0.2 for i in range(n)],
-                    self._marker_cols[1]: [0.2 if i % 2 == 0 else 0.8 for i in range(n)],
+                    self._marker_cols[0]: [
+                        0.8 if i % 2 == 0 else 0.2 for i in range(n)
+                    ],
+                    self._marker_cols[1]: [
+                        0.2 if i % 2 == 0 else 0.8 for i in range(n)
+                    ],
                 },
                 index=self._adata.obs_names,
             )
@@ -697,7 +731,9 @@ async def test_annotate_with_singler_raises_on_insufficient_gene_overlap(
     with pytest.raises(DataError, match="Insufficient gene overlap"):
         await ann._annotate_with_singler(
             adata,
-            AnnotationParameters(method="singler", reference_data_id="r", cell_type_key="ctype"),
+            AnnotationParameters(
+                method="singler", reference_data_id="r", cell_type_key="ctype"
+            ),
             DummyWarnCtx({"q": adata, "r": ref}),
             "cell_type_singler",
             "confidence_singler",
@@ -711,7 +747,9 @@ async def test_annotate_with_scanvi_uses_ndarray_probability_fallback(
 ):
     adata = minimal_spatial_adata.copy()
     ref = minimal_spatial_adata.copy()
-    ref.obs["ctype"] = pd.Categorical(["B"] * (ref.n_obs // 2) + ["T"] * (ref.n_obs - ref.n_obs // 2))
+    ref.obs["ctype"] = pd.Categorical(
+        ["B"] * (ref.n_obs // 2) + ["T"] * (ref.n_obs - ref.n_obs // 2)
+    )
 
     class _FakeSCANVIModel:
         @staticmethod
@@ -727,10 +765,15 @@ async def test_annotate_with_scanvi_uses_ndarray_probability_fallback(
         def predict(self, soft: bool = False):
             if soft:
                 return np.array(
-                    [[0.9, 0.1] if i % 2 == 0 else [0.1, 0.9] for i in range(self._adata.n_obs)],
+                    [
+                        [0.9, 0.1] if i % 2 == 0 else [0.1, 0.9]
+                        for i in range(self._adata.n_obs)
+                    ],
                     dtype=float,
                 )
-            return pd.Categorical(["B" if i % 2 == 0 else "T" for i in range(self._adata.n_obs)])
+            return pd.Categorical(
+                ["B" if i % 2 == 0 else "T" for i in range(self._adata.n_obs)]
+            )
 
         @staticmethod
         def load_query_data(adata_subset, _model):
@@ -746,7 +789,9 @@ async def test_annotate_with_scanvi_uses_ndarray_probability_fallback(
     monkeypatch.setattr(
         ann,
         "find_common_genes",
-        lambda ref_genes, qry_genes: list(ref_genes)[: min(len(ref_genes), len(qry_genes))],
+        lambda ref_genes, qry_genes: list(ref_genes)[
+            : min(len(ref_genes), len(qry_genes))
+        ],
     )
     monkeypatch.setattr(ann, "shallow_copy_adata", lambda x: x.copy())
     monkeypatch.setattr(ann, "ensure_counts_layer", lambda *_args, **_kwargs: None)
@@ -777,7 +822,9 @@ async def test_annotate_with_scanvi_warns_when_probability_extraction_fails(
 ):
     adata = minimal_spatial_adata.copy()
     ref = minimal_spatial_adata.copy()
-    ref.obs["ctype"] = pd.Categorical(["B"] * (ref.n_obs // 2) + ["T"] * (ref.n_obs - ref.n_obs // 2))
+    ref.obs["ctype"] = pd.Categorical(
+        ["B"] * (ref.n_obs // 2) + ["T"] * (ref.n_obs - ref.n_obs // 2)
+    )
 
     class _FakeSCANVIModel:
         @staticmethod
@@ -793,7 +840,9 @@ async def test_annotate_with_scanvi_warns_when_probability_extraction_fails(
         def predict(self, soft: bool = False):
             if soft:
                 raise RuntimeError("probabilities unavailable")
-            return pd.Categorical(["B" if i % 2 == 0 else "T" for i in range(self._adata.n_obs)])
+            return pd.Categorical(
+                ["B" if i % 2 == 0 else "T" for i in range(self._adata.n_obs)]
+            )
 
         @staticmethod
         def load_query_data(adata_subset, _model):
@@ -809,7 +858,9 @@ async def test_annotate_with_scanvi_warns_when_probability_extraction_fails(
     monkeypatch.setattr(
         ann,
         "find_common_genes",
-        lambda ref_genes, qry_genes: list(ref_genes)[: min(len(ref_genes), len(qry_genes))],
+        lambda ref_genes, qry_genes: list(ref_genes)[
+            : min(len(ref_genes), len(qry_genes))
+        ],
     )
     monkeypatch.setattr(ann, "shallow_copy_adata", lambda x: x.copy())
     monkeypatch.setattr(ann, "ensure_counts_layer", lambda *_args, **_kwargs: None)
@@ -834,3 +885,76 @@ async def test_annotate_with_scanvi_warns_when_probability_extraction_fails(
     assert out.confidence == {}
     assert "confidence_scanvi" not in adata.obs.columns
     assert any("Could not get confidence scores" in msg for msg in ctx.warnings)
+
+
+# =============================================================================
+# Issue 2 regression: Tangram zero-sum rows → "unassigned" in cell_types
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_annotate_with_tangram_zero_sum_rows_include_unassigned_in_cell_types(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """When some spots have zero-sum tangram_ct_pred, the returned cell_types
+    and counts must include 'unassigned' to match the actual label space."""
+    adata = minimal_spatial_adata.copy()
+    adata.raw = adata.copy()
+    ref = minimal_spatial_adata.copy()
+    ref.obs["ctype"] = pd.Categorical(
+        ["B"] * (ref.n_obs // 2) + ["T"] * (ref.n_obs - ref.n_obs // 2)
+    )
+
+    fake_tg = ModuleType("tangram")
+    fake_tg.pp_adatas = lambda *_args, **_kwargs: None
+    fake_tg.map_cells_to_space = lambda *_args, **_kwargs: SimpleNamespace(
+        uns={"training_history": {"main_loss": ["tensor(0.9, grad_fn=<x>)"]}}
+    )
+
+    def _project_with_zero_rows(_ad_map, adata_sp, annotation):
+        n = adata_sp.n_obs
+        b_vals = [0.8 if i % 2 == 0 else 0.2 for i in range(n)]
+        t_vals = [0.2 if i % 2 == 0 else 0.8 for i in range(n)]
+        # Make first row all-zero → "unassigned"
+        b_vals[0] = 0.0
+        t_vals[0] = 0.0
+        adata_sp.obsm["tangram_ct_pred"] = pd.DataFrame(
+            {"B": b_vals, "T": t_vals}, index=adata_sp.obs_names
+        )
+
+    fake_tg.project_cell_annotations = _project_with_zero_rows
+    monkeypatch.setitem(__import__("sys").modules, "tangram", fake_tg)
+
+    async def _no_dupes(*_args, **_kwargs):
+        return 0
+
+    monkeypatch.setattr(ann, "require", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(ann, "ensure_unique_var_names_async", _no_dupes)
+    monkeypatch.setattr(ann, "get_device", lambda prefer_gpu=False: "cpu")
+    monkeypatch.setattr(ann, "shallow_copy_adata", lambda x: x)
+
+    ctx = DummyWarnCtx({"q": adata, "r": ref})
+    out = await ann._annotate_with_tangram(
+        adata,
+        AnnotationParameters(
+            method="tangram",
+            reference_data_id="r",
+            cell_type_key="ctype",
+            training_genes=["gene_0", "gene_1"],
+        ),
+        ctx,
+        "cell_type_tangram",
+        "confidence_tangram",
+        reference_adata=ref,
+    )
+
+    # "unassigned" must appear in the returned metadata
+    assert "unassigned" in out.cell_types
+    assert "unassigned" in out.counts
+    assert out.counts["unassigned"] >= 1
+
+    # Actual obs labels must match
+    assert "unassigned" in adata.obs["cell_type_tangram"].values
+    # Confidence for unassigned spots must be 0
+    unassigned_mask = adata.obs["cell_type_tangram"] == "unassigned"
+    assert (adata.obs.loc[unassigned_mask, "confidence_tangram"] == 0.0).all()

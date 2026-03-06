@@ -150,6 +150,9 @@ def test_integrate_with_scvi_happy_path_sets_latent_and_neighbors(
 ):
     adata = minimal_spatial_adata.copy()
     adata.obs["batch"] = np.where(np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2")
+    adata.layers["counts"] = np.abs(
+        np.round(np.asarray(adata.X))
+    ).astype(float)
     adata.X = np.clip(adata.X.astype(np.float32) / 10.0, 0, 10)
 
     calls: dict[str, object] = {}
@@ -172,6 +175,139 @@ def test_integrate_with_scvi_happy_path_sets_latent_and_neighbors(
     assert calls["train"]["max_epochs"] == 7
     assert calls["train"]["accelerator"] == "cpu"
     assert calls["neighbors"]["use_rep"] == "X_scvi"
+
+
+def test_integrate_with_scvi_uses_counts_layer_when_available(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """scVI should pass layer='counts' to setup_anndata when counts layer exists."""
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(
+        np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2"
+    )
+    # Normalized X (small values, passes the max_val < 50 check)
+    adata.X = np.clip(adata.X.astype(np.float32) / 10.0, 0, 10)
+    # Add a counts layer with raw integer counts
+    adata.layers["counts"] = np.abs(
+        np.round(np.asarray(minimal_spatial_adata.X))
+    ).astype(float)
+
+    calls: dict[str, object] = {}
+    _install_fake_scvi(monkeypatch, calls)
+
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.get_accelerator",
+        lambda prefer_gpu=False: "cpu",
+    )
+    monkeypatch.setattr(
+        "scanpy.pp.neighbors",
+        lambda _adata, use_rep: None,
+    )
+
+    out = integrate_with_scvi(adata, batch_key="batch", n_epochs=5, use_gpu=False)
+
+    assert out is adata
+    assert calls["setup"]["layer"] == "counts"
+
+
+def test_integrate_with_scvi_salvages_counts_from_raw(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """When X is not integer counts and no layers['counts'] exists, but .raw
+    has integer counts, ensure_counts_layer should salvage them."""
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(
+        np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2"
+    )
+    # Store raw integer counts in .raw before normalizing.
+    # AnnData.raw is created from the current state of adata, so we first
+    # ensure X contains integer counts, snapshot .raw, then normalize X.
+    adata.X = np.abs(np.round(np.asarray(adata.X))).astype(np.float32)
+    adata.raw = adata.copy()
+    # Normalized X — non-integer, no counts layer
+    adata.X = np.clip(adata.X.astype(np.float32) / 10.0, 0, 10)
+    assert "counts" not in adata.layers
+
+    calls: dict[str, object] = {}
+    _install_fake_scvi(monkeypatch, calls)
+
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.get_accelerator",
+        lambda prefer_gpu=False: "cpu",
+    )
+    monkeypatch.setattr(
+        "scanpy.pp.neighbors",
+        lambda _adata, use_rep: None,
+    )
+
+    integrate_with_scvi(adata, batch_key="batch", n_epochs=5, use_gpu=False)
+
+    # ensure_counts_layer should have created layers["counts"] from .raw
+    assert "counts" in adata.layers
+    assert calls["setup"]["layer"] == "counts"
+
+
+def test_integrate_with_scvi_errors_when_no_counts_available(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """scVI should raise DataError when only normalized data is available
+    (no counts, no .raw)."""
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(
+        np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2"
+    )
+    # Normalized X — non-integer, no counts layer, no .raw
+    adata.X = np.clip(adata.X.astype(np.float32) / 10.0, 0, 10)
+
+    calls: dict[str, object] = {}
+    _install_fake_scvi(monkeypatch, calls)
+
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.get_accelerator",
+        lambda prefer_gpu=False: "cpu",
+    )
+    monkeypatch.setattr(
+        "scanpy.pp.neighbors",
+        lambda _adata, use_rep: None,
+    )
+
+    with pytest.raises(DataError, match="scVI requires raw count data"):
+        integrate_with_scvi(adata, batch_key="batch", n_epochs=5, use_gpu=False)
+
+
+def test_integrate_with_scvi_uses_x_directly_when_x_is_counts(
+    minimal_spatial_adata,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """scVI should use layer=None when X itself contains integer counts."""
+    adata = minimal_spatial_adata.copy()
+    adata.obs["batch"] = np.where(
+        np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2"
+    )
+    # X is integer counts and small enough to pass max_val check
+    adata.X = np.clip(
+        np.abs(np.round(np.asarray(adata.X))).astype(np.float32), 0, 40
+    )
+
+    calls: dict[str, object] = {}
+    _install_fake_scvi(monkeypatch, calls)
+
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.get_accelerator",
+        lambda prefer_gpu=False: "cpu",
+    )
+    monkeypatch.setattr(
+        "scanpy.pp.neighbors",
+        lambda _adata, use_rep: None,
+    )
+
+    out = integrate_with_scvi(adata, batch_key="batch", n_epochs=5, use_gpu=False)
+
+    assert out is adata
+    assert calls["setup"]["layer"] is None
 
 
 def test_integrate_multiple_samples_autofills_missing_batch_labels_with_concat(
@@ -227,6 +363,9 @@ def test_integrate_with_scvi_auto_epochs_for_small_dataset(
 ):
     adata = minimal_spatial_adata.copy()
     adata.obs["batch"] = np.where(np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2")
+    adata.layers["counts"] = np.abs(
+        np.round(np.asarray(adata.X))
+    ).astype(float)
     adata.X = np.clip(adata.X.astype(np.float32) / 10.0, 0, 10)
 
     calls: dict[str, object] = {}

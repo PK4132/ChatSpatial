@@ -36,6 +36,7 @@ from ...models.data import VisualizationParameters
 from ...tools.cell_communication import (
     CCC_SPATIAL_PVALS_KEY,
     CCC_SPATIAL_SCORES_KEY,
+    CCCStorage,
     get_ccc_results,
 )
 from ...utils.adata_utils import require_spatial_coords
@@ -341,12 +342,16 @@ async def get_cell_communication_data(
     """
     Unified function to retrieve cell communication results from AnnData.
 
-    Reads from unified CCC storage at adata.uns["ccc"] (single source of truth).
-    Converts all results to LIANA format for unified visualization.
+    When *method* is specified, reads from the per-method snapshot at
+    ``adata.uns[f"ccc_{method}"]`` (written by the dual-write pattern in
+    ``analyze_cell_communication``).  Falls back to the shared key
+    ``adata.uns["ccc"]`` (latest result) when no method is given or the
+    per-method snapshot is absent.
 
     Args:
         adata: AnnData object with cell communication results
-        method: Analysis method hint (optional, unused - kept for API compatibility)
+        method: If provided, retrieve results for this specific method
+            instead of the latest shared slot.
         context: MCP context for logging
 
     Returns:
@@ -355,7 +360,17 @@ async def get_cell_communication_data(
     Raises:
         DataNotFoundError: No cell communication results found
     """
-    ccc = get_ccc_results(adata)
+    ccc: CCCStorage | None = None
+
+    # Prefer per-method snapshot when method is specified
+    if method is not None:
+        method_key = f"ccc_{method}"
+        if method_key in adata.uns:
+            ccc = CCCStorage.from_dict(adata.uns[method_key])
+
+    # Fall back to shared (latest) result
+    if ccc is None:
+        ccc = get_ccc_results(adata)
 
     if ccc is None:
         raise DataNotFoundError(
@@ -364,9 +379,20 @@ async def get_cell_communication_data(
             "'cellphonedb', 'fastccc', or 'cellchat_r'."
         )
 
-    # Get spatial data from obsm if available
-    spatial_scores = adata.obsm.get(CCC_SPATIAL_SCORES_KEY)
-    spatial_pvals = adata.obsm.get(CCC_SPATIAL_PVALS_KEY)
+    # Get spatial data from obsm — prefer per-method keys when method
+    # is specified, fall back to shared keys for backward compatibility.
+    scores_key = (
+        f"ccc_spatial_scores_{method}"
+        if method and f"ccc_spatial_scores_{method}" in adata.obsm
+        else CCC_SPATIAL_SCORES_KEY
+    )
+    pvals_key = (
+        f"ccc_spatial_pvals_{method}"
+        if method and f"ccc_spatial_pvals_{method}" in adata.obsm
+        else CCC_SPATIAL_PVALS_KEY
+    )
+    spatial_scores = adata.obsm.get(scores_key)
+    spatial_pvals = adata.obsm.get(pvals_key)
 
     # Convert results to LIANA format for unified visualization
     # This is the key step for first-principles architecture:
@@ -444,7 +470,9 @@ async def create_cell_communication_visualization(
     if context:
         await context.info("Creating cell communication visualization")
 
-    data = await get_cell_communication_data(adata, context=context)
+    data = await get_cell_communication_data(
+        adata, method=params.analysis_method, context=context
+    )
 
     if context:
         await context.info(

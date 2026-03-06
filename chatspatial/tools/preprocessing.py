@@ -387,8 +387,7 @@ async def preprocess_data(
                 )
 
             # Reconstruct sparse matrix and run SCTransform in R
-            ro.r(
-                """
+            ro.r("""
                 library(Matrix)
                 library(sctransform)
 
@@ -419,8 +418,7 @@ async def preprocess_data(
                 residual_variance <- vst_result$gene_attr$residual_variance
                 # Extract gene names that survived SCTransform filtering
                 kept_genes <- rownames(vst_result$y)
-            """
-            )
+            """)
 
             # Extract results from R
             with localconverter(ro.default_converter + numpy2ri.converter):
@@ -693,7 +691,22 @@ async def preprocess_data(
     if not use_existing_sct_hvgs:
         # Check if we should use all genes (for very small gene sets like MERFISH)
         if adata.n_vars < 100:
-            adata.var["highly_variable"] = True
+            if gene_subsample_requested and n_hvgs < adata.n_vars:
+                # Small panel but user explicitly wants fewer genes:
+                # rank by variance and select top n_hvgs.
+                if scipy.sparse.issparse(adata.X):
+                    var = np.asarray(
+                        adata.X.power(2).mean(axis=0)
+                        - np.power(adata.X.mean(axis=0), 2)
+                    ).ravel()
+                else:
+                    var = np.var(adata.X, axis=0)
+                top_idx = np.argpartition(var, -n_hvgs)[-n_hvgs:]
+                mask = np.zeros(adata.n_vars, dtype=bool)
+                mask[top_idx] = True
+                adata.var["highly_variable"] = mask
+            else:
+                adata.var["highly_variable"] = True
         else:
             # Attempt HVG selection - no fallback for failures
             try:

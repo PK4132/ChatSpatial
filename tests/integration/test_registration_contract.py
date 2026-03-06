@@ -45,12 +45,12 @@ async def test_register_spatial_data_success_saves_registration_result(
         SimpleNamespace(register_spatial_slices_mcp=fake_register),
     )
 
-    saved: dict[str, object] = {}
+    saved_calls: list[dict[str, object]] = []
 
     async def fake_save_result(data_id: str, result_type: str, result):
-        saved["data_id"] = data_id
-        saved["result_type"] = result_type
-        saved["result"] = result
+        saved_calls.append(
+            {"data_id": data_id, "result_type": result_type, "result": result}
+        )
 
     monkeypatch.setattr(data_manager, "save_result", fake_save_result)
 
@@ -59,6 +59,11 @@ async def test_register_spatial_data_success_saves_registration_result(
     )
 
     assert result["source_id"] == "source_1"
-    assert saved["data_id"] == "source_1"
-    assert saved["result_type"] == "registration"
-    assert saved["result"] == result
+    # Registration must be saved to both source and target datasets
+    assert len(saved_calls) == 2
+    assert saved_calls[0]["data_id"] == "source_1"
+    assert saved_calls[0]["result_type"] == "registration"
+    assert saved_calls[0]["result"] == result
+    assert saved_calls[1]["data_id"] == "target_1"
+    assert saved_calls[1]["result_type"] == "registration"
+    assert saved_calls[1]["result"] == result

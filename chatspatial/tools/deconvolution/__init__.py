@@ -39,6 +39,21 @@ from ...utils.exceptions import DataError, DependencyError, ParameterError
 from ...utils.results_export import export_analysis_result
 from .base import MethodConfig, PreparedDeconvolutionData, prepare_deconvolution
 
+
+def _build_deconvolution_key(
+    method: str,
+    reference_data_id: str | None,
+) -> str:
+    """Build a parametric analysis key for deconvolution results.
+
+    Encodes method + reference so that runs with different reference
+    datasets coexist in metadata/export/cache.
+    """
+    if reference_data_id:
+        return f"deconvolution_{method}_{reference_data_id}"
+    return f"deconvolution_{method}"
+
+
 # Export main function and data container
 __all__ = ["deconvolve_spatial_data", "PreparedDeconvolutionData", "METHOD_REGISTRY"]
 
@@ -265,7 +280,13 @@ async def deconvolve_spatial_data(
 
     # Store results in AnnData
     result = await _store_results(
-        spatial_adata, proportions, stats, method, data_id, ctx
+        spatial_adata,
+        proportions,
+        stats,
+        method,
+        data_id,
+        ctx,
+        reference_data_id=params.reference_data_id,
     )
 
     return result
@@ -360,6 +381,8 @@ async def _store_results(
     method: str,
     data_id: str,
     ctx: "ToolContext",
+    *,
+    reference_data_id: str | None = None,
 ) -> DeconvolutionResult:
     """Store deconvolution results in AnnData and return result object."""
     proportions_key = f"deconvolution_{method}"
@@ -380,17 +403,25 @@ async def _store_results(
 
     # Add dominant cell type annotation (all-zero rows → "unassigned")
     dominant_key = f"dominant_celltype_{method}"
-    cell_types_array = np.array(cell_types)
+    cell_types_array = np.array(cell_types, dtype=object)
     row_sums = full_proportions.sum(axis=1)
     zero_mask = row_sums == 0
     dominant_types = cell_types_array[np.argmax(full_proportions, axis=1)]
     dominant_types[zero_mask] = "unassigned"
     spatial_adata.obs[dominant_key] = pd.Categorical(dominant_types)
 
+    # Build the full label space: proportions columns + "unassigned" if any
+    # zero-sum rows exist.  This keeps metadata (cell_types, n_cell_types)
+    # consistent with the actual labels in obs[dominant_key].
+    all_cell_types: list[str] = list(cell_types)
+    if zero_mask.any() and "unassigned" not in all_cell_types:
+        all_cell_types.append("unassigned")
+
     # Store metadata for provenance tracking
+    analysis_key = _build_deconvolution_key(method, reference_data_id)
     store_analysis_metadata(
         spatial_adata,
-        analysis_name=f"deconvolution_{method}",
+        analysis_name=analysis_key,
         method=method,
         parameters={},  # Method-specific params already in stats
         results_keys={
@@ -399,16 +430,16 @@ async def _store_results(
             "uns": [f"{proportions_key}_cell_types"],
         },
         statistics={
-            "n_cell_types": len(cell_types),
+            "n_cell_types": len(all_cell_types),
             "n_spots": len(full_proportions),
-            "cell_types": cell_types,
+            "cell_types": all_cell_types,
             "proportions_key": proportions_key,
             "dominant_type_key": dominant_key,
         },
     )
 
     # Export results to CSV for reproducibility
-    export_analysis_result(spatial_adata, data_id, f"deconvolution_{method}")
+    export_analysis_result(spatial_adata, data_id, analysis_key)
 
     # Save updated data
     await ctx.set_adata(data_id, spatial_adata)
@@ -417,8 +448,8 @@ async def _store_results(
         data_id=data_id,
         method=method,
         dominant_type_key=dominant_key,
-        n_cell_types=len(cell_types),
-        cell_types=cell_types,
+        n_cell_types=len(all_cell_types),
+        cell_types=all_cell_types,
         proportions_key=proportions_key,
         n_spots=stats.get("n_spots", 0),
         genes_used=stats.get("genes_used", stats.get("common_genes", 0)),

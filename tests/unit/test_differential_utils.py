@@ -319,11 +319,11 @@ async def test_run_pydeseq2_success_auto_group_selection_and_persistence(
     assert out.top_genes == ["gene_0", "gene_1"]
     assert out.statistics["n_pseudobulk_samples"] == 4
     assert any("No group specified" in msg for msg in ctx.infos)
-    assert captured["analysis_name"] == "differential_expression"
+    assert captured["analysis_name"] == "de_pydeseq2_A_vs_B"
     assert captured["method"] == "pydeseq2"
     assert captured["statistics"]["n_pseudobulk_samples"] == 4
     assert captured["contrast"] == ["condition", "A", "B"]
-    assert "pydeseq2_results" in adata.uns
+    assert "pydeseq2_results_A_vs_B" in adata.uns
     assert "_de_condition" not in adata.obs.columns
     assert "_pseudobulk_id" not in adata.obs.columns
 

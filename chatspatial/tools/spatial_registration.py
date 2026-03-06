@@ -141,6 +141,35 @@ def _prepare_stalign_image(
 # =============================================================================
 
 
+def _prepare_paste_slices(
+    adata_list: list["ad.AnnData"],
+    common_genes: list[str],
+    spatial_key: str,
+) -> list["ad.AnnData"]:
+    """Subset to common genes, normalize, and ensure ``obsm["spatial"]`` exists.
+
+    PASTE internally accesses ``adata.obsm["spatial"]``.  When the actual
+    spatial key is something else (e.g. ``X_spatial``), we copy it to
+    ``"spatial"`` so PASTE finds valid coordinates.
+
+    Normalization (``normalize_total`` + ``log1p``) is applied uniformly so
+    that optimal-transport costs are computed on the same expression scale
+    regardless of how many slices are being aligned.
+    """
+    import scanpy as sc
+
+    slices: list["ad.AnnData"] = []
+    for adata in adata_list:
+        s = adata[:, common_genes].copy()
+        # Guarantee PASTE can read obsm["spatial"]
+        if spatial_key != "spatial":
+            s.obsm["spatial"] = s.obsm[spatial_key]
+        sc.pp.normalize_total(s, target_sum=1e4)
+        sc.pp.log1p(s)
+        slices.append(s)
+    return slices
+
+
 def _register_paste(
     adata_list: list["ad.AnnData"],
     params: RegistrationParameters,
@@ -154,21 +183,13 @@ def _register_paste(
     registered = [shallow_copy_adata(adata) for adata in adata_list]
     common_genes = _get_common_genes(registered)
 
+    # Unified preparation: gene subset + normalize + ensure obsm["spatial"]
+    slices = _prepare_paste_slices(registered, common_genes, spatial_key)
+
     if len(registered) == 2:
-        import scanpy as sc
-
         # Pairwise alignment
+        slice1, slice2 = slices
 
-        slice1 = registered[0][:, common_genes].copy()
-        slice2 = registered[1][:, common_genes].copy()
-
-        # Normalize
-        sc.pp.normalize_total(slice1, target_sum=1e4)
-        sc.pp.log1p(slice1)
-        sc.pp.normalize_total(slice2, target_sum=1e4)
-        sc.pp.log1p(slice2)
-
-        # Run PASTE
         pi = pst.pairwise_align(
             slice1,
             slice2,
@@ -184,8 +205,6 @@ def _register_paste(
 
     else:
         # Multi-slice center alignment
-
-        slices = [adata[:, common_genes] for adata in registered]
         backend = get_ot_backend(params.use_gpu)
 
         # Initial pairwise alignments to reference
@@ -218,13 +237,14 @@ def _register_paste(
             gpu_verbose=False,
         )
 
-        # Apply transformations
+        # Apply transformations — read coords from prepared slices
+        # (which have "spatial" guaranteed by _prepare_paste_slices)
         for i, (adata, pi) in enumerate(zip(registered, pis_new, strict=False)):
             if i == reference_idx:
                 adata.obsm["spatial_registered"] = adata.obsm[spatial_key].copy()
             else:
                 adata.obsm["spatial_registered"] = _transform_coordinates(
-                    pi, slices[reference_idx].obsm[spatial_key]
+                    pi, slices[reference_idx].obsm["spatial"]
                 )
 
     return registered
@@ -442,7 +462,29 @@ async def register_spatial_slices_mcp(
         # Store metadata and export results for both datasets
         method = params.method
         results_keys: dict[str, list[str]] = {"obsm": ["spatial_registered"]}
-        parameters = {"method": method, "target_id": target_id}
+
+        # Record all parameters that affect registration results
+        # so downstream users can reproduce the exact experiment.
+        if method == "paste":
+            method_params = {
+                "paste_alpha": params.paste_alpha,
+                "paste_n_components": params.paste_n_components,
+                "paste_numItermax": params.paste_numItermax,
+            }
+        else:  # stalign
+            method_params = {
+                "stalign_image_size": list(params.stalign_image_size),
+                "stalign_niter": params.stalign_niter,
+                "stalign_a": params.stalign_a,
+                "stalign_use_expression": params.stalign_use_expression,
+            }
+
+        parameters = {
+            "method": method,
+            "target_id": target_id,
+            "use_gpu": params.use_gpu,
+            **method_params,
+        }
         statistics = {
             "n_source_spots": source_adata.n_obs,
             "n_target_spots": target_adata.n_obs,

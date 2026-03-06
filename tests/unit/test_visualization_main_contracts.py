@@ -88,3 +88,39 @@ async def test_visualize_data_builds_plot_type_key_with_subtype(monkeypatch):
 
     assert result == "saved"
     assert captured["plot_type"] == "feature_umap"
+
+
+# ---------------------------------------------------------------------------
+# Regression: non-gene-dependent plot types must accept low n_vars
+# ---------------------------------------------------------------------------
+
+
+async def test_visualize_data_allows_few_genes_for_non_gene_plots(monkeypatch):
+    """integration/deconvolution/cnv etc. should not be rejected for low n_vars."""
+    adata = SimpleNamespace(n_obs=60, n_vars=3)
+    sentinel = object()
+
+    async def _handler(_adata, _params, _ctx):
+        return sentinel
+
+    async def _optimize(fig, params, ctx, data_id=None, plot_type=None):
+        return "ok"
+
+    monkeypatch.setattr(viz_main.sc.settings, "set_figure_params", lambda **_k: None)
+    monkeypatch.setattr(viz_main, "PLOT_HANDLERS", {"integration": _handler})
+    monkeypatch.setattr(viz_main, "optimize_fig_to_image_with_cache", _optimize)
+
+    # Should NOT raise DataNotFoundError for n_vars=3
+    result = await viz_main.visualize_data(
+        "d1",
+        _Ctx(adata),
+        _params(plot_type="integration"),
+    )
+    assert result == "ok"
+
+
+async def test_visualize_data_still_rejects_few_genes_for_feature_type():
+    """feature/expression types must still enforce the gene count check."""
+    adata = SimpleNamespace(n_obs=60, n_vars=3)
+    with pytest.raises(DataNotFoundError, match="too few genes"):
+        await viz_main.visualize_data("d1", _Ctx(adata), _params(plot_type="feature"))

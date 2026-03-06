@@ -281,33 +281,25 @@ async def _prepare_counts(
     ctx: "ToolContext",
     require_int_dtype: bool,
 ) -> ad.AnnData:
-    """Prepare AnnData by restoring raw counts."""
-    # Directly check data sources in priority order (avoids double-access pattern)
-    # Priority: adata.raw > layers["counts"] > adata.X
-    if adata.raw is not None:
-        adata_copy = adata.raw.to_adata()
-        # Preserve obsm from original (raw.to_adata() doesn't include it)
-        for key in adata.obsm:
-            adata_copy.obsm[key] = adata.obsm[key].copy()
-    elif "counts" in adata.layers:
-        adata_copy = adata.copy()
-        adata_copy.X = adata_copy.layers["counts"]
-    else:
-        adata_copy = adata.copy()
+    """Prepare AnnData by restoring raw counts.
 
-    # Convert to int32 if required (R-based methods)
-    # Check if data is integer counts by sampling
+    Uses the unified data source priority (layers["counts"] > adata.X)
+    to avoid silently using normalized .raw data as counts.
+    """
+    from ...utils.adata_utils import check_is_integer_counts, get_raw_data_source
+
+    # Use SSOT priority: layers["counts"] > adata.X
+    # prefer_complete_genes=False because deconvolution needs alignment
+    # with current adata dimensions (obsm, obs, spatial coords).
+    result = get_raw_data_source(adata, prefer_complete_genes=False)
+
+    adata_copy = adata.copy()
+    adata_copy.X = result.X
+
+    # Convert to int32 if required (R-based methods like RCTD)
     if require_int_dtype:
-        X = adata_copy.X
-        sample_size = min(100, X.shape[0] * X.shape[1])
-        if sparse.issparse(X):
-            sample = X.data[:sample_size] if len(X.data) > 0 else np.array([0])
-        else:
-            flat = X.flatten()
-            sample = flat[:sample_size]
-        is_integer = np.allclose(sample, np.round(sample), equal_nan=True)
-
-        if is_integer:
+        is_int, _, _ = check_is_integer_counts(adata_copy.X)
+        if is_int:
             if sparse.issparse(adata_copy.X):
                 adata_copy.X = adata_copy.X.astype(np.int32, copy=False)
             else:

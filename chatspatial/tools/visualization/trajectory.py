@@ -36,6 +36,35 @@ from .core import (
     resolve_figure_size,
 )
 
+# CellRank 2.x default forward fate key
+_CELLRANK_FATE_KEY = "to_terminal_states"
+
+# Candidate obsm keys for CellRank fate probabilities (priority order)
+_FATE_KEY_CANDIDATES = ["lineages_fwd", "to_terminal_states", "fate_probabilities"]
+
+
+def _resolve_cellrank_fate_key(adata: "ad.AnnData") -> str:
+    """Find the CellRank fate-probabilities key in *adata.obsm* (read-only).
+
+    The analysis pipeline now writes both ``"fate_probabilities"`` and the
+    CellRank-standard ``"to_terminal_states"`` alias, so this function only
+    needs to locate the first matching key without modifying *adata*.
+
+    Returns:
+        The obsm key that holds the fate probabilities.
+
+    Raises:
+        DataNotFoundError: If no fate probabilities are found.
+    """
+    for key in _FATE_KEY_CANDIDATES:
+        if key in adata.obsm:
+            return key
+
+    raise DataNotFoundError(
+        "CellRank fate probabilities not found. Run trajectory analysis first."
+    )
+
+
 # =============================================================================
 # Main Router
 # =============================================================================
@@ -250,18 +279,7 @@ async def _create_cellrank_circular_projection(
     require("cellrank", feature="circular projection")
     import cellrank as cr
 
-    # Check for CellRank results
-    fate_key_candidates = ["lineages_fwd", "to_terminal_states", "fate_probabilities"]
-    fate_key = None
-    for key in fate_key_candidates:
-        if key in adata.obsm:
-            fate_key = key
-            break
-
-    if not fate_key:
-        raise DataNotFoundError(
-            "CellRank fate probabilities not found. Run trajectory analysis first."
-        )
+    _resolve_cellrank_fate_key(adata)
 
     if context:
         await context.info("Creating CellRank circular projection")
@@ -300,27 +318,17 @@ async def _create_cellrank_fate_map(
 ) -> plt.Figure:
     """Create CellRank aggregated fate probabilities.
 
-    Shows fate probabilities aggregated by cluster as bar, paga, or heatmap.
+    Shows fate probabilities aggregated by cluster using CellRank's default
+    mode (paga_pie).
 
     Data requirements:
-        - adata.obsm['lineages_fwd'] or 'to_terminal_states': Fate probabilities
+        - adata.obsm with CellRank fate probabilities (any standard key)
         - adata.obs[cluster_key]: Cluster labels for aggregation
     """
     require("cellrank", feature="fate map")
     import cellrank as cr
 
-    # Check for CellRank results
-    fate_key_candidates = ["lineages_fwd", "to_terminal_states", "fate_probabilities"]
-    fate_key = None
-    for key in fate_key_candidates:
-        if key in adata.obsm:
-            fate_key = key
-            break
-
-    if not fate_key:
-        raise DataNotFoundError(
-            "CellRank fate probabilities not found. Run trajectory analysis first."
-        )
+    _resolve_cellrank_fate_key(adata)
 
     # Determine cluster key
     cluster_key = params.cluster_key
@@ -344,7 +352,6 @@ async def _create_cellrank_fate_map(
         cr.pl.aggregate_fate_probabilities(
             adata,
             cluster_key=cluster_key,
-            mode="bar",
             figsize=figsize,
             dpi=params.dpi,
         )
@@ -378,18 +385,7 @@ async def _create_cellrank_gene_trends(
     # Import GAM model preparation from trajectory module
     from ..trajectory import prepare_gam_model_for_visualization
 
-    # Check for fate probabilities
-    fate_key_candidates = ["lineages_fwd", "to_terminal_states", "fate_probabilities"]
-    fate_key = None
-    for key in fate_key_candidates:
-        if key in adata.obsm:
-            fate_key = key
-            break
-
-    if not fate_key:
-        raise DataNotFoundError(
-            "CellRank fate probabilities not found. Run trajectory analysis first."
-        )
+    fate_key = _resolve_cellrank_fate_key(adata)
 
     # Find time key
     time_key = None
@@ -479,18 +475,7 @@ async def _create_cellrank_fate_heatmap(
     # Import GAM model preparation from trajectory module
     from ..trajectory import prepare_gam_model_for_visualization
 
-    # Check for fate probabilities
-    fate_key_candidates = ["lineages_fwd", "to_terminal_states", "fate_probabilities"]
-    fate_key = None
-    for key in fate_key_candidates:
-        if key in adata.obsm:
-            fate_key = key
-            break
-
-    if not fate_key:
-        raise DataNotFoundError(
-            "CellRank fate probabilities not found. Run trajectory analysis first."
-        )
+    fate_key = _resolve_cellrank_fate_key(adata)
 
     # Find time key
     time_key = None

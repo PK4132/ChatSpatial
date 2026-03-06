@@ -79,14 +79,23 @@ def _get_score_columns(adata: "ad.AnnData") -> list[str]:
         2. Fall back to suffix search (for legacy data without metadata)
 
     Returns columns from:
-        - enrichment_spatial_metadata["results_keys"]["obs"] (e.g., 'Wnt_score')
-        - enrichment_ssgsea_metadata["results_keys"]["obs"] (e.g., 'ssgsea_Wnt')
+        - enrichment_spatial*_metadata["results_keys"]["obs"] (e.g., 'Wnt_score')
+        - enrichment_ssgsea*_metadata["results_keys"]["obs"] (e.g., 'ssgsea_Wnt')
     """
     score_cols = []
 
-    # Try to get from stored metadata (first principles: read what was stored)
-    for analysis_name in ["enrichment_spatial", "enrichment_ssgsea"]:
-        obs_cols = get_analysis_metadata_field(adata, analysis_name, "results_keys")
+    # Search all metadata keys matching enrichment_spatial* or enrichment_ssgsea*
+    # After parametrization, keys are e.g. "enrichment_spatial_KEGG_Pathways_metadata"
+    prefixes = ("enrichment_spatial", "enrichment_ssgsea")
+    for uns_key in adata.uns:
+        if not uns_key.endswith("_metadata"):
+            continue
+        analysis_name = uns_key.removesuffix("_metadata")
+        if not analysis_name.startswith(prefixes):
+            continue
+        obs_cols = get_analysis_metadata_field(
+            adata, analysis_name, "results_keys"
+        )
         if obs_cols and isinstance(obs_cols, dict) and "obs" in obs_cols:
             # Filter to only columns that actually exist
             for col in obs_cols["obs"]:
@@ -412,22 +421,36 @@ def _create_enrichmap_cross_correlation(
     em,
 ) -> plt.Figure:
     """Create EnrichMap cross-correlation visualization."""
-    # Look for gene sets from any enrichment method (prefer spatial, then others)
+    # Only spatial enrichment produces {pathway}_score obs columns.
     gene_sets_key = None
-    for candidate in [
-        "enrichment_spatial_gene_sets",
-        "enrichment_gsea_gene_sets",
-        "enrichment_ora_gene_sets",
-        "enrichment_ssgsea_gene_sets",
-        "enrichment_gene_sets",  # legacy fallback
-    ]:
-        if candidate in adata.uns:
-            gene_sets_key = candidate
-            break
+
+    # If analysis_method hints at a specific database, look for that per-run key
+    if params.analysis_method:
+        hint = params.analysis_method
+        for uns_key in adata.uns:
+            if (
+                uns_key.startswith("enrichment_spatial_gene_sets_")
+                and hint in uns_key
+            ):
+                gene_sets_key = uns_key
+                break
+
+    if gene_sets_key is None:
+        # Default to shared key (always the latest spatial enrichment result)
+        if "enrichment_spatial_gene_sets" in adata.uns:
+            gene_sets_key = "enrichment_spatial_gene_sets"
+
+    if gene_sets_key is None:
+        # Last resort: find any per-run spatial key
+        for uns_key in adata.uns:
+            if uns_key.startswith("enrichment_spatial_gene_sets_"):
+                gene_sets_key = uns_key
+                break
+
     if gene_sets_key is None:
         raise DataNotFoundError(
-            "Enrichment gene sets not found in adata.uns. "
-            "Run enrichment analysis first."
+            "Spatial enrichment gene sets not found in adata.uns. "
+            "Run spatial enrichment analysis first (method='spatial')."
         )
 
     pathways = list(adata.uns[gene_sets_key].keys())

@@ -365,6 +365,7 @@ async def _annotate_with_tangram(
     output_key: str,
     confidence_key: str,
     reference_adata: Optional[Any] = None,
+    tangram_ct_pred_key: str = "tangram_ct_pred",
 ) -> AnnotationMethodOutput:
     """Annotate cell types using Tangram method"""
     # Validate dependencies with comprehensive error reporting
@@ -610,12 +611,21 @@ async def _annotate_with_tangram(
             per_cell_conf.loc[zero_mask] = 0.0
         adata_sp.obs[confidence_key] = per_cell_conf.values
 
+        # Include "unassigned" in the cell_types list so that downstream
+        # metadata (n_cell_types, cell_types) matches the actual label space.
+        if zero_mask.any() and "unassigned" not in cell_types:
+            cell_types.append("unassigned")
+
         # Get counts
         counts = adata_sp.obs[output_key].value_counts().to_dict()
 
         # Calculate per-cell-type aggregated confidence scores
         confidence_scores = {}
         for cell_type in cell_types:
+            if cell_type == "unassigned":
+                # Zero-sum rows have confidence 0 by definition
+                confidence_scores[cell_type] = 0.0
+                continue
             cells_of_type = adata_sp.obs[output_key] == cell_type
             if np.sum(cells_of_type) > 0:
                 mean_prob = cell_type_prob.loc[cells_of_type, cell_type].mean()
@@ -647,15 +657,16 @@ async def _annotate_with_tangram(
         if confidence_key in adata_sp.obs:
             adata.obs[confidence_key] = adata_sp.obs[confidence_key]
 
-        # Copy tangram_ct_pred from obsm
+        # Copy tangram_ct_pred from obsm (parametrized key)
         if "tangram_ct_pred" in adata_sp.obsm:
-            adata.obsm["tangram_ct_pred"] = adata_sp.obsm["tangram_ct_pred"]
+            adata.obsm[tangram_ct_pred_key] = adata_sp.obsm["tangram_ct_pred"]
 
-        # Copy tangram_gene_predictions if they exist
+        # Copy tangram_gene_predictions if they exist (parametrized key)
         if "tangram_gene_predictions" in adata_sp.obsm:
-            adata.obsm["tangram_gene_predictions"] = adata_sp.obsm[
-                "tangram_gene_predictions"
-            ]
+            gene_pred_key = tangram_ct_pred_key.replace(
+                "tangram_ct_pred", "tangram_gene_predictions"
+            )
+            adata.obsm[gene_pred_key] = adata_sp.obsm["tangram_gene_predictions"]
 
     return AnnotationMethodOutput(
         cell_types=cell_types,
@@ -1363,6 +1374,21 @@ async def _annotate_with_cellassign(
     )
 
 
+def _build_annotation_suffix(
+    method: str,
+    reference_data_id: str | None,
+) -> str:
+    """Build a parametric suffix for annotation output keys.
+
+    Reference-sensitive methods (tangram, scanvi, singler) encode the
+    reference_data_id so that runs with different references coexist.
+    Non-reference methods use the method name alone.
+    """
+    if reference_data_id and method in ("tangram", "scanvi", "singler"):
+        return f"{method}_{reference_data_id}"
+    return method
+
+
 async def annotate_cell_types(
     data_id: str,
     ctx: ToolContext,
@@ -1393,14 +1419,26 @@ async def annotate_cell_types(
         reference_adata = await ctx.get_adata(params.reference_data_id)
 
     # Generate output keys in ONE place (single-point control)
-    output_key = f"cell_type_{params.method}"
-    confidence_key = f"confidence_{params.method}"
+    # Suffix encodes reference_data_id for reference-sensitive methods
+    # so that runs with different references coexist in obs/uns.
+    suffix = _build_annotation_suffix(params.method, params.reference_data_id)
+    output_key = f"cell_type_{suffix}"
+    confidence_key = f"confidence_{suffix}"
+
+    # Tangram-specific obsm key (parametrized by suffix)
+    tangram_ct_pred_key = f"tangram_ct_pred_{suffix}"
 
     # Route to appropriate annotation method
     try:
         if params.method == "tangram":
             result = await _annotate_with_tangram(
-                adata, params, ctx, output_key, confidence_key, reference_adata
+                adata,
+                params,
+                ctx,
+                output_key,
+                confidence_key,
+                reference_adata,
+                tangram_ct_pred_key=tangram_ct_pred_key,
             )
         elif params.method == "scanvi":
             result = await _annotate_with_scanvi(
@@ -1461,7 +1499,7 @@ async def annotate_cell_types(
     # Note: tangram_gene_predictions (n_cells × n_genes) is too large for CSV export
     # Only export tangram_ct_pred (n_cells × n_cell_types) which is reasonably sized
     if params.method == "tangram":
-        results_keys_dict["obsm"].append("tangram_ct_pred")
+        results_keys_dict["obsm"].append(tangram_ct_pred_key)
 
     # Prepare parameters dict (only scientifically important ones)
     parameters_dict = {}
@@ -1511,10 +1549,11 @@ async def annotate_cell_types(
     if params.method in ["tangram", "scanvi", "singler"] and params.reference_data_id:
         reference_info_dict = {"reference_data_id": params.reference_data_id}
 
-    # Store metadata
+    # Store metadata (keyed by suffix to allow coexistence of different references)
+    analysis_key = f"annotation_{suffix}"
     store_analysis_metadata(
         adata,
-        analysis_name=f"annotation_{params.method}",
+        analysis_name=analysis_key,
         method=params.method,
         parameters=parameters_dict,
         results_keys=results_keys_dict,
@@ -1523,7 +1562,7 @@ async def annotate_cell_types(
     )
 
     # Export results for reproducibility
-    export_analysis_result(adata, data_id, f"annotation_{params.method}")
+    export_analysis_result(adata, data_id, analysis_key)
 
     # Return result
     return AnnotationResult(
@@ -2134,7 +2173,12 @@ async def _annotate_with_sctype(
                 adata.obs[output_key] = pd.Categorical(per_cell_types)
                 # Use per-cell confidence if available (new format),
                 # fall back to per-type mean for legacy cache entries.
-                if per_cell_conf is not None and len(per_cell_conf) == adata.n_obs:
+                # Legacy caches may store a scalar mapping_score instead of
+                # a per-cell list; guard with isinstance before len().
+                if (
+                    isinstance(per_cell_conf, list)
+                    and len(per_cell_conf) == adata.n_obs
+                ):
                     adata.obs[confidence_key] = per_cell_conf
                 else:
                     adata.obs[confidence_key] = [

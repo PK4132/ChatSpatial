@@ -196,11 +196,12 @@ async def _create_co_occurrence_visualization(
         )
 
     col = adata.obs[cluster_key]
-    categories = (
-        col.cat.categories.tolist()
-        if pd.api.types.is_categorical_dtype(col)
-        else sorted(col.dropna().unique())
-    )
+    if pd.api.types.is_categorical_dtype(col):
+        categories = col.cat.categories.tolist()
+    else:
+        # Cast to str to handle mixed-type labels (e.g. str + int)
+        # that would otherwise fail on sorted().
+        categories = sorted(str(v) for v in col.dropna().unique())
     max_clusters = 4
     clusters_to_show = categories[:max_clusters]
 

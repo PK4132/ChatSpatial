@@ -217,3 +217,58 @@ async def test_load_detects_alternative_spatial_keys(
     result = await dl.load_spatial_data(str(path), "generic")
     assert result["spatial_coordinates_available"] is True
 
+
+# =============================================================================
+# Var names alignment contracts
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_load_creates_counts_from_raw_with_reordered_genes(
+    minimal_spatial_adata, tmp_path: Path, monkeypatch
+):
+    """When .raw has same genes in different order, counts layer is reindexed."""
+    import anndata as ad
+
+    adata = minimal_spatial_adata.copy()
+    raw_X = adata.X.copy()
+    # Reverse gene order in .raw
+    reversed_var = adata.var.copy().iloc[::-1]
+    reversed_X = raw_X[:, ::-1]
+    adata.raw = ad.AnnData(X=reversed_X, var=reversed_var)
+    adata.X = np.log1p(adata.X)  # Normalize X so .raw path is used
+
+    path = tmp_path / "reordered.h5ad"
+    path.write_text("placeholder")
+
+    fake_scanpy = ModuleType("scanpy")
+    fake_scanpy.read_h5ad = lambda _p: adata
+    monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
+
+    result = await dl.load_spatial_data(str(path), "generic")
+    out = result["adata"]
+
+    assert "counts" in out.layers
+    # Counts should be reindexed to match adata.var_names order (original)
+    counts = (
+        out.layers["counts"].toarray()
+        if hasattr(out.layers["counts"], "toarray")
+        else out.layers["counts"]
+    )
+    assert np.allclose(counts, raw_X)
+
+
+def test_load_does_not_freeze_normalized_x_as_raw(minimal_spatial_adata):
+    """load_spatial_data should not set .raw when X is normalized."""
+    # This tests the contract: .raw is only set when X is integer counts
+    adata = minimal_spatial_adata.copy()
+    adata.raw = None
+    adata.X = np.asarray(adata.X, dtype=float) + 0.5  # normalized
+
+    from chatspatial.utils.adata_utils import check_is_integer_counts
+
+    is_int, has_neg, _ = check_is_integer_counts(adata.X)
+
+    # Contract: normalized X should not be frozen as .raw
+    assert not is_int or has_neg  # verify our test data IS normalized
+

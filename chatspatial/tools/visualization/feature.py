@@ -20,6 +20,7 @@ from ...models.data import VisualizationParameters
 from ...utils.adata_utils import (
     get_cluster_key,
     get_gene_expression,
+    require_spatial_coords,
 )
 from ...utils.compute import ensure_umap
 from ...utils.exceptions import DataNotFoundError, ParameterError
@@ -127,11 +128,7 @@ async def create_feature_visualization(
 
     # Validate basis and get coordinates
     if basis == "spatial":
-        if "spatial" not in adata.obsm:
-            raise DataNotFoundError(
-                "Spatial coordinates not found in adata.obsm['spatial']."
-            )
-        coords = adata.obsm["spatial"]
+        coords = require_spatial_coords(adata)  # auto-detects alternative keys
     elif basis == "umap":
         if "X_umap" not in adata.obsm:
             # Try to compute UMAP

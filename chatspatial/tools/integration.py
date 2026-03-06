@@ -692,7 +692,7 @@ def integrate_with_scvi(
     require("scvi", feature="scVI integration")
     import scvi
 
-    # Validate data is preprocessed
+    # Validate data is preprocessed (HVG selection uses normalized X)
     max_val = combined.X.max() if hasattr(combined.X, "max") else np.max(combined.X)
     if max_val > 50:
         raise DataError(
@@ -714,9 +714,42 @@ def integrate_with_scvi(
             "Check your batch labels."
         )
 
+    # scVI's generative model requires raw counts, not log-normalized data.
+    # Use layers["counts"] when available; fall back to adata.X only if
+    # it appears to contain integer counts.
+    layer_for_scvi: str | None = None
+    if "counts" in combined.layers:
+        layer_for_scvi = "counts"
+    else:
+        from ..utils.adata_utils import check_is_integer_counts
+
+        is_int, has_neg, _ = check_is_integer_counts(combined.X)
+        if is_int and not has_neg:
+            layer_for_scvi = None  # X is already counts
+        else:
+            # Try to salvage counts from .raw before giving up
+            from ..utils.adata_utils import ensure_counts_layer
+            from ..utils.exceptions import DataNotFoundError as _DNF
+
+            try:
+                ensure_counts_layer(combined)
+                layer_for_scvi = "counts"
+            except _DNF:
+                raise DataError(
+                    "scVI requires raw count data but only normalized "
+                    "values are available (no integer counts in X, "
+                    "layers['counts'], or .raw).\n\n"
+                    "Solutions:\n"
+                    "1. Load data with raw counts before integration\n"
+                    "2. Use method='harmony' or method='scanorama' "
+                    "which work with normalized data"
+                ) from None
+
     # Setup AnnData for scVI
     scvi.model.SCVI.setup_anndata(
-        combined, batch_key=batch_key, layer=None  # Use .X (should be preprocessed)
+        combined,
+        batch_key=batch_key,
+        layer=layer_for_scvi,
     )
 
     # Initialize scVI model

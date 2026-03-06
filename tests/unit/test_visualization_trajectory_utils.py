@@ -276,8 +276,7 @@ async def test_cellrank_fate_map_success_with_auto_cluster_key(
     fake_cr = ModuleType("cellrank")
 
     def _aggregate(*_args, **kwargs):
-        captured["cluster_key"] = kwargs.get("cluster_key")
-        captured["mode"] = kwargs.get("mode")
+        captured.update(kwargs)
         plt.figure()
 
     fake_cr.pl = SimpleNamespace(aggregate_fate_probabilities=_aggregate)
@@ -290,7 +289,8 @@ async def test_cellrank_fate_map_success_with_auto_cluster_key(
         context=ctx,
     )
     assert captured["cluster_key"] == "group"
-    assert captured["mode"] == "bar"
+    # mode should not be hardcoded; CellRank uses its default (paga_pie)
+    assert "mode" not in captured
     assert any("Using cluster_key: 'group'" in msg for msg in ctx.infos)
     assert any("Creating CellRank fate map for 'group'" in msg for msg in ctx.infos)
     fig.clf()
@@ -723,3 +723,166 @@ async def test_cellrank_fate_heatmap_defaults_with_hvg_uses_hvg_genes(
     )
     assert captured["genes"] == ["gene_0", "gene_1", "gene_2"]
     fig.clf()
+
+
+# ---------------------------------------------------------------------------
+# Regression: fate_probabilities alias → CellRank-recognised key
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_circular_projection_finds_fate_probabilities_key(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """When only 'fate_probabilities' is present, _resolve_cellrank_fate_key
+    must find it without modifying adata.obsm (read-only)."""
+    adata = minimal_spatial_adata.copy()
+    adata.obsm["fate_probabilities"] = np.ones((adata.n_obs, 2), dtype=float)
+    obsm_keys_before = set(adata.obsm.keys())
+
+    monkeypatch.setattr(viz_traj, "require", lambda *_a, **_k: None)
+    fake_cr = ModuleType("cellrank")
+    fake_cr.pl = SimpleNamespace(circular_projection=lambda *_a, **_k: plt.figure())
+    monkeypatch.setitem(sys.modules, "cellrank", fake_cr)
+
+    fig = await viz_traj._create_cellrank_circular_projection(
+        adata,
+        VisualizationParameters(plot_type="trajectory", subtype="circular"),
+        context=DummyCtx(),
+    )
+    # _resolve_cellrank_fate_key should NOT write new keys
+    assert set(adata.obsm.keys()) == obsm_keys_before
+    fig.clf()
+
+
+@pytest.mark.asyncio
+async def test_fate_map_finds_fate_probabilities_key(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """fate_map with only 'fate_probabilities' must find it read-only."""
+    adata = minimal_spatial_adata.copy()
+    adata.obsm["fate_probabilities"] = np.ones((adata.n_obs, 2), dtype=float)
+    obsm_keys_before = set(adata.obsm.keys())
+
+    monkeypatch.setattr(viz_traj, "require", lambda *_a, **_k: None)
+    fake_cr = ModuleType("cellrank")
+    fake_cr.pl = SimpleNamespace(
+        aggregate_fate_probabilities=lambda *_a, **_k: plt.figure()
+    )
+    monkeypatch.setitem(sys.modules, "cellrank", fake_cr)
+
+    fig = await viz_traj._create_cellrank_fate_map(
+        adata,
+        VisualizationParameters(
+            plot_type="trajectory", subtype="fate_map", cluster_key="group"
+        ),
+        context=DummyCtx(),
+    )
+    # _resolve_cellrank_fate_key should NOT write new keys
+    assert set(adata.obsm.keys()) == obsm_keys_before
+    fig.clf()
+
+
+# ---------------------------------------------------------------------------
+# _resolve_cellrank_fate_key is read-only (no side-effects)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_cellrank_fate_key_is_read_only(minimal_spatial_adata):
+    """_resolve_cellrank_fate_key must not modify adata.obsm."""
+    adata = minimal_spatial_adata.copy()
+    adata.obsm["fate_probabilities"] = np.ones((adata.n_obs, 2), dtype=float)
+    obsm_keys_before = set(adata.obsm.keys())
+
+    key = viz_traj._resolve_cellrank_fate_key(adata)
+    assert key == "fate_probabilities"
+    assert set(adata.obsm.keys()) == obsm_keys_before
+
+
+def test_resolve_cellrank_fate_key_prefers_lineages_fwd(minimal_spatial_adata):
+    """Priority order: lineages_fwd > to_terminal_states > fate_probabilities."""
+    adata = minimal_spatial_adata.copy()
+    adata.obsm["fate_probabilities"] = np.ones((adata.n_obs, 2), dtype=float)
+    adata.obsm["to_terminal_states"] = np.ones((adata.n_obs, 2), dtype=float)
+    adata.obsm["lineages_fwd"] = np.ones((adata.n_obs, 2), dtype=float)
+
+    key = viz_traj._resolve_cellrank_fate_key(adata)
+    assert key == "lineages_fwd"
+
+
+# ---------------------------------------------------------------------------
+# Regression: bbknn empty results_keys still records in _index.json
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_export_empty_results_keys_still_writes_index(
+    minimal_spatial_adata, tmp_path, monkeypatch
+):
+    """bbknn-like analysis with empty results_keys must appear in _index.json."""
+    import json
+
+    from chatspatial.utils import results_export
+
+    adata = minimal_spatial_adata.copy()
+    # Simulate metadata written by integration (bbknn)
+    adata.uns["integration_bbknn_metadata"] = {
+        "method": "bbknn",
+        "parameters": {"batch_key": "batch"},
+        "results_keys": {},
+        "statistics": {"n_batches": 2},
+    }
+
+    monkeypatch.setattr(results_export, "_is_export_enabled", lambda: True)
+    monkeypatch.setattr(
+        results_export,
+        "get_results_dir",
+        lambda data_id: tmp_path,
+    )
+
+    files = results_export.export_analysis_result(adata, "d1", "integration_bbknn")
+    assert files == []  # no CSVs exported
+
+    index_path = tmp_path / "_index.json"
+    assert index_path.exists()
+    index = json.loads(index_path.read_text())
+    assert "integration_bbknn" in index["analyses"]
+    assert index["analyses"]["integration_bbknn"]["method"] == "bbknn"
+
+
+# ---------------------------------------------------------------------------
+# Regression: fate_map must not hardcode mode="bar"
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fate_map_does_not_hardcode_bar_mode(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    """cr.pl.aggregate_fate_probabilities should use CellRank default mode,
+    not a hardcoded 'bar'."""
+    adata = minimal_spatial_adata.copy()
+    adata.obsm["to_terminal_states"] = np.ones((adata.n_obs, 2), dtype=float)
+
+    monkeypatch.setattr(viz_traj, "require", lambda *_a, **_k: None)
+    captured: dict[str, object] = {}
+
+    fake_cr = ModuleType("cellrank")
+
+    def _aggregate(*_args, **kwargs):
+        captured.update(kwargs)
+        plt.figure()
+
+    fake_cr.pl = SimpleNamespace(aggregate_fate_probabilities=_aggregate)
+    monkeypatch.setitem(sys.modules, "cellrank", fake_cr)
+
+    await viz_traj._create_cellrank_fate_map(
+        adata,
+        VisualizationParameters(
+            plot_type="trajectory", subtype="fate_map", cluster_key="group"
+        ),
+        context=DummyCtx(),
+    )
+    # mode should NOT be "bar" — should be absent (CellRank default: paga_pie)
+    assert "mode" not in captured
+    plt.close("all")

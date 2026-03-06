@@ -14,7 +14,7 @@ import numpy as np
 
 from ...models.data import VisualizationParameters
 from ...utils.adata_utils import validate_obs_column
-from ...utils.exceptions import DataNotFoundError, ParameterError
+from ...utils.exceptions import DataError, DataNotFoundError, ParameterError
 from .core import get_categorical_cmap
 
 if TYPE_CHECKING:
@@ -257,6 +257,12 @@ async def _create_batch_highlight(
     batch_values = adata.obs[batch_key]
     unique_batches = batch_values.dropna().unique()
     n_batches = len(unique_batches)
+
+    if n_batches == 0:
+        raise DataError(
+            f"Batch column '{batch_key}' contains only missing values. "
+            "Cannot create per-batch highlight visualization."
+        )
 
     # Calculate grid layout
     n_cols = min(4, n_batches)

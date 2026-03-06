@@ -197,7 +197,9 @@ async def compute_embeddings(
     resolved = _resolve_params(params, EmbeddingParameters)
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
     result = await compute_embeddings_func(data_id, ctx, resolved)
-    return result.model_dump()
+    dumped = result.model_dump()
+    await data_manager.save_result(data_id, "embeddings", dumped)
+    return dumped
 
 
 @mcp.tool(
@@ -266,8 +268,11 @@ async def annotate_cell_types(
 
     # Note: No writeback needed - adata modifications are in-place on the same object
 
-    # Save annotation result
-    await data_manager.save_result(data_id, "annotation", result)
+    # Save annotation result (keyed by method + reference to allow coexistence)
+    from .tools.annotation import _build_annotation_suffix
+
+    cache_key = f"annotation_{_build_annotation_suffix(resolved_params.method, resolved_params.reference_data_id)}"
+    await data_manager.save_result(data_id, cache_key, result)
 
     # Visualization should be done separately via visualization tools
 
@@ -308,8 +313,9 @@ async def analyze_spatial_statistics(
 
     # Note: No writeback needed - adata modifications are in-place on the same object
 
-    # Save spatial statistics result
-    await data_manager.save_result(data_id, "spatial_statistics", result)
+    # Save spatial statistics result (keyed by analysis_type to allow coexistence)
+    cache_key = f"spatial_statistics_{resolved_params.analysis_type}"
+    await data_manager.save_result(data_id, cache_key, result)
 
     # Note: Visualization should be created separately using create_visualization tool
     # This maintains clean separation between analysis and visualization
@@ -340,8 +346,11 @@ async def find_markers(
 
     from .tools.differential import differential_expression
 
+    from .tools.differential import _build_de_key
+
     result = await differential_expression(data_id, ctx, params)
-    await data_manager.save_result(data_id, "differential_expression", result)
+    cache_key = _build_de_key(params.method, params.group1, params.group2)
+    await data_manager.save_result(data_id, cache_key, result)
     return result
 
 
@@ -369,7 +378,10 @@ async def compare_conditions(
     from .tools.condition_comparison import compare_conditions as _compare_conditions
 
     result = await _compare_conditions(data_id, ctx, params)
-    await data_manager.save_result(data_id, "condition_comparison", result)
+    # Use a parametric key so multiple comparisons on the same dataset
+    # don't silently overwrite each other.
+    cache_key = f"condition_comparison_{params.condition1}_vs_{params.condition2}"
+    await data_manager.save_result(data_id, cache_key, result)
     return result
 
 
@@ -394,10 +406,11 @@ async def analyze_cnv(
     """
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
 
-    from .tools.cnv_analysis import infer_cnv
+    from .tools.cnv_analysis import _build_cnv_key, infer_cnv
 
     result = await infer_cnv(data_id=data_id, ctx=ctx, params=params)
-    await data_manager.save_result(data_id, "cnv_analysis", result)
+    cache_key = _build_cnv_key(params)
+    await data_manager.save_result(data_id, cache_key, result)
     return result
 
 
@@ -424,7 +437,7 @@ async def analyze_velocity_data(
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
 
     # Lazy import velocity analysis tool
-    from .tools.velocity import analyze_rna_velocity
+    from .tools.velocity import _build_velocity_key, analyze_rna_velocity
 
     resolved_params = _resolve_params(params, RNAVelocityParameters)
 
@@ -433,8 +446,9 @@ async def analyze_velocity_data(
 
     # Note: No writeback needed - adata modifications are in-place on the same object
 
-    # Save velocity result
-    await data_manager.save_result(data_id, "rna_velocity", result)
+    # Save velocity result (keyed by method+params to allow coexistence)
+    cache_key = _build_velocity_key(resolved_params)
+    await data_manager.save_result(data_id, cache_key, result)
 
     # Visualization should be done separately via visualization tools
 
@@ -464,7 +478,7 @@ async def analyze_trajectory_data(
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
 
     # Lazy import trajectory function
-    from .tools.trajectory import analyze_trajectory
+    from .tools.trajectory import _build_trajectory_key, analyze_trajectory
 
     resolved_params = _resolve_params(params, TrajectoryParameters)
 
@@ -473,8 +487,9 @@ async def analyze_trajectory_data(
 
     # Note: No writeback needed - adata modifications are in-place on the same object
 
-    # Save trajectory result
-    await data_manager.save_result(data_id, "trajectory", result)
+    # Save trajectory result (keyed by method+params to allow coexistence)
+    cache_key = _build_trajectory_key(resolved_params)
+    await data_manager.save_result(data_id, cache_key, result)
 
     # Visualization should be done separately via visualization tools
 
@@ -542,15 +557,16 @@ async def deconvolve_data(
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
 
     # Lazy import deconvolution tool
-    from .tools.deconvolution import deconvolve_spatial_data
+    from .tools.deconvolution import _build_deconvolution_key, deconvolve_spatial_data
 
     # Call deconvolution function with ToolContext
     result = await deconvolve_spatial_data(data_id, ctx, params)
 
     # Note: No writeback needed - adata modifications are in-place on the same object
 
-    # Save deconvolution result
-    await data_manager.save_result(data_id, "deconvolution", result)
+    # Save deconvolution result (keyed by method+ref to allow coexistence)
+    cache_key = _build_deconvolution_key(params.method, params.reference_data_id)
+    await data_manager.save_result(data_id, cache_key, result)
 
     # Visualization should be done separately via visualization tools
 
@@ -589,8 +605,11 @@ async def identify_spatial_domains(
 
     # Note: No writeback needed - adata modifications are in-place on the same object
 
-    # Save spatial domains result
-    await data_manager.save_result(data_id, "spatial_domains", result)
+    # Save spatial domains result (keyed by method + params for coexistence)
+    from .tools.spatial_domains import _build_domain_suffix
+
+    cache_key = f"spatial_domains_{_build_domain_suffix(resolved_params.method, resolved_params.resolution, resolved_params.n_domains)}"
+    await data_manager.save_result(data_id, cache_key, result)
 
     return result
 
@@ -627,8 +646,9 @@ async def analyze_cell_communication(
 
     # Note: No writeback needed - adata modifications are in-place on the same object
 
-    # Save communication result
-    await data_manager.save_result(data_id, "cell_communication", result)
+    # Save communication result (keyed by method to allow coexistence)
+    cache_key = f"cell_communication_{params.method}"
+    await data_manager.save_result(data_id, cache_key, result)
 
     # Visualization should be done separately via visualization tools
 
@@ -668,8 +688,11 @@ async def analyze_enrichment(
     # Call enrichment analysis (all business logic is in tools/enrichment.py)
     result = await analyze_enrichment_func(data_id, ctx, params)
 
-    # Save result
-    await data_manager.save_result(data_id, "enrichment", result)
+    # Save result (keyed by method + database to allow coexistence)
+    from .tools.enrichment import _build_enrichment_key
+
+    cache_key = _build_enrichment_key(params.method, params.gene_set_database)
+    await data_manager.save_result(data_id, cache_key, result)
 
     return result
 
@@ -706,8 +729,9 @@ async def find_spatial_genes(
 
     # Note: No writeback needed - adata modifications are in-place on the same object
 
-    # Save spatial genes result
-    await data_manager.save_result(data_id, "spatial_genes", result)
+    # Save spatial genes result (keyed by method to allow coexistence)
+    cache_key = f"spatial_genes_{resolved_params.method}"
+    await data_manager.save_result(data_id, cache_key, result)
 
     # Visualization should be done separately via visualization tools
 
@@ -736,7 +760,7 @@ async def register_spatial_data(
         params: Registration parameters (method, alignment settings, etc.)
 
     Returns:
-        Registration result with transformation matrix
+        Registration result with method, dataset IDs, spot counts, and registered spatial key
     """
     # Create ToolContext for unified data access
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
@@ -752,8 +776,9 @@ async def register_spatial_data(
         source_id, target_id, ctx, resolved_params
     )
 
-    # Save registration result
+    # Save registration result for both datasets (registration is bilateral)
     await data_manager.save_result(source_id, "registration", result)
+    await data_manager.save_result(target_id, "registration", result)
 
     return result
 
