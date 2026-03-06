@@ -134,14 +134,11 @@ async def preprocess_data(
     params: Optional[PreprocessingParameters] = None,
     context: Optional[Context] = None,
 ) -> PreprocessingResult:
-    """Preprocess spatial transcriptomics data.
+    """Preprocess spatial transcriptomics data (QC, normalization, HVGs, PCA, clustering, spatial neighbors).
 
     Args:
         data_id: Dataset ID
-        params: Preprocessing parameters
-
-    Returns:
-        PreprocessingResult with HVGs, PCA, clustering, and spatial neighbors
+        params: Preprocessing parameters (all have sensible defaults)
     """
     # Create ToolContext
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
@@ -170,14 +167,11 @@ async def compute_embeddings(
     params: Optional[EmbeddingParameters] = None,
     context: Optional[Context] = None,
 ) -> dict[str, Any]:
-    """Compute dimensionality reduction, clustering, and neighbor graphs.
+    """Compute dimensionality reduction (PCA, UMAP), clustering, and neighbor graphs.
 
     Args:
         data_id: Dataset ID
         params: Embedding parameters (PCA, UMAP, clustering, etc.)
-
-    Returns:
-        Summary of computed embeddings
     """
     from .tools.embeddings import compute_embeddings as compute_embeddings_func
 
@@ -194,32 +188,11 @@ async def visualize_data(
     params: Optional[VisualizationParameters] = None,
     context: Optional[Context] = None,
 ) -> str:
-    """Visualize spatial transcriptomics data.
+    """Visualize spatial transcriptomics data. Set plot_type and subtype in params; see VisualizationParameters schema for all options.
 
     Args:
         data_id: Dataset ID
-        params: Visualization parameters
-
-    Plot types (11 unified types):
-        - feature: Spatial/UMAP feature visualization (use basis='spatial'|'umap')
-        - expression: Aggregated expression (subtype='heatmap'|'violin'|'dotplot'|'correlation')
-        - deconvolution: Cell type proportions (subtype='spatial_multi'|'pie'|'dominant'|'diversity'|'umap'|'imputation')
-        - communication: Cell-cell communication (subtype='dotplot'|'tileplot'|'circle_plot')
-        - interaction: Spatial ligand-receptor pairs
-        - trajectory: Pseudotime and fate analysis (subtype='pseudotime'|'circular'|'fate_map'|'gene_trends'|'fate_heatmap'|'palantir')
-        - velocity: RNA velocity visualization (subtype='stream'|'phase'|'proportions'|'heatmap'|'paga')
-        - statistics: Spatial statistics (subtype='neighborhood'|'co_occurrence'|'ripley'|'moran'|'centrality'|'getis_ord')
-        - enrichment: Pathway enrichment (subtype='barplot'|'dotplot')
-        - cnv: Copy number variation (subtype='heatmap'|'spatial')
-        - integration: Batch integration quality (subtype='batch'|'cluster'|'highlight')
-
-    Export options (in params):
-        - output_path: Custom save path (default: ./visualizations/)
-        - output_format: png, pdf, svg, eps, tiff (default: png)
-        - dpi: Resolution (default: 300)
-
-    Returns:
-        Path to saved visualization file
+        params: Visualization parameters (plot_type, subtype, genes, output_format, dpi, etc.)
     """
     from .tools.visualization import visualize_data as visualize_func
 
@@ -245,14 +218,9 @@ async def annotate_cell_types(
 
     Args:
         data_id: Dataset ID
-        params: Annotation parameters
+        params: Annotation parameters (method, reference_data_id, cell_type_key, etc.)
 
-    Key requirements:
-        - Reference methods (tangram, scanvi): reference_data_id must be preprocessed first
-        - cell_type_key: Auto-detected if None
-
-    Returns:
-        AnnotationResult with cell type assignments and confidence scores
+    Note: Reference methods (tangram, scanvi) require reference_data_id to be preprocessed first.
     """
     # Create ToolContext for clean data access (no redundant dict wrapping)
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
@@ -286,16 +254,7 @@ async def analyze_spatial_statistics(
 
     Args:
         data_id: Dataset ID
-        params: Analysis parameters (analysis_type, cluster_key, genes)
-
-    Analysis types:
-        - Gene-based: moran, local_moran, geary, getis_ord, bivariate_moran
-        - Group-based (requires cluster_key): neighborhood, co_occurrence, ripley
-        - Categorical: join_count (binary), local_join_count (multi-category)
-        - Network: centrality, network_properties
-
-    Returns:
-        SpatialStatisticsResult with statistics and p-values
+        params: Analysis parameters (analysis_type, cluster_key, genes). See SpatialStatisticsParameters for all types.
     """
     # Create ToolContext for clean data access (no redundant dict wrapping)
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
@@ -332,10 +291,7 @@ async def find_markers(
 
     Args:
         data_id: Dataset ID
-        params: Required - group_key and optional method, group1/group2, etc.
-
-    Returns:
-        DifferentialExpressionResult with top marker genes
+        params: Required - group_key and optional method, group1/group2, n_top_genes, etc.
     """
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
 
@@ -358,9 +314,6 @@ async def compare_conditions(
     Args:
         data_id: Dataset ID
         params: Required - condition_key, condition1, condition2, sample_key, etc.
-
-    Returns:
-        ConditionComparisonResult with differential expression results
     """
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
 
@@ -382,10 +335,7 @@ async def analyze_cnv(
 
     Args:
         data_id: Dataset identifier
-        params: Required - reference_key, reference_categories, and optional method/thresholds
-
-    Returns:
-        CNVResult with CNV scores and optional clone assignments
+        params: Required - reference_key, reference_categories, and optional method/thresholds.
     """
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
 
@@ -403,14 +353,11 @@ async def analyze_velocity_data(
     params: Optional[RNAVelocityParameters] = None,
     context: Optional[Context] = None,
 ) -> RNAVelocityResult:
-    """Analyze RNA velocity to understand cellular dynamics.
+    """Analyze RNA velocity to understand cellular dynamics. Requires 'spliced' and 'unspliced' layers.
 
     Args:
-        data_id: Dataset ID (must have 'spliced' and 'unspliced' layers)
-        params: method='scvelo' (modes: deterministic/stochastic/dynamical) or 'velovi'
-
-    Returns:
-        RNAVelocityResult with velocity vectors and latent time
+        data_id: Dataset ID
+        params: Velocity parameters (method, scvelo_mode, etc.)
     """
     # Create ToolContext for clean data access (no redundant dict wrapping)
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
@@ -440,14 +387,11 @@ async def analyze_trajectory_data(
     params: Optional[TrajectoryParameters] = None,
     context: Optional[Context] = None,
 ) -> TrajectoryResult:
-    """Infer cellular trajectories and pseudotime.
+    """Infer cellular trajectories and pseudotime ordering.
 
     Args:
         data_id: Dataset ID
-        params: method='cellrank' (requires velocity), 'palantir', or 'dpt'
-
-    Returns:
-        TrajectoryResult with pseudotime and fate probabilities
+        params: Trajectory parameters (method, root_cell, spatial_weight, etc.)
     """
     # Create ToolContext
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
@@ -477,14 +421,11 @@ async def integrate_samples(
     params: Optional[IntegrationParameters] = None,
     context: Optional[Context] = None,
 ) -> IntegrationResult:
-    """Integrate multiple spatial transcriptomics samples.
+    """Integrate multiple spatial transcriptomics samples into a unified dataset.
 
     Args:
         data_ids: List of dataset IDs to integrate
-        params: method='harmony' (default), 'bbknn', 'scanorama', or 'scvi'
-
-    Returns:
-        IntegrationResult with integrated dataset ID
+        params: Integration parameters (method, batch_key, n_pcs, etc.)
     """
     # Create ToolContext for clean data access
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
@@ -516,17 +457,7 @@ async def deconvolve_data(
 
     Args:
         data_id: Dataset ID
-        params: Required - method, cell_type_key, reference_data_id
-
-    Methods:
-        - flashdeconv: Fast sketch-based method (default, recommended)
-        - cell2location: Deep learning, accurate but slow (requires scvi-tools)
-        - rctd: R-based, modes: doublet (high-res), full (Visium), multi
-        - destvi, stereoscope, tangram: Alternative deep learning methods
-        - spotlight, card: R-based methods (card supports spatial imputation)
-
-    Returns:
-        DeconvolutionResult with cell type proportions per spot
+        params: Required - method, cell_type_key, reference_data_id. See DeconvolutionParameters for all methods and options.
     """
     # Create ToolContext for clean data access (no redundant dict wrapping)
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
@@ -558,10 +489,7 @@ async def identify_spatial_domains(
 
     Args:
         data_id: Dataset ID
-        params: method='spagcn' (default, uses histology), 'leiden', 'louvain', 'stagate', 'graphst'
-
-    Returns:
-        SpatialDomainResult with domain_key for visualization
+        params: Spatial domain parameters (method, n_domains, resolution, etc.)
     """
     # Create ToolContext for clean data access
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
@@ -589,24 +517,11 @@ async def analyze_cell_communication(
     params: CellCommunicationParameters,  # No default - LLM must provide parameters
     context: Optional[Context] = None,
 ) -> CellCommunicationResult:
-    """Analyze cell-cell communication patterns.
+    """Analyze cell-cell communication and ligand-receptor interaction patterns.
 
     Args:
         data_id: Dataset ID
-        params: Required - species, cell_type_key, and method
-
-    Methods:
-        - fastccc: Fast C++ implementation (default). Human and mouse supported
-        - liana: Multi-method consensus. Use liana_resource for database selection
-        - cellphonedb: Statistical permutation-based analysis
-        - cellchat_r: R-based CellChat (requires rpy2)
-
-    Species configuration:
-        - human: liana_resource="consensus" (default)
-        - mouse: liana_resource="mouseconsensus"
-
-    Returns:
-        CellCommunicationResult with significant ligand-receptor interactions
+        params: Required - species, cell_type_key, and method. For mouse with liana, set liana_resource='mouseconsensus'.
     """
     # Create ToolContext for clean data access
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
@@ -640,20 +555,7 @@ async def analyze_enrichment(
 
     Args:
         data_id: Dataset ID
-        params: Required - species must be specified ('human' or 'mouse')
-
-    Methods:
-        - pathway_ora: Over-representation analysis (default)
-        - pathway_gsea: Gene Set Enrichment Analysis
-        - spatial_enrichmap: Spatial enrichment mapping
-        - pathway_enrichr, pathway_ssgsea: Alternative methods
-
-    Databases (gene_set_database):
-        - KEGG_Pathways (recommended), Reactome_Pathways, MSigDB_Hallmark
-        - GO_Biological_Process (default), GO_Molecular_Function, GO_Cellular_Component
-
-    Returns:
-        EnrichmentResult with enriched pathways and statistics
+        params: Required - species must be specified. See EnrichmentParameters for methods and gene_set_database options.
     """
     from .tools.enrichment import analyze_enrichment as analyze_enrichment_func
 
@@ -686,10 +588,7 @@ async def find_spatial_genes(
 
     Args:
         data_id: Dataset ID
-        params: method='sparkx' (default), 'flashs' (Python-native fast), or 'spatialde' (Gaussian process)
-
-    Returns:
-        SpatialVariableGenesResult with ranked genes and statistics
+        params: Spatial variable gene parameters (method, n_top_genes, etc.)
     """
     # Create ToolContext for clean data access (no redundant dict wrapping)
     ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)

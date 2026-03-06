@@ -45,44 +45,41 @@ from scipy import misc as scipy_misc
 #   - https://github.com/theislab/cellrank/blob/main/src/cellrank/kernels/_velocity_kernel.py
 
 
-def _numpy2_compat_assert_array_equal(
-    *args: Any,
-    x: Any = None,
-    y: Any = None,
-    actual: Any = None,
-    desired: Any = None,
-    **kwargs: Any,
-) -> None:
-    """Wrapper for np.testing.assert_array_equal accepting both old and new parameter names.
+_NUMPY2_COMPAT_MARKER = "_chatspatial_numpy2_compat"
 
-    NumPy 2.x changed parameter names from (x, y) to (actual, desired).
-    This wrapper accepts both conventions for backward compatibility.
+
+def _make_numpy2_compat_wrapper(
+    original: Callable[..., None],
+) -> Callable[..., None]:
+    """Create a wrapper that accepts both old (x, y) and new (actual, desired) kwargs.
+
+    The original function is captured by closure — no mutable module-level state.
     """
-    # Resolve arrays from either naming convention
-    if args:
-        # Positional arguments take precedence
-        arr_actual = args[0]
-        arr_desired = args[1] if len(args) > 1 else desired or y
-    else:
-        # Named arguments: prefer new names, fall back to old
-        arr_actual = actual if actual is not None else x
-        arr_desired = desired if desired is not None else y
 
-    if arr_actual is None or arr_desired is None:
-        raise ValueError(
-            "assert_array_equal requires two arrays. "
-            "Use positional args or (actual, desired) / (x, y) keyword args."
-        )
+    def wrapper(
+        *args: Any,
+        x: Any = None,
+        y: Any = None,
+        actual: Any = None,
+        desired: Any = None,
+        **kwargs: Any,
+    ) -> None:
+        if args:
+            arr_actual = args[0]
+            arr_desired = args[1] if len(args) > 1 else desired or y
+        else:
+            arr_actual = actual if actual is not None else x
+            arr_desired = desired if desired is not None else y
 
-    # Call original function with positional arguments (works in all NumPy versions)
-    # __wrapped__ is set by _patch_numpy_testing() and must exist when this function is called
-    original_func = getattr(np.testing.assert_array_equal, "__wrapped__", None)
-    if original_func is None:
-        raise RuntimeError(
-            "_numpy2_compat_assert_array_equal called without patching. "
-            "Use numpy2_compat() context manager or _patch_numpy_testing() first."
-        )
-    original_func(arr_actual, arr_desired, **kwargs)
+        if arr_actual is None or arr_desired is None:
+            raise ValueError(
+                "assert_array_equal requires two arrays. "
+                "Use positional args or (actual, desired) / (x, y) keyword args."
+            )
+        original(arr_actual, arr_desired, **kwargs)
+
+    setattr(wrapper, _NUMPY2_COMPAT_MARKER, True)
+    return wrapper
 
 
 def _is_numpy2() -> bool:
@@ -94,23 +91,21 @@ def _is_numpy2() -> bool:
 def _patch_numpy_testing() -> Callable[[], None]:
     """Patch np.testing.assert_array_equal for NumPy 2.x compatibility.
 
+    Each call creates a fresh closure-based wrapper. The original function is
+    captured by the closure, so unpatch leaves zero residual state.
+
     Returns:
         Unpatch function to restore original behavior.
     """
-    original_func = np.testing.assert_array_equal
+    current = np.testing.assert_array_equal
 
-    # Only patch if not already patched
-    if hasattr(original_func, "__wrapped__"):
-        return lambda: None  # No-op unpatch
+    if getattr(current, _NUMPY2_COMPAT_MARKER, False):
+        return lambda: None  # Already patched
 
-    # Store original function using setattr for dynamic attribute setting
-    setattr(_numpy2_compat_assert_array_equal, "__wrapped__", original_func)
-
-    # Apply patch
-    np.testing.assert_array_equal = _numpy2_compat_assert_array_equal
+    np.testing.assert_array_equal = _make_numpy2_compat_wrapper(current)
 
     def unpatch() -> None:
-        np.testing.assert_array_equal = original_func
+        np.testing.assert_array_equal = current
 
     return unpatch
 

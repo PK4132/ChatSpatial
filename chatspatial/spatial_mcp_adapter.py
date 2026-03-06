@@ -195,66 +195,67 @@ class DefaultSpatialDataManager:
 
     @staticmethod
     def _has_tissue_image(uns: Any) -> bool:
-        """Best-effort check for Visium-like tissue images in adata.uns."""
-        try:
-            spatial = uns.get("spatial") if hasattr(uns, "get") else None
-            if not isinstance(spatial, dict):
-                return False
-            for sample_data in spatial.values():
-                if not isinstance(sample_data, dict):
-                    continue
-                images = sample_data.get("images")
-                if isinstance(images, dict) and (
-                    "hires" in images or "lowres" in images
-                ):
-                    return True
+        """Check for Visium-like tissue images in adata.uns['spatial']."""
+        spatial = uns.get("spatial") if hasattr(uns, "get") else None
+        if not isinstance(spatial, dict):
             return False
-        except Exception:
-            return False
+        for sample_data in spatial.values():
+            if not isinstance(sample_data, dict):
+                continue
+            images = sample_data.get("images")
+            if isinstance(images, dict) and ("hires" in images or "lowres" in images):
+                return True
+        return False
 
-    def _sync_dataset_metadata(
-        self, dataset_info: dict[str, Any], data_id: Optional[str] = None
-    ) -> None:
-        """Keep lightweight metadata synchronized with the current adata object."""
-        if data_id is not None:
-            dataset_info.setdefault("name", f"Dataset {data_id}")
-        dataset_info.setdefault("type", "unknown")
+    @staticmethod
+    def _extract_adata_metadata(adata: Any) -> dict[str, Any]:
+        """Extract lightweight metadata from an AnnData object.
 
-        adata = dataset_info.get("adata")
+        Pure function: reads adata attributes, returns a new dict.
+        Does not modify the input.
+        """
+        meta: dict[str, Any] = {}
+
         n_obs = getattr(adata, "n_obs", None)
         n_vars = getattr(adata, "n_vars", None)
-        dataset_info["n_cells"] = int(n_obs) if isinstance(n_obs, int) else 0
-        dataset_info["n_genes"] = int(n_vars) if isinstance(n_vars, int) else 0
+        meta["n_cells"] = int(n_obs) if isinstance(n_obs, int) else 0
+        meta["n_genes"] = int(n_vars) if isinstance(n_vars, int) else 0
 
         obsm = getattr(adata, "obsm", None)
         if obsm is not None:
-            try:
-                dataset_info["obsm_keys"] = list(obsm.keys())
-            except Exception:
-                dataset_info.setdefault("obsm_keys", [])
-            try:
-                has_spatial = (
-                    "spatial" in obsm
-                    and obsm["spatial"] is not None
-                    and len(obsm["spatial"]) > 0
-                )
-                dataset_info["spatial_coordinates_available"] = bool(has_spatial)
-            except Exception:
-                dataset_info.setdefault("spatial_coordinates_available", False)
+            meta["obsm_keys"] = list(obsm.keys())
+            has_spatial = (
+                "spatial" in obsm
+                and obsm["spatial"] is not None
+                and len(obsm["spatial"]) > 0
+            )
+            meta["spatial_coordinates_available"] = bool(has_spatial)
         else:
-            dataset_info.setdefault("obsm_keys", [])
-            dataset_info.setdefault("spatial_coordinates_available", False)
+            meta["obsm_keys"] = []
+            meta["spatial_coordinates_available"] = False
 
         uns = getattr(adata, "uns", None)
         if uns is not None:
-            try:
-                dataset_info["uns_keys"] = list(uns.keys())
-            except Exception:
-                dataset_info.setdefault("uns_keys", [])
-            dataset_info["tissue_image_available"] = self._has_tissue_image(uns)
+            meta["uns_keys"] = list(uns.keys())
+            meta["tissue_image_available"] = (
+                DefaultSpatialDataManager._has_tissue_image(uns)
+            )
         else:
-            dataset_info.setdefault("uns_keys", [])
-            dataset_info.setdefault("tissue_image_available", False)
+            meta["uns_keys"] = []
+            meta["tissue_image_available"] = False
+
+        return meta
+
+    def _materialize_metadata(self, dataset_info: dict[str, Any], data_id: str) -> None:
+        """Write adata-derived metadata into dataset_info.
+
+        Call this on write paths only (load, create, update_adata).
+        """
+        dataset_info.setdefault("name", f"Dataset {data_id}")
+        dataset_info.setdefault("type", "unknown")
+        adata = dataset_info.get("adata")
+        if adata is not None:
+            dataset_info.update(self._extract_adata_metadata(adata))
 
     async def load_dataset(
         self, path: str, data_type: str, name: Optional[str] = None
@@ -275,30 +276,30 @@ class DefaultSpatialDataManager:
 
         # Store data
         self.data_store[data_id] = dataset_info
-        self._sync_dataset_metadata(dataset_info, data_id)
+        self._materialize_metadata(dataset_info, data_id)
 
         return data_id
 
     async def get_dataset(self, data_id: str) -> Any:
-        """Get a dataset by ID"""
+        """Get a dataset by ID."""
         if data_id not in self.data_store:
             raise DataNotFoundError(f"Dataset {data_id} not found")
-        dataset_info = self.data_store[data_id]
-        self._sync_dataset_metadata(dataset_info, data_id)
-        return dataset_info
+        return self.data_store[data_id]
 
     async def list_datasets(self) -> list[dict[str, Any]]:
-        """List all loaded datasets"""
+        """List all loaded datasets with current cell/gene counts."""
         listed: list[dict[str, Any]] = []
         for data_id, info in self.data_store.items():
-            self._sync_dataset_metadata(info, data_id)
+            adata = info.get("adata")
+            n_obs = getattr(adata, "n_obs", None)
+            n_vars = getattr(adata, "n_vars", None)
             listed.append(
                 {
                     "id": data_id,
                     "name": info.get("name", f"Dataset {data_id}"),
                     "type": info.get("type", "unknown"),
-                    "n_cells": info.get("n_cells", 0),
-                    "n_genes": info.get("n_genes", 0),
+                    "n_cells": n_obs if isinstance(n_obs, int) else 0,
+                    "n_genes": n_vars if isinstance(n_vars, int) else 0,
                 }
             )
         return listed
@@ -353,7 +354,7 @@ class DefaultSpatialDataManager:
         if data_id not in self.data_store:
             raise DataNotFoundError(f"Dataset {data_id} not found")
         self.data_store[data_id]["adata"] = adata
-        self._sync_dataset_metadata(self.data_store[data_id], data_id)
+        self._materialize_metadata(self.data_store[data_id], data_id)
 
     async def create_dataset(
         self,
@@ -387,7 +388,7 @@ class DefaultSpatialDataManager:
             _RESERVED_KEYS = {"adata", "name", "results"}
             safe = {k: v for k, v in metadata.items() if k not in _RESERVED_KEYS}
             dataset_info.update(safe)
-        self._sync_dataset_metadata(dataset_info, data_id)
+        self._materialize_metadata(dataset_info, data_id)
         self.data_store[data_id] = dataset_info
         return data_id
 
@@ -521,9 +522,7 @@ class ToolContext:
         Returns:
             The generated dataset ID
         """
-        return await self._data_manager.create_dataset(
-            adata, prefix, name, metadata
-        )
+        return await self._data_manager.create_dataset(adata, prefix, name, metadata)
 
     async def info(self, msg: str) -> None:
         """Log info message to MCP context if available."""

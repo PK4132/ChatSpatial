@@ -14,9 +14,18 @@ def test_numpy2_compat_assert_array_equal_works_with_legacy_keywords():
         np.testing.assert_array_equal(x=np.array([1, 2]), y=np.array([1, 2]))
 
 
-def test_numpy2_compat_assert_array_equal_requires_patch_context():
-    with pytest.raises(RuntimeError, match="without patching"):
-        compat._numpy2_compat_assert_array_equal(np.array([1]), np.array([1]))
+def test_numpy2_compat_unpatch_leaves_no_residual_state():
+    """After unpatch, np.testing.assert_array_equal has no compat marker."""
+    original = np.testing.assert_array_equal
+    with compat.numpy2_compat():
+        assert getattr(
+            np.testing.assert_array_equal, compat._NUMPY2_COMPAT_MARKER, False
+        )
+    # After context exit, original is restored with no leaked attributes
+    assert np.testing.assert_array_equal is original
+    assert not getattr(
+        np.testing.assert_array_equal, compat._NUMPY2_COMPAT_MARKER, False
+    )
 
 
 def test_derivative_compat_first_and_second_order():
@@ -48,7 +57,9 @@ def test_patch_scipy_sparse_matrix_A_restores_alias():
     np.testing.assert_array_equal(arr.A, arr.toarray())
 
 
-def test_cellrank_compat_decorator_runs_cleanup_on_error(monkeypatch: pytest.MonkeyPatch):
+def test_cellrank_compat_decorator_runs_cleanup_on_error(
+    monkeypatch: pytest.MonkeyPatch,
+):
     state = {"cleaned": False}
 
     def _fake_ensure():

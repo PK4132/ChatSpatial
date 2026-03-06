@@ -808,16 +808,23 @@ class SpatialStatisticsParameters(BaseModel):
         "co_occurrence",
         "ripley",
         "moran",
-        "local_moran",  # Added: Local Moran's I (LISA)
+        "local_moran",
         "geary",
         "centrality",
         "getis_ord",
         "bivariate_moran",
-        "join_count",  # Traditional Join Count for binary data (2 categories)
-        "local_join_count",  # Local Join Count for multi-category data (>2 categories)
+        "join_count",
+        "local_join_count",
         "network_properties",
         "spatial_centrality",
-    ] = "neighborhood"
+    ] = Field(
+        default="neighborhood",
+        description=(
+            "Gene-based (no cluster_key): moran, local_moran, geary, getis_ord, bivariate_moran. "
+            "Group-based (requires cluster_key): neighborhood, co_occurrence, ripley, "
+            "join_count, local_join_count, centrality, spatial_centrality, network_properties."
+        ),
+    )
     cluster_key: Optional[str] = Field(
         default=None,
         description="Cluster column. Required for neighborhood, co_occurrence, ripley, join_count analyses.",
@@ -1366,8 +1373,8 @@ class SpatialVariableGenesParameters(BaseModel):
 
     # Method selection
     method: Literal["spatialde", "sparkx", "flashs"] = Field(
-        default="sparkx",
-        description="'sparkx' is fast and robust. 'flashs' is Python-native and very fast. 'spatialde' uses Gaussian process.",
+        default="flashs",
+        description="'flashs' is Python-native and very fast (recommended). 'sparkx' is fast and robust. 'spatialde' uses Gaussian process.",
     )
 
     # Common parameters for all methods
@@ -1421,11 +1428,11 @@ class SpatialVariableGenesParameters(BaseModel):
         le=10000,
         description="Minimum expressing spots to test a gene (FlashS only).",
     )
-    flashs_adjustment: Literal[
-        "bh", "bonferroni", "holm", "by", "storey", "none"
-    ] = Field(
-        default="bh",
-        description="Multiple testing correction method (FlashS only).",
+    flashs_adjustment: Literal["bh", "bonferroni", "holm", "by", "storey", "none"] = (
+        Field(
+            default="bh",
+            description="Multiple testing correction method (FlashS only).",
+        )
     )
     flashs_random_state: Optional[int] = Field(
         default=0,
@@ -1456,9 +1463,7 @@ class SpatialVariableGenesParameters(BaseModel):
     @classmethod
     def validate_sparkx_percentage(cls, v: float) -> float:
         if not (0 < v < 1):
-            raise ValueError(
-                "sparkx_percentage must be between 0 and 1"
-            )
+            raise ValueError("sparkx_percentage must be between 0 and 1")
         return v
 
 
