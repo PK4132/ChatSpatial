@@ -50,8 +50,8 @@ def _store_cluster_ccc(adata, *, method: str = "cellphonedb") -> None:
         analysis_type="cluster",
         species="human",
         database="cellphonedb",
-        lr_pairs=["L1_R1", "L2_R2"],
-        top_lr_pairs=["L1_R1"],
+        lr_pairs=["L1^R1", "L2^R2"],
+        top_lr_pairs=["L1^R1"],
         n_pairs=2,
         n_significant=1,
         results=results,
@@ -84,7 +84,7 @@ def _mock_cc_data(
         results=results,
         method="cellphonedb",
         analysis_type=analysis_type,
-        lr_pairs=lr_pairs or ["L1_R1", "L2_R2"],
+        lr_pairs=lr_pairs or ["L1^R1", "L2^R2"],
         pvalues=None,
         spatial_scores=spatial_scores,
         spatial_pvals=None,
@@ -515,7 +515,7 @@ def test_create_spatial_lr_visualization_uses_metric_and_handles_missing_pair_co
     data = _mock_cc_data(
         results,
         analysis_type="spatial",
-        lr_pairs=["L1_R1", "L2_R2"],
+        lr_pairs=["L1^R1", "L2^R2"],
         spatial_scores=np.ones((adata.n_obs, 1), dtype=float),
     )
     fig = viz_cc._create_spatial_lr_visualization(
@@ -539,7 +539,7 @@ def test_create_spatial_lr_visualization_handles_no_metric_with_single_panel(
     data = _mock_cc_data(
         pd.DataFrame({"note": [1]}, index=["L1_R1"]),
         analysis_type="spatial",
-        lr_pairs=["L1_R1"],
+        lr_pairs=["L1^R1"],
         spatial_scores=np.ones((adata.n_obs, 1), dtype=float),
     )
     fig = viz_cc._create_spatial_lr_visualization(
@@ -558,7 +558,7 @@ def test_create_spatial_lr_visualization_falls_back_when_top_pairs_not_in_lr_lis
     data = _mock_cc_data(
         pd.DataFrame({"morans": [0.9, 0.8, 0.7, 0.6]}, index=["X1", "X2", "X3", "X4"]),
         analysis_type="spatial",
-        lr_pairs=["L1_R1", "L2_R2", "L3_R3", "L4_R4"],
+        lr_pairs=["L1^R1", "L2^R2", "L3^R3", "L4^R4"],
         spatial_scores=np.ones((adata.n_obs, 4), dtype=float),
     )
     fig = viz_cc._create_spatial_lr_visualization(
@@ -582,7 +582,7 @@ def test_create_spatial_lr_visualization_errors_for_empty_selected_pairs_and_mis
         results=pd.DataFrame(),
         method="cellphonedb",
         analysis_type="spatial",
-        lr_pairs=["L1_R1"],
+        lr_pairs=["L1^R1"],
         pvalues=None,
         spatial_scores=np.ones((adata.n_obs, 1), dtype=float),
         spatial_pvals=None,

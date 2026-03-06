@@ -387,6 +387,7 @@ async def get_cell_communication_data(
         method=ccc.method,
         analysis_type=ccc.analysis_type,
         lr_pairs=ccc.lr_pairs,
+        top_lr_pairs=ccc.top_lr_pairs,
         pvalues=ccc.pvalues,  # Keep original pvalues for methods that need them
         spatial_scores=spatial_scores,
         spatial_pvals=spatial_pvals,
@@ -501,26 +502,16 @@ def _create_spatial_lr_visualization(
 
     n_pairs = min(params.plot_top_pairs or 6, len(data.lr_pairs), 6)
 
-    # Determine top pairs based on global metric
-    if len(data.results) > 0:
-        metric_col = None
-        for col in ["morans", "lee", "global_score"]:
-            if col in data.results.columns:
-                metric_col = col
-                break
-
-        if metric_col:
-            top_results = data.results.nlargest(n_pairs, metric_col)
-            top_pairs = top_results.index.tolist()
-        else:
-            top_pairs = data.lr_pairs[:n_pairs]
+    # Use pre-computed top_lr_pairs from analysis (single source of truth)
+    if data.top_lr_pairs:
+        top_pairs = data.top_lr_pairs[:n_pairs]
     else:
         top_pairs = data.lr_pairs[:n_pairs]
 
     if not top_pairs:
         raise DataNotFoundError("No LR pairs found in spatial results.")
 
-    # Get pair indices
+    # Map top pair names → indices into data.lr_pairs / spatial_scores columns
     pair_indices = []
     valid_pairs = []
     for pair in top_pairs:
@@ -529,6 +520,7 @@ def _create_spatial_lr_visualization(
             valid_pairs.append(pair)
 
     if not valid_pairs:
+        # Fallback: top_lr_pairs naming may differ from lr_pairs
         valid_pairs = data.lr_pairs[:n_pairs]
         pair_indices = list(range(len(valid_pairs)))
 
@@ -568,7 +560,8 @@ def _create_spatial_lr_visualization(
             edgecolors="none",
         )
 
-        display_name = pair.replace("^", " → ").replace("_", " → ")
+        # Display: only split on ^ (the canonical separator), keep _ in complex names
+        display_name = pair.replace("^", " → ")
 
         if len(data.results) > 0 and pair in data.results.index:
             for metric in ["morans", "lee", "global_score"]:
@@ -879,11 +872,7 @@ def _create_unified_circle_plot(
         df = df.copy()
         max_val = df[score_col].max()
         df["weight"] = max_val - df[score_col] + 1
-        agg = (
-            df.groupby(["source", "target"], sort=False)["weight"]
-            .sum()
-            .reset_index()
-        )
+        agg = df.groupby(["source", "target"], sort=False)["weight"].sum().reset_index()
     else:
         # Count interactions
         agg = (

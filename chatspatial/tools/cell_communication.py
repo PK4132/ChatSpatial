@@ -11,7 +11,7 @@ Storage Structure:
         "analysis_type": str,    # "cluster" or "spatial"
         "species": str,          # "human", "mouse", "zebrafish"
         "database": str,         # Resource/database used
-        "lr_pairs": list[str],   # Standardized format: "LIGAND_RECEPTOR"
+        "lr_pairs": list[str],   # Standardized format: "LIGAND^RECEPTOR"
         "top_lr_pairs": list[str],
         "n_pairs": int,
         "n_significant": int,
@@ -87,7 +87,7 @@ class CCCStorage:
     regardless of the analysis method used. It ensures consistency across
     LIANA, CellPhoneDB, CellChat R, and FastCCC.
 
-    All LR pairs are stored in standardized format: "LIGAND_RECEPTOR"
+    All LR pairs are stored in standardized format: "LIGAND^RECEPTOR"
     """
 
     # === Core metadata ===
@@ -96,7 +96,7 @@ class CCCStorage:
     species: str  # "human", "mouse", "zebrafish"
     database: str  # Resource/database used
 
-    # === Standardized LR pairs (format: "LIGAND_RECEPTOR") ===
+    # === Standardized LR pairs (format: "LIGAND^RECEPTOR") ===
     lr_pairs: list[str] = field(default_factory=list)
     top_lr_pairs: list[str] = field(default_factory=list)
     n_pairs: int = 0
@@ -161,17 +161,43 @@ class CCCStorage:
 
 
 def standardize_lr_pair(pair_str: str) -> str:
-    """Standardize LR pair format to 'LIGAND_RECEPTOR'.
+    """Standardize LR pair format to 'LIGAND^RECEPTOR'.
 
-    Handles various input formats:
-    - 'LIGAND^RECEPTOR' -> 'LIGAND_RECEPTOR'
-    - 'LIGAND_RECEPTOR' -> 'LIGAND_RECEPTOR' (no change)
-    - 'ligand-receptor' -> 'LIGAND_RECEPTOR'
+    Uses ``^`` as the ligand-receptor separator because:
+    - ``^`` never appears in gene/complex names
+    - ``_`` and ``-`` appear inside complex names (e.g. ICAM1_ITGB2, HLA-A)
+    - Using ``_`` as separator would conflate different pairs
+      (e.g. ``ITGAL^ICAM1_ITGB2`` ≠ ``ITGAL_ICAM1^ITGB2``)
+
+    Input formats handled:
+    - 'LIGAND^RECEPTOR'   -> 'LIGAND^RECEPTOR' (no change)
+    - 'LIGAND_RECEPTOR'   -> 'LIGAND^RECEPTOR' (single underscore → ^)
+    - 'LIGAND-RECEPTOR'   -> 'LIGAND^RECEPTOR' (single dash, no underscore → ^)
+    - 'COMPLEX1_COMPLEX2' -> kept as-is when no ^ present and ambiguous
+
+    For inputs without ``^``, the first ``_`` that is NOT inside a known
+    complex pattern is treated as the separator.  As a simple heuristic
+    we split on the *first* ``_`` only when the string contains exactly
+    one ``_`` (unambiguous single-gene ligand/receptor).  When no ``_``
+    is present but exactly one ``-`` exists, the dash is treated as the
+    separator (e.g. LIANA output format).  Multi-separator strings
+    without ``^`` are returned unchanged to avoid lossy guessing.
     """
-    # Replace common separators with underscore
-    standardized = pair_str.replace("^", "_").replace("-", "_")
-    # Don't uppercase - preserve original gene names
-    return standardized
+    if "^" in pair_str:
+        return pair_str  # Already canonical
+
+    n_underscores = pair_str.count("_")
+    if n_underscores == 1:
+        # Unambiguous: single underscore separates ligand from receptor
+        return pair_str.replace("_", "^", 1)
+
+    if n_underscores == 0 and pair_str.count("-") == 1:
+        # No underscores, single dash — treat dash as separator
+        # (e.g. LIANA's "LIGAND-RECEPTOR" format)
+        return pair_str.replace("-", "^", 1)
+
+    # Ambiguous multi-separator or no separator — return as-is
+    return pair_str
 
 
 def store_ccc_results(adata: Any, storage: CCCStorage) -> None:
@@ -385,7 +411,7 @@ def _integrate_autocrine_detection(storage: CCCStorage, n_top: int) -> None:
         autocrine_df = results[results["source"] == results["target"]].copy()
         if len(autocrine_df) > 0:
             autocrine_df["lr_pair"] = (
-                autocrine_df["ligand_complex"] + "_" + autocrine_df["receptor_complex"]
+                autocrine_df["ligand_complex"] + "^" + autocrine_df["receptor_complex"]
             )
             if "magnitude_rank" in autocrine_df.columns:
                 autocrine_df = autocrine_df.nsmallest(n_top, "magnitude_rank")
@@ -545,20 +571,20 @@ def _run_liana_cluster_analysis(
     significance_alpha = params.liana_significance_alpha
     n_significant = len(liana_res[liana_res["magnitude_rank"] <= significance_alpha])
 
-    # Extract top LR pairs (standardized format: LIGAND_RECEPTOR)
+    # Extract top LR pairs (standardized format: LIGAND^RECEPTOR)
     lr_pairs: list[str] = []
     top_lr_pairs: list[str] = []
 
     if "magnitude_rank" in liana_res.columns and len(liana_res) > 0:
         # All LR pairs
         lr_pairs = [
-            f"{row['ligand_complex']}_{row['receptor_complex']}"
+            f"{row['ligand_complex']}^{row['receptor_complex']}"
             for _, row in liana_res.iterrows()
         ]
         # Top pairs by magnitude rank
         top_df = liana_res.nsmallest(params.plot_top_pairs, "magnitude_rank")
         top_lr_pairs = [
-            f"{row['ligand_complex']}_{row['receptor_complex']}"
+            f"{row['ligand_complex']}^{row['receptor_complex']}"
             for _, row in top_df.iterrows()
         ]
 

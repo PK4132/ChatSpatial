@@ -381,7 +381,8 @@ def test_analyze_co_occurrence_uses_interval_from_params_and_returns_distance_ra
         captured["cluster_key"] = cluster_key
         a.uns["leiden_co_occurrence"] = {
             "occ": np.zeros((2, 2, 4)),
-            "interval": np.array([0.0, 5.0, 10.0, 15.0]),
+            # bin edges: 5 edges → 4 intervals (matches occ shape)
+            "interval": np.array([0.0, 5.0, 10.0, 15.0, 20.0]),
         }
 
     monkeypatch.setattr(ss.sq.gr, "co_occurrence", _fake_co_occurrence)
@@ -395,8 +396,8 @@ def test_analyze_co_occurrence_uses_interval_from_params_and_returns_distance_ra
 
     assert captured == {"interval": 42, "cluster_key": "leiden"}
     assert out["n_clusters"] == 2
-    assert out["n_intervals"] == 4
-    assert out["distance_range"] == (0.0, 15.0)
+    assert out["n_intervals"] == 4  # 5 bin edges → 4 intervals
+    assert out["distance_range"] == (0.0, 20.0)
 
 
 def test_analyze_co_occurrence_uses_default_interval_when_not_set(
@@ -723,7 +724,9 @@ def test_analyze_morans_i_handles_small_gene_set_without_duplicate_rank_lists(
 
     def _fake_autocorr(a, **_kwargs):
         a.uns["moranI"] = pd.DataFrame(
-            {"I": [0.7, 0.2, -0.1, 0.4], "pval_norm": [0.01, 0.2, 0.04, 0.9]},
+            # p-values chosen so 2 genes survive FDR correction (BH):
+            # sorted [0.001, 0.02, 0.2, 0.9] → FDR [0.004, 0.04, 0.267, 0.9]
+            {"I": [0.7, 0.2, -0.1, 0.4], "pval_norm": [0.001, 0.2, 0.02, 0.9]},
             index=["gene_0", "gene_1", "gene_2", "gene_3"],
         )
 
@@ -734,7 +737,7 @@ def test_analyze_morans_i_handles_small_gene_set_without_duplicate_rank_lists(
         DummyCtx(adata),
     )
     assert out["n_genes_analyzed"] == 4
-    assert out["n_significant"] == 2
+    assert out["n_significant"] == 2  # gene_0 and gene_2 survive FDR
     assert out["top_highest_autocorrelation"] == []
     assert out["top_lowest_autocorrelation"] == []
     assert out["analysis_key"] == "moranI"

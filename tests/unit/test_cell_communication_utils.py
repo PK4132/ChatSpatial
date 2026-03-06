@@ -33,9 +33,14 @@ class DummyCtx:
 
 
 def test_standardize_lr_pair_normalizes_separators():
-    assert standardize_lr_pair("LIG^REC") == "LIG_REC"
-    assert standardize_lr_pair("lig-rec") == "lig_rec"
-    assert standardize_lr_pair("LIG_REC") == "LIG_REC"
+    # ^ is the canonical separator — preserved as-is
+    assert standardize_lr_pair("LIG^REC") == "LIG^REC"
+    # Single underscore → treated as ligand/receptor separator → ^
+    assert standardize_lr_pair("LIG_REC") == "LIG^REC"
+    # Multi-underscore without ^ is ambiguous → returned as-is
+    assert standardize_lr_pair("ITGAL_ICAM1_ITGB2") == "ITGAL_ICAM1_ITGB2"
+    # Complex names with ^ are unambiguous
+    assert standardize_lr_pair("ITGAL^ICAM1_ITGB2") == "ITGAL^ICAM1_ITGB2"
 
 
 def test_top_n_desc_indices_handles_non_finite_and_bounds():
@@ -58,11 +63,11 @@ def test_store_and_get_ccc_results_roundtrip(minimal_spatial_adata):
         analysis_type="cluster",
         species="human",
         database="consensus",
-        lr_pairs=["L1_R1"],
-        top_lr_pairs=["L1_R1"],
+        lr_pairs=["L1^R1"],
+        top_lr_pairs=["L1^R1"],
         n_pairs=1,
         n_significant=1,
-        autocrine=CCCAutocrine(n_loops=1, top_pairs=["L1_R1"]),
+        autocrine=CCCAutocrine(n_loops=1, top_pairs=["L1^R1"]),
     )
 
     store_ccc_results(adata, storage)
@@ -96,8 +101,8 @@ def test_integrate_autocrine_detection_for_liana_cluster_results():
     _integrate_autocrine_detection(storage, n_top=5)
 
     assert storage.autocrine.n_loops == 2
-    assert "L1_R1" in storage.autocrine.top_pairs
-    assert "L3_R3" in storage.autocrine.top_pairs
+    assert "L1^R1" in storage.autocrine.top_pairs
+    assert "L3^R3" in storage.autocrine.top_pairs
 
 
 def test_integrate_autocrine_detection_for_matrix_based_methods():
@@ -108,7 +113,7 @@ def test_integrate_autocrine_detection_for_matrix_based_methods():
             "T|B": [0.1, 0.2],
             "B|B": [0.0, 0.9],
         },
-        index=["L1_R1", "L2_R2"],
+        index=["L1^R1", "L2^R2"],
     )
     storage = CCCStorage(
         method="cellphonedb",
@@ -121,8 +126,8 @@ def test_integrate_autocrine_detection_for_matrix_based_methods():
     _integrate_autocrine_detection(storage, n_top=5)
 
     assert storage.autocrine.n_loops == 2
-    assert "L1_R1" in storage.autocrine.top_pairs
-    assert "L2_R2" in storage.autocrine.top_pairs
+    assert "L1^R1" in storage.autocrine.top_pairs
+    assert "L2^R2" in storage.autocrine.top_pairs
 
 
 @pytest.mark.asyncio
@@ -218,8 +223,8 @@ async def test_analyze_cell_communication_happy_path_cluster(
             analysis_type="cluster",
             species="human",
             database="fastccc",
-            lr_pairs=["L1_R1"],
-            top_lr_pairs=["L1_R1"],
+            lr_pairs=["L1^R1"],
+            top_lr_pairs=["L1^R1"],
             n_pairs=1,
             n_significant=1,
             statistics={"ok": 1.0},
@@ -369,8 +374,8 @@ async def test_analyze_cell_communication_spatial_writes_obsm_scores(
             analysis_type="spatial",
             species="human",
             database="consensus",
-            lr_pairs=["L1_R1"],
-            top_lr_pairs=["L1_R1"],
+            lr_pairs=["L1^R1"],
+            top_lr_pairs=["L1^R1"],
             n_pairs=1,
             n_significant=1,
             method_data={
@@ -459,8 +464,8 @@ def test_run_liana_cluster_analysis_builds_expected_storage(
     assert out.analysis_type == "cluster"
     assert out.n_pairs == 2
     assert out.n_significant == 1
-    assert out.lr_pairs == ["L1_R1", "L2_R2"]
-    assert out.top_lr_pairs == ["L1_R1"]
+    assert out.lr_pairs == ["L1^R1", "L2^R2"]
+    assert out.top_lr_pairs == ["L1^R1"]
     assert out.statistics["use_raw"] is True
 
 
@@ -506,8 +511,8 @@ def test_run_liana_spatial_analysis_builds_expected_storage(
 
     assert out.analysis_type == "spatial"
     assert out.n_pairs == 2
-    assert out.lr_pairs == ["L1_R1", "L2_R2"]
-    assert out.top_lr_pairs == ["L1_R1"]
+    assert out.lr_pairs == ["L1^R1", "L2^R2"]
+    assert out.top_lr_pairs == ["L1^R1"]
     assert out.method_data["spatial_scores"].shape == (adata.n_obs, 2)
     assert out.method_data["spatial_pvals"].shape == (adata.n_obs, 2)
     assert "morans_pvals_corrected" in out.results.columns
@@ -813,7 +818,7 @@ async def test_create_microenvironments_file_writes_expected_format(
 
 
 def test_integrate_autocrine_detection_cellchat_prob_matrix_branch():
-    results = pd.DataFrame({"interaction_name": ["L1^R1", "L2-R2", "L3_R3"]})
+    results = pd.DataFrame({"interaction_name": ["L1^R1", "L2-R2", "L3^R3"]})
     prob = np.zeros((2, 2, 3), dtype=float)
     prob[0, 0, :] = [1.0, 0.0, 2.0]  # diagonal contributions for pairs 1 and 3
     prob[1, 1, :] = [0.0, 0.0, 0.0]
@@ -830,7 +835,7 @@ def test_integrate_autocrine_detection_cellchat_prob_matrix_branch():
     ccc._integrate_autocrine_detection(storage, n_top=2)
 
     assert storage.autocrine.n_loops == 2
-    assert storage.autocrine.top_pairs == ["L1_R1", "L3_R3"]
+    assert storage.autocrine.top_pairs == ["L1^R1", "L3^R3"]
 
 
 def _install_fake_cellphonedb_modules(monkeypatch: pytest.MonkeyPatch, download_impl):
@@ -959,8 +964,8 @@ async def test_analyze_communication_fastccc_success_single_method(
     assert out.method == "fastccc"
     assert out.n_pairs == 2
     assert out.n_significant == 1
-    assert out.lr_pairs == ["L1_R1", "L2_R2"]
-    assert out.top_lr_pairs == ["L2_R2"]
+    assert out.lr_pairs == ["L1^R1", "L2^R2"]
+    assert out.top_lr_pairs == ["L2^R2"]
     assert out.method_data["percentages"] is percentages
 
 
@@ -1086,7 +1091,7 @@ def test_run_liana_spatial_analysis_without_pvals_layer_sets_none(
     )
 
     assert out.method_data["spatial_pvals"] is None
-    assert out.lr_pairs == ["L1_R1"]
+    assert out.lr_pairs == ["L1^R1"]
 
 
 @pytest.mark.asyncio
@@ -1152,8 +1157,8 @@ async def test_analyze_communication_cellphonedb_success_with_correction_stats(
     assert out.method == "cellphonedb"
     assert out.n_pairs == 2
     assert out.n_significant == 1
-    assert out.lr_pairs == ["L1_R1", "L2_R2"]
-    assert out.top_lr_pairs == ["L1_R1"]
+    assert out.lr_pairs == ["L1^R1", "L2^R2"]
+    assert out.top_lr_pairs == ["L1^R1"]
     assert "correction_statistics" in out.statistics
 
 
@@ -1211,8 +1216,8 @@ async def test_analyze_communication_fastccc_success_standard_path(
     assert out.method == "fastccc"
     assert out.n_pairs == 2
     assert out.n_significant == 1
-    assert out.lr_pairs == ["L1_R1", "L2_R2"]
-    assert out.top_lr_pairs == ["L1_R1"]
+    assert out.lr_pairs == ["L1^R1", "L2^R2"]
+    assert out.top_lr_pairs == ["L1^R1"]
     assert out.method_data["percentages"].shape == (2, 2)
 
 
@@ -1632,7 +1637,7 @@ async def test_analyze_communication_cellphonedb_handles_missing_pvalues_and_ind
         ),
         ctx,
     )
-    assert out.lr_pairs == ["L1_R1"]
+    assert out.lr_pairs == ["L1^R1"]
     assert out.n_significant == 0
     assert any("Multiple testing correction disabled" in w for w in ctx.warnings)
     assert any("No significant interactions found" in w for w in ctx.warnings)
@@ -1943,7 +1948,7 @@ def test_analyze_communication_cellchat_r_non_spatial_success(
     assert out.method == "cellchat_r"
     assert out.n_pairs == 2
     assert out.n_significant == 3
-    assert out.lr_pairs == ["L1_R1", "L2_R2"]
+    assert out.lr_pairs == ["L1^R1", "L2^R2"]
     assert out.method_data["prob_matrix"].shape == (2, 2, 2)
     assert "createCellChat" in "\n".join(r_exec.scripts)
     assert "spatial_locs" not in fake_ro.globalenv

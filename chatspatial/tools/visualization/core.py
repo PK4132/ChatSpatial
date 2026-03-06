@@ -285,7 +285,8 @@ class CellCommunicationData(NamedTuple):
         results: Main results DataFrame (format varies by method)
         method: Analysis method ("liana", "cellphonedb", "fastccc", "cellchat_r")
         analysis_type: Type of analysis ("cluster" or "spatial")
-        lr_pairs: List of ligand-receptor pair names (standardized: LIGAND_RECEPTOR)
+        lr_pairs: List of ligand-receptor pair names (standardized: LIGAND^RECEPTOR)
+        top_lr_pairs: Top LR pairs ranked by analysis (pre-computed at analysis time)
         pvalues: P-values DataFrame/array (method-specific format)
         spatial_scores: Spatial communication scores array (n_spots x n_pairs)
         spatial_pvals: P-values for spatial scores (LIANA spatial only)
@@ -298,6 +299,7 @@ class CellCommunicationData(NamedTuple):
     method: str
     analysis_type: str  # "cluster" or "spatial"
     lr_pairs: list[str]
+    top_lr_pairs: list[str] = []
     pvalues: Optional[pd.DataFrame] = None
     spatial_scores: Optional[np.ndarray] = None
     spatial_pvals: Optional[np.ndarray] = None
@@ -563,27 +565,23 @@ def auto_spot_size(
     if basis == "spatial" and "spatial" in adata.uns:
         spatial_data = adata.uns["spatial"]
         if spatial_data and isinstance(spatial_data, dict):
-            # Get first library_id
-            library_ids = list(spatial_data.keys())
-            if library_ids:
-                lib_data = spatial_data[library_ids[0]]
-
+            # Collect calculated sizes from all library_ids, use median
+            # to avoid bias from a single slice in multi-sample data
+            calculated_sizes: list[float] = []
+            for lib_data in spatial_data.values():
                 if isinstance(lib_data, dict) and "scalefactors" in lib_data:
                     scalefactors = lib_data["scalefactors"]
-
-                    # Get spot diameter
                     spot_diameter = scalefactors.get("spot_diameter_fullres")
                     if spot_diameter and spot_diameter > 0:
-                        # Get scale factor (prefer hires, fallback to lowres)
                         scale_factor = scalefactors.get(
                             "tissue_hires_scalef",
                             scalefactors.get("tissue_lowres_scalef", 1.0),
                         )
+                        size = (spot_diameter * scale_factor * 0.5) ** 2
+                        calculated_sizes.append(max(size, 5.0))
 
-                        # Calculate: scatter s parameter is area (diameter^2 based)
-                        # Apply 0.5 adjustment factor to match typical visual expectations
-                        calculated_size = (spot_diameter * scale_factor * 0.5) ** 2
-                        return max(calculated_size, 5.0)  # minimum size of 5
+            if calculated_sizes:
+                return float(np.median(calculated_sizes))
 
     # Priority 3: Adaptive formula based on cell count
     n_cells = adata.n_obs

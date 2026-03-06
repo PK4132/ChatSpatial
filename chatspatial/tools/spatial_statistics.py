@@ -510,8 +510,18 @@ def _analyze_morans_i(
     if moran_key in adata.uns:
         results_df = adata.uns[moran_key]
 
-        # Get top significant genes
-        significant_genes = results_df[results_df["pval_norm"] < 0.05].index.tolist()
+        # Apply FDR correction for multiple testing across genes
+        from statsmodels.stats.multitest import multipletests
+
+        raw_pvals = results_df["pval_norm"].values
+        _, fdr_pvals, _, _ = multipletests(raw_pvals, method="fdr_bh")
+        results_df["pval_norm_fdr"] = fdr_pvals
+        adata.uns[moran_key] = results_df
+
+        # Use FDR-corrected significance
+        significant_genes = results_df[
+            results_df["pval_norm_fdr"] < 0.05
+        ].index.tolist()
 
         # Calculate appropriate number of top genes to return
         # To avoid returning identical lists, we take at most half of the analyzed genes
@@ -630,8 +640,9 @@ def _analyze_co_occurrence(
         result = {
             "n_clusters": len(co_occurrence),
             "analysis_key": analysis_key,
+            # interval_data contains bin edges (length = n_intervals + 1)
             "n_intervals": (
-                len(interval_data) if interval_data is not None else interval
+                len(interval_data) - 1 if interval_data is not None else interval
             ),
         }
 

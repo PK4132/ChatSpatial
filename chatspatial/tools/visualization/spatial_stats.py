@@ -194,7 +194,15 @@ async def _create_co_occurrence_visualization(
         )
 
     categories = adata.obs[cluster_key].cat.categories.tolist()
-    clusters_to_show = categories[: min(4, len(categories))]
+    max_clusters = 4
+    clusters_to_show = categories[:max_clusters]
+
+    if len(categories) > max_clusters and context:
+        await context.warning(
+            f"Showing {max_clusters} of {len(categories)} clusters "
+            f"in co-occurrence plot. Specify feature parameter to select "
+            f"specific clusters."
+        )
 
     # Calculate appropriate figsize based on number of clusters
     # squidpy default: (5 * n_clusters, 5) with constrained_layout=True
@@ -286,8 +294,11 @@ def _create_moran_visualization(
     pvals_safe = np.clip(pvals, min_pval, 1.0)
     moran_data["neg_log_pval"] = -np.log10(pvals_safe)
 
-    # Mark significance
-    moran_data["significant"] = pvals < 0.05
+    # Mark significance using FDR-corrected p-values when available
+    if "pval_norm_fdr" in moran_data.columns:
+        moran_data["significant"] = moran_data["pval_norm_fdr"].values < 0.05
+    else:
+        moran_data["significant"] = pvals < 0.05
 
     # Sort by Moran's I (descending) and take top genes
     n_top = min(20, len(moran_data))  # Use actual data size if less than 20
@@ -502,7 +513,18 @@ async def _create_getis_ord_visualization(
                 continue
 
             z_scores = adata.obs[z_key].values
-            p_vals = adata.obs[p_key].values
+
+            # Read analysis-time significance settings from stored metadata
+            getis_meta = adata.uns.get("getis_ord", {}).get("parameters", {})
+            sig_alpha = getis_meta.get("alpha", 0.05)
+            correction = getis_meta.get("correction", "none")
+
+            # Use corrected p-values when available (matches analysis口径)
+            p_corr_key = f"{gene}_getis_ord_p_corrected"
+            if correction != "none" and p_corr_key in adata.obs:
+                p_vals = adata.obs[p_corr_key].values
+            else:
+                p_vals = adata.obs[p_key].values
 
             scatter = ax.scatter(
                 coords[:, 0],
@@ -518,9 +540,8 @@ async def _create_getis_ord_visualization(
             if params.show_colorbar:
                 plt.colorbar(scatter, ax=ax, label="Gi* Z-score")
 
-            # Count significant hot and cold spots
-            alpha = 0.05
-            significant = p_vals < alpha
+            # Count significant hot/cold spots using analysis-time criteria
+            significant = p_vals < sig_alpha
             hot_spots = np.sum((z_scores > 0) & significant)
             cold_spots = np.sum((z_scores < 0) & significant)
 

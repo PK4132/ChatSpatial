@@ -304,57 +304,57 @@ async def _annotate_with_singler(
     unique_types = list(dict.fromkeys(cell_types))
     counts = pd.Series(cell_types).value_counts().to_dict()
 
-    # Calculate confidence scores (see docstring for transformation formulas)
-    confidence_scores = {}
+    # Calculate per-cell confidence and per-type summary
+    n_cells = len(cell_types)
+    per_cell_confidence = np.zeros(n_cells, dtype=float)
+    confidence_scores: dict[str, float] = {}
 
     # Prefer delta scores (more meaningful confidence measure)
     if delta_scores is not None:
         try:
-            for cell_type in unique_types:
-                type_indices = [i for i, ct in enumerate(cell_types) if ct == cell_type]
-                if type_indices:
-                    type_deltas = [
-                        delta_scores[i] for i in type_indices if i < len(delta_scores)
-                    ]
-                    if type_deltas:
-                        avg_delta = np.mean([d for d in type_deltas if d is not None])
-                        confidence = 1.0 - np.exp(-avg_delta)  # Transform to [0, 1]
-                        confidence_scores[cell_type] = round(float(confidence), 3)
+            for i in range(n_cells):
+                if i < len(delta_scores) and delta_scores[i] is not None:
+                    per_cell_confidence[i] = round(1.0 - np.exp(-delta_scores[i]), 3)
         except Exception:
-            # Delta score extraction failed, will fall back to regular scores
-            pass
+            per_cell_confidence[:] = 0.0
 
     # Fall back to correlation scores if delta not available
-    if not confidence_scores and scores is not None:
+    if per_cell_confidence.sum() == 0 and scores is not None:
         try:
-            scores_df = pd.DataFrame(scores.to_dict())
-        except AttributeError:
-            scores_df = pd.DataFrame(
-                scores.to_numpy() if hasattr(scores, "to_numpy") else scores
-            )
+            try:
+                scores_df = pd.DataFrame(scores.to_dict())
+            except AttributeError:
+                scores_df = pd.DataFrame(
+                    scores.to_numpy() if hasattr(scores, "to_numpy") else scores
+                )
 
-        for cell_type in unique_types:
-            mask = [ct == cell_type for ct in cell_types]
-            if cell_type in scores_df.columns and any(mask):
-                type_scores = scores_df.loc[mask, cell_type]
-                avg_score = type_scores.mean()
-                confidence = max(
-                    0.0, float(avg_score)
-                )  # Clamp negative correlations to 0
-                confidence_scores[cell_type] = round(confidence, 3)
+            for i, ct in enumerate(cell_types):
+                if ct in scores_df.columns:
+                    val = float(scores_df.iloc[i][ct])
+                    per_cell_confidence[i] = round(max(0.0, val), 3)
+        except Exception:
+            per_cell_confidence[:] = 0.0
+
+    # Per-type summary (for result metadata, not for obs storage)
+    for cell_type in unique_types:
+        mask = np.array([ct == cell_type for ct in cell_types])
+        if mask.any():
+            confidence_scores[cell_type] = round(
+                float(per_cell_confidence[mask].mean()), 3
+            )
 
     # Add to AnnData (keys provided by caller for single-point control)
     adata.obs[output_key] = cell_types
     ensure_categorical(adata, output_key)
 
-    if confidence_scores:
-        confidence_array = [confidence_scores.get(ct, 0.0) for ct in cell_types]
-        adata.obs[confidence_key] = confidence_array
+    has_confidence = per_cell_confidence.sum() > 0
+    if has_confidence:
+        adata.obs[confidence_key] = per_cell_confidence
 
     return AnnotationMethodOutput(
         cell_types=unique_types,
         counts=counts,
-        confidence=confidence_scores,
+        confidence=confidence_scores if has_confidence else {},
     )
 
 
@@ -926,47 +926,48 @@ async def _annotate_with_scanvi(
     cell_types = list(adata_subset.obs[cell_type_key].cat.categories)
     counts = adata_subset.obs[cell_type_key].value_counts().to_dict()
 
-    # Get prediction probabilities as confidence scores
+    # Get per-cell confidence from soft predictions
+    per_cell_confidence = np.zeros(adata_subset.n_obs, dtype=float)
+    confidence_scores: dict[str, float] = {}
     try:
         probs = spatial_model.predict(soft=True)
-        confidence_scores = {}
-        for i, cell_type in enumerate(cell_types):
-            cells_of_type = adata_subset.obs[cell_type_key] == cell_type
-            if np.sum(cells_of_type) > 0 and isinstance(probs, pd.DataFrame):
-                if cell_type in probs.columns:
-                    mean_prob = probs.loc[cells_of_type, cell_type].mean()
-                    confidence_scores[cell_type] = round(float(mean_prob), 2)
-                # else: No probability column for this cell type - skip confidence
-            elif (
-                np.sum(cells_of_type) > 0
-                and hasattr(probs, "shape")
-                and probs.shape[1] > i
-            ):
-                mean_prob = probs[cells_of_type, i].mean()
-                confidence_scores[cell_type] = round(float(mean_prob), 2)
-            # else: No cells of this type or no probability data - skip confidence
+        predicted_labels = adata_subset.obs[cell_type_key].values
+
+        if isinstance(probs, pd.DataFrame):
+            # Each cell's confidence = P(predicted_class) for that cell
+            for i, ct in enumerate(predicted_labels):
+                if ct in probs.columns:
+                    per_cell_confidence[i] = round(float(probs.iloc[i][ct]), 3)
+        elif hasattr(probs, "shape") and probs.ndim == 2:
+            # Array form: use argmax index from predictions
+            pred_idx = probs.argmax(axis=1)
+            for i in range(len(pred_idx)):
+                per_cell_confidence[i] = round(float(probs[i, pred_idx[i]]), 3)
+
+        # Per-type summary for metadata
+        for cell_type in cell_types:
+            mask = predicted_labels == cell_type
+            if mask.any():
+                confidence_scores[cell_type] = round(
+                    float(per_cell_confidence[mask].mean()), 2
+                )
     except Exception as e:
         await ctx.warning(f"Could not get confidence scores: {e}")
-        # Could not extract probabilities - return empty confidence dict
-        confidence_scores = (
-            {}
-        )  # Empty dict clearly indicates no confidence data available
+        confidence_scores = {}
 
     # COW FIX: Add prediction results to original adata.obs using output_key
     adata.obs[output_key] = adata_subset.obs[cell_type_key].values
     ensure_categorical(adata, output_key)
 
-    # Store confidence if available
-    if confidence_scores:
-        confidence_array = [
-            confidence_scores.get(ct, 0.0) for ct in adata.obs[output_key]
-        ]
-        adata.obs[confidence_key] = confidence_array
+    # Store per-cell confidence if available
+    has_confidence = per_cell_confidence.sum() > 0
+    if has_confidence:
+        adata.obs[confidence_key] = per_cell_confidence
 
     return AnnotationMethodOutput(
         cell_types=cell_types,
         counts=counts,
-        confidence=confidence_scores,
+        confidence=confidence_scores if has_confidence else {},
     )
 
 
@@ -1320,35 +1321,35 @@ async def _annotate_with_cellassign(
     predictions = model.predict()
 
     # Handle different prediction formats (key provided by caller)
+    per_cell_confidence = np.zeros(adata.n_obs, dtype=float)
+    confidence_scores: dict[str, float] = {}
+
     if isinstance(predictions, pd.DataFrame):
-        # CellAssign returns DataFrame with probabilities
+        # CellAssign returns DataFrame with per-cell probabilities
         predicted_indices = predictions.values.argmax(axis=1)
         adata.obs[output_key] = [valid_cell_types[i] for i in predicted_indices]
 
-        # Get confidence scores from probabilities DataFrame
-        confidence_scores = {}
-        for i, cell_type in enumerate(valid_cell_types):
-            cells_of_type = adata.obs[output_key] == cell_type
-            if np.sum(cells_of_type) > 0:
-                # Use iloc with boolean indexing properly
-                cell_indices = np.where(cells_of_type)[0]
-                mean_prob = predictions.iloc[cell_indices, i].mean()
-                confidence_scores[cell_type] = round(float(mean_prob), 2)
-            # else: No cells of this type - skip confidence
+        # Per-cell confidence = P(predicted_class) for each cell
+        for i, idx in enumerate(predicted_indices):
+            per_cell_confidence[i] = round(float(predictions.iloc[i, idx]), 3)
+
+        # Per-type summary for metadata
+        for j, cell_type in enumerate(valid_cell_types):
+            mask = predicted_indices == j
+            if mask.any():
+                confidence_scores[cell_type] = round(
+                    float(per_cell_confidence[mask].mean()), 2
+                )
     else:
-        # Other models return indices directly
+        # Other models return indices directly — no probability data
         adata.obs[output_key] = [valid_cell_types[i] for i in predictions]
-        # CellAssign returned indices, not probabilities - no confidence available
-        confidence_scores = {}  # Empty dict indicates no confidence data
 
     ensure_categorical(adata, output_key)
 
-    # Store confidence if available
-    if confidence_scores:
-        confidence_array = [
-            confidence_scores.get(ct, 0.0) for ct in adata.obs[output_key]
-        ]
-        adata.obs[confidence_key] = confidence_array
+    # Store per-cell confidence if available
+    has_confidence = per_cell_confidence.sum() > 0
+    if has_confidence:
+        adata.obs[confidence_key] = per_cell_confidence
 
     # Get cell types and counts
     counts = adata.obs[output_key].value_counts().to_dict()
@@ -1356,7 +1357,7 @@ async def _annotate_with_cellassign(
     return AnnotationMethodOutput(
         cell_types=valid_cell_types,
         counts=counts,
-        confidence=confidence_scores,
+        confidence=confidence_scores if has_confidence else {},
     )
 
 
