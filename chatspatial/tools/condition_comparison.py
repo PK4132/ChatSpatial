@@ -123,10 +123,10 @@ async def compare_conditions(
             "Results may be inaccurate. Consider using adata.raw."
         )
 
-    # Count samples per condition
-    sample_condition_map = adata_filtered.obs.groupby(params.sample_key)[
-        params.condition_key
-    ].first()
+    # Validate each sample maps to exactly one condition, then count per condition
+    sample_condition_map = _validate_sample_condition_mapping(
+        adata_filtered.obs, params.sample_key, params.condition_key
+    )
     n_samples_cond1 = (sample_condition_map == params.condition1).sum()
     n_samples_cond2 = (sample_condition_map == params.condition2).sum()
 
@@ -159,8 +159,6 @@ async def compare_conditions(
             ctx,
             params,
             data_id=data_id,
-            n_samples_condition1=int(n_samples_cond1),
-            n_samples_condition2=int(n_samples_cond2),
             results_key=results_key,
         )
     else:
@@ -206,6 +204,31 @@ async def compare_conditions(
     return result
 
 
+def _validate_sample_condition_mapping(
+    obs: pd.DataFrame,
+    sample_key: str,
+    condition_key: str,
+) -> pd.Series:
+    """Validate that each sample maps to exactly one condition.
+
+    Returns:
+        Series mapping sample_id -> condition (one per sample).
+
+    Raises:
+        DataError: If any sample has cells with conflicting conditions.
+    """
+    conditions_per_sample = obs.groupby(sample_key)[condition_key].nunique()
+    mixed = conditions_per_sample[conditions_per_sample > 1]
+    if len(mixed) > 0:
+        examples = ", ".join(f"'{s}'" for s in list(mixed.index[:5]))
+        raise DataError(
+            f"Samples have cells with multiple conditions in '{condition_key}': "
+            f"{examples}. Each sample must belong to exactly one condition. "
+            f"Check your metadata or use a different sample_key."
+        )
+    return obs.groupby(sample_key)[condition_key].first()
+
+
 def _create_pseudobulk(
     adata: "ad.AnnData",
     raw_X: Union[np.ndarray, sparse.spmatrix],
@@ -240,9 +263,13 @@ def _create_pseudobulk(
         obs_work = adata.obs[[sample_key, condition_key]]
         raw_X_work = raw_X
 
+    # Validate and get the unique condition per sample
+    sample_condition_map = _validate_sample_condition_mapping(
+        obs_work, sample_key, condition_key
+    )
+
     # Group by sample; .indices already provides integer positional indices.
     sample_groups = obs_work.groupby(sample_key).indices
-    condition_values = obs_work[condition_key].to_numpy()
 
     pseudobulk_data = []
     metadata_list = []
@@ -258,8 +285,8 @@ def _create_pseudobulk(
             np.asarray(raw_X_work[int_idx].sum(axis=0)).flatten().astype(np.int64)
         )
 
-        # Get condition for this sample
-        condition = condition_values[int(int_idx[0])]
+        # Get validated condition for this sample
+        condition = sample_condition_map[sample_id]
 
         pseudobulk_data.append(sample_counts)
         metadata_list.append(
@@ -373,8 +400,6 @@ async def _run_global_comparison(
     ctx: ToolContext,
     params: ConditionComparisonParameters,
     data_id: str = "",
-    n_samples_condition1: int = 0,
-    n_samples_condition2: int = 0,
     results_key: str = "",
 ) -> ConditionComparisonResult:
     """Run global comparison (all cells, no cell type stratification).
@@ -444,8 +469,8 @@ async def _run_global_comparison(
         condition2=params.condition2,
         sample_key=params.sample_key,
         cell_type_key=None,
-        n_samples_condition1=n_samples_condition1,
-        n_samples_condition2=n_samples_condition2,
+        n_samples_condition1=n_cond1,
+        n_samples_condition2=n_cond2,
         global_n_significant=n_significant,
         global_top_upregulated=top_up,
         global_top_downregulated=top_down,

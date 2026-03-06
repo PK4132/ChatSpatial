@@ -17,6 +17,7 @@ from chatspatial.tools.condition_comparison import (
     _run_deseq2,
     _run_global_comparison,
     _run_stratified_comparison,
+    _validate_sample_condition_mapping,
     compare_conditions,
 )
 from chatspatial.utils.exceptions import DataError, ParameterError, ProcessingError
@@ -75,7 +76,9 @@ def test_create_pseudobulk_raises_when_no_sample_meets_min_cells(minimal_spatial
         )
 
 
-def test_create_pseudobulk_cell_type_filter_only_keeps_selected_type(minimal_spatial_adata):
+def test_create_pseudobulk_cell_type_filter_only_keeps_selected_type(
+    minimal_spatial_adata,
+):
     adata = minimal_spatial_adata.copy()
     adata.obs["condition"] = ["treated"] * 30 + ["control"] * 30
     adata.obs["sample"] = ["s1"] * 15 + ["s2"] * 15 + ["s3"] * 15 + ["s4"] * 15
@@ -347,16 +350,18 @@ async def test_run_stratified_comparison_continues_after_cell_type_failure(monke
     obs = pd.DataFrame(
         {
             "condition": ["treated"] * 12 + ["control"] * 12,
-            "sample": (
-                ["s1"] * 6
-                + ["s2"] * 6
-                + ["s3"] * 6
-                + ["s4"] * 6
-            ),
+            "sample": (["s1"] * 6 + ["s2"] * 6 + ["s3"] * 6 + ["s4"] * 6),
             "cell_type": ["bad"] * 4 + ["good"] * 20,
         }
     )
-    adata = type("A", (), {"obs": obs, "__getitem__": lambda self, idx: type("B", (), {"obs": self.obs[idx]})()})()
+    adata = type(
+        "A",
+        (),
+        {
+            "obs": obs,
+            "__getitem__": lambda self, idx: type("B", (), {"obs": self.obs[idx]})(),
+        },
+    )()
     ctx = DummyCtx()
     params = ConditionComparisonParameters(
         condition_key="condition",
@@ -443,9 +448,13 @@ async def test_compare_conditions_min_samples_guard_for_condition2(
 
     monkeypatch.setattr(cc_module, "require", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(
-        cc_module, "get_raw_data_source", lambda *_args, **_kwargs: _RawStub(adata.X, adata.var_names)
+        cc_module,
+        "get_raw_data_source",
+        lambda *_args, **_kwargs: _RawStub(adata.X, adata.var_names),
     )
-    monkeypatch.setattr(cc_module, "check_is_integer_counts", lambda _X: (True, None, None))
+    monkeypatch.setattr(
+        cc_module, "check_is_integer_counts", lambda _X: (True, None, None)
+    )
 
     params = ConditionComparisonParameters(
         condition_key="condition",
@@ -478,7 +487,9 @@ async def test_compare_conditions_min_samples_guard_for_condition1(
         "get_raw_data_source",
         lambda *_args, **_kwargs: _RawStub(adata.X, adata.var_names),
     )
-    monkeypatch.setattr(cc_module, "check_is_integer_counts", lambda _X: (True, None, None))
+    monkeypatch.setattr(
+        cc_module, "check_is_integer_counts", lambda _X: (True, None, None)
+    )
 
     params = ConditionComparisonParameters(
         condition_key="condition",
@@ -536,10 +547,16 @@ async def test_compare_conditions_stratified_branch_warns_for_non_integer_counts
         "get_raw_data_source",
         lambda *_args, **_kwargs: _RawStub(adata.X, adata.var_names),
     )
-    monkeypatch.setattr(cc_module, "check_is_integer_counts", lambda _X: (False, None, None))
+    monkeypatch.setattr(
+        cc_module, "check_is_integer_counts", lambda _X: (False, None, None)
+    )
     monkeypatch.setattr(cc_module, "_run_stratified_comparison", _fake_stratified)
-    monkeypatch.setattr(cc_module, "store_analysis_metadata", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(cc_module, "export_analysis_result", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        cc_module, "store_analysis_metadata", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        cc_module, "export_analysis_result", lambda *_args, **_kwargs: None
+    )
 
     params = ConditionComparisonParameters(
         condition_key="condition",
@@ -553,3 +570,38 @@ async def test_compare_conditions_stratified_branch_warns_for_non_integer_counts
     assert called["stratified"] is True
     assert result.results_key == "condition_comparison_treated_vs_control"
     assert any("Data appears to be normalized" in m for m in ctx.warn_logs)
+
+
+def test_validate_sample_condition_mapping_clean():
+    obs = pd.DataFrame(
+        {"sample": ["S1", "S1", "S2", "S2"], "cond": ["A", "A", "B", "B"]}
+    )
+    result = _validate_sample_condition_mapping(obs, "sample", "cond")
+    assert result["S1"] == "A"
+    assert result["S2"] == "B"
+
+
+def test_validate_sample_condition_mapping_rejects_mixed():
+    obs = pd.DataFrame(
+        {"sample": ["S1", "S1", "S2", "S2"], "cond": ["A", "B", "B", "B"]}
+    )
+    with pytest.raises(DataError, match="multiple conditions"):
+        _validate_sample_condition_mapping(obs, "sample", "cond")
+
+
+def test_create_pseudobulk_rejects_mixed_condition_sample(minimal_spatial_adata):
+    adata = minimal_spatial_adata.copy()
+    adata.obs["condition"] = ["treated"] * 30 + ["control"] * 30
+    adata.obs["sample"] = ["s1"] * 15 + ["s2"] * 15 + ["s3"] * 15 + ["s4"] * 15
+    # Corrupt s1: mix in a "control" cell
+    adata.obs.iloc[0, adata.obs.columns.get_loc("condition")] = "control"
+
+    with pytest.raises(DataError, match="multiple conditions"):
+        _create_pseudobulk(
+            adata=adata,
+            raw_X=adata.X,
+            var_names=adata.var_names,
+            sample_key="sample",
+            condition_key="condition",
+            min_cells_per_sample=1,
+        )

@@ -71,12 +71,12 @@ async def test_compare_conditions_uses_global_branch_and_returns_contract(
         "get_raw_data_source",
         lambda *args, **kwargs: _RawStub(adata.X, adata.var_names),
     )
-    monkeypatch.setattr(cc_module, "check_is_integer_counts", lambda X: (True, None, None))
+    monkeypatch.setattr(
+        cc_module, "check_is_integer_counts", lambda X: (True, None, None)
+    )
 
     async def fake_run_global(*args, **kwargs):
         data_id = kwargs.get("data_id", "")
-        n_samples_condition1 = kwargs.get("n_samples_condition1", 0)
-        n_samples_condition2 = kwargs.get("n_samples_condition2", 0)
         results_key = kwargs.get("results_key", "")
         return ConditionComparisonResult(
             data_id=data_id,
@@ -87,8 +87,8 @@ async def test_compare_conditions_uses_global_branch_and_returns_contract(
             condition2="control",
             sample_key="sample",
             cell_type_key=None,
-            n_samples_condition1=n_samples_condition1,
-            n_samples_condition2=n_samples_condition2,
+            n_samples_condition1=2,
+            n_samples_condition2=2,
             global_n_significant=3,
             global_top_upregulated=[],
             global_top_downregulated=[],
@@ -98,8 +98,12 @@ async def test_compare_conditions_uses_global_branch_and_returns_contract(
         )
 
     monkeypatch.setattr(cc_module, "_run_global_comparison", fake_run_global)
-    monkeypatch.setattr(cc_module, "store_analysis_metadata", lambda *args, **kwargs: None)
-    monkeypatch.setattr(cc_module, "export_analysis_result", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        cc_module, "store_analysis_metadata", lambda *args, **kwargs: None
+    )
+    monkeypatch.setattr(
+        cc_module, "export_analysis_result", lambda *args, **kwargs: None
+    )
 
     params = ConditionComparisonParameters(
         condition_key="condition",

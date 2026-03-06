@@ -1528,7 +1528,13 @@ class CellCommunicationParameters(BaseModel):
         default=0.05,
         gt=0.0,
         lt=1.0,
-        description="FDR significance threshold. 0.01 for stringent, 0.10 for exploratory. LIANA only.",
+        description=(
+            "Significance threshold for LIANA. In cluster mode, filters by "
+            "magnitude_rank (RRA consensus rank, p-value-like: lower = more "
+            "significant). In spatial mode, used as FDR alpha for "
+            "Benjamini-Hochberg correction. 0.01 for stringent, 0.10 for "
+            "exploratory."
+        ),
     )
 
     # ========== Expression Filtering Parameters ==========

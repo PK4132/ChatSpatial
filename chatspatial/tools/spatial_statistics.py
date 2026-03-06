@@ -762,24 +762,29 @@ def _analyze_getis_ord(
             obs_updates[f"{gene}_getis_ord_z"] = all_z_scores[gene]
             obs_updates[f"{gene}_getis_ord_p"] = all_pvalues[gene]
 
-        # Apply multiple testing correction if requested
+        # Apply multiple testing correction if requested.
+        # Both methods correct within each gene across spots (consistent family).
         if params.getis_ord_correction != "none" and len(genes) > 1:
             if params.getis_ord_correction == "bonferroni":
-                corrected_alpha = params.getis_ord_alpha / len(genes)
-                corrected_z_threshold = norm.ppf(1 - corrected_alpha / 2)
-
                 for gene in genes:
                     p_values = all_pvalues[gene]
-                    obs_updates[f"{gene}_getis_ord_p_corrected"] = np.minimum(
-                        p_values * len(genes), 1.0
-                    )
+                    n_spots = len(p_values)
+                    p_corrected = np.minimum(p_values * n_spots, 1.0)
+                    obs_updates[f"{gene}_getis_ord_p_corrected"] = p_corrected
+
+                    corrected_alpha = params.getis_ord_alpha / n_spots
+                    corrected_z_threshold = norm.ppf(1 - corrected_alpha / 2)
 
                     z_scores = all_z_scores[gene]
+                    significant_mask = p_corrected < params.getis_ord_alpha
+                    getis_ord_results[gene]["n_significant_corrected"] = int(
+                        np.sum(significant_mask)
+                    )
                     getis_ord_results[gene]["n_hot_spots_corrected"] = int(
-                        np.sum(z_scores > corrected_z_threshold)
+                        np.sum((z_scores > corrected_z_threshold) & significant_mask)
                     )
                     getis_ord_results[gene]["n_cold_spots_corrected"] = int(
-                        np.sum(z_scores < -corrected_z_threshold)
+                        np.sum((z_scores < -corrected_z_threshold) & significant_mask)
                     )
 
             elif params.getis_ord_correction == "fdr_bh":
