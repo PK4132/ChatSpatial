@@ -344,11 +344,14 @@ async def test_perform_spatial_enrichment_partial_failure_still_returns_success(
 
     assert result.method == "spatial_enrichmap"
     assert result.n_gene_sets == 1
-    assert result.n_significant == 1
+    # Spatial enrichment has no significance testing — n_significant is always 0
+    assert result.n_significant == 0
+    assert result.n_successful_signatures == 1
     assert "sig_ok" in result.enrichment_scores
     assert "sig_ok_score" in adata.obs.columns
-    assert "enrichment_gene_sets" in adata.uns
-    assert list(adata.uns["enrichment_gene_sets"].keys()) == ["sig_ok"]
+    # Gene sets keyed by method to avoid cross-analysis overwrite
+    assert "enrichment_spatial_gene_sets" in adata.uns
+    assert list(adata.uns["enrichment_spatial_gene_sets"].keys()) == ["sig_ok"]
     assert captured["analysis_name"] == "enrichment_spatial"
     assert captured["results_keys"]["obs"] == ["sig_ok_score"]
     assert any("Failed to process 1 gene sets" in msg for msg in ctx.warnings)
@@ -701,7 +704,7 @@ def test_perform_gsea_with_ranking_key_persists_results(monkeypatch: pytest.Monk
     assert out.n_significant == 1
     assert set(out.gene_set_statistics) == {"GS_A"}
     assert "gsea_results" in adata.uns
-    assert "enrichment_gene_sets" in adata.uns
+    assert "enrichment_gsea_gene_sets" in adata.uns
     assert captured["analysis_name"] == "enrichment_gsea"
 
 
@@ -748,7 +751,7 @@ def test_perform_ssgsea_success_populates_obs_and_uns(monkeypatch: pytest.Monkey
     assert set(out.top_gene_sets) == {"GS_A", "GS_B"}
     assert "ssgsea_GS_A" in adata.obs.columns
     assert "ssgsea_GS_B" in adata.obs.columns
-    assert "enrichment_gene_sets" in adata.uns
+    assert "enrichment_ssgsea_gene_sets" in adata.uns
     assert captured["analysis_name"] == "enrichment_ssgsea"
 
 

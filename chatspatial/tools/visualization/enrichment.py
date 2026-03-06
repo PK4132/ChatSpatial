@@ -204,13 +204,22 @@ async def create_pathway_enrichment_visualization(
     # Get GSEA/ORA results from adata.uns
     gsea_key = getattr(params, "gsea_results_key", "gsea_results")
     if gsea_key not in adata.uns:
-        alt_keys = ["rank_genes_groups", "de_results", "pathway_enrichment"]
+        alt_keys = [
+            "ora_results",  # ORA stores its own results separately
+            "gsea_results",
+            "rank_genes_groups",
+            "de_results",
+            "pathway_enrichment",
+        ]
         for key in alt_keys:
             if key in adata.uns:
                 gsea_key = key
                 break
         else:
-            raise DataNotFoundError(f"GSEA results not found. Expected key: {gsea_key}")
+            raise DataNotFoundError(
+                f"Enrichment results not found. Expected key: {gsea_key}. "
+                "Run GSEA or ORA analysis first."
+            )
 
     gsea_results = adata.uns[gsea_key]
 
@@ -403,10 +412,25 @@ def _create_enrichmap_cross_correlation(
     em,
 ) -> plt.Figure:
     """Create EnrichMap cross-correlation visualization."""
-    if "enrichment_gene_sets" not in adata.uns:
-        raise DataNotFoundError("enrichment_gene_sets not found in adata.uns")
+    # Look for gene sets from any enrichment method (prefer spatial, then others)
+    gene_sets_key = None
+    for candidate in [
+        "enrichment_spatial_gene_sets",
+        "enrichment_gsea_gene_sets",
+        "enrichment_ora_gene_sets",
+        "enrichment_ssgsea_gene_sets",
+        "enrichment_gene_sets",  # legacy fallback
+    ]:
+        if candidate in adata.uns:
+            gene_sets_key = candidate
+            break
+    if gene_sets_key is None:
+        raise DataNotFoundError(
+            "Enrichment gene sets not found in adata.uns. "
+            "Run enrichment analysis first."
+        )
 
-    pathways = list(adata.uns["enrichment_gene_sets"].keys())
+    pathways = list(adata.uns[gene_sets_key].keys())
     if len(pathways) < 2:
         raise DataNotFoundError("Need at least 2 pathways for cross-correlation")
 

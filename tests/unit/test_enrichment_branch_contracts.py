@@ -520,7 +520,7 @@ async def test_perform_spatial_enrichment_normalizes_list_input_and_score_keys(
 
     assert out.method == "spatial_enrichmap"
     assert f"{expected_name}_score" in adata.obs.columns
-    assert expected_name in adata.uns["enrichment_gene_sets"]
+    assert expected_name in adata.uns["enrichment_spatial_gene_sets"]
 
 
 @pytest.mark.asyncio

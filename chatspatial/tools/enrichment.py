@@ -591,8 +591,8 @@ def perform_gsea(
         # Store full results DataFrame for visualization
         adata.uns["gsea_results"] = results_df
 
-        # Store gene set membership for validation
-        adata.uns["enrichment_gene_sets"] = gene_sets
+        # Store gene set membership keyed by method to avoid cross-analysis overwrite
+        adata.uns["enrichment_gsea_gene_sets"] = gene_sets
 
         # Store metadata for scientific provenance tracking
         store_analysis_metadata(
@@ -606,7 +606,7 @@ def perform_gsea(
                 "max_size": max_size,
                 "ranking_key": ranking_key,
             },
-            results_keys={"uns": ["gsea_results", "enrichment_gene_sets"]},
+            results_keys={"uns": ["gsea_results", "enrichment_gsea_gene_sets"]},
             statistics={
                 "n_gene_sets": len(gene_sets),
                 "n_significant": len(
@@ -834,12 +834,14 @@ def perform_ora(
     ora_df = ora_df.sort_values("pvalue")
 
     adata.uns["ora_results"] = ora_df
-    adata.uns["gsea_results"] = (
-        ora_df  # Also save as gsea_results for visualization compatibility
-    )
 
-    # Store gene set membership for validation
-    adata.uns["enrichment_gene_sets"] = gene_sets
+    # Store gene set membership keyed by method to avoid cross-analysis overwrite
+    adata.uns["enrichment_ora_gene_sets"] = gene_sets
+
+    # Count significant using the user-supplied pvalue_threshold (not a hardcoded 0.05)
+    n_significant = sum(
+        1 for p in adjusted_pvalues.values() if p is not None and p < pvalue_threshold
+    )
 
     # Store metadata for scientific provenance tracking
     store_analysis_metadata(
@@ -853,12 +855,10 @@ def perform_ora(
             "max_size": max_size,
             "n_query_genes": len(query_genes),
         },
-        results_keys={"uns": ["ora_results", "gsea_results", "enrichment_gene_sets"]},
+        results_keys={"uns": ["ora_results", "enrichment_ora_gene_sets"]},
         statistics={
             "n_gene_sets": len(gene_sets),
-            "n_significant": sum(
-                1 for p in adjusted_pvalues.values() if p is not None and p < 0.05
-            ),
+            "n_significant": n_significant,
             "n_query_genes": len(query_genes),
         },
         species=species,
@@ -869,8 +869,8 @@ def perform_ora(
     if data_id is not None:
         export_analysis_result(adata, data_id, "enrichment_ora")
 
-    # Filter all result dictionaries to only significant pathways (reduces MCP response size)
-    # Uses method-based FDR threshold: ORA = 0.05 (standard statistical threshold)
+    # Filter result dicts to significant pathways (reduces MCP response size)
+    # Use the user-supplied pvalue_threshold for consistency
     (
         filtered_statistics,
         filtered_scores,
@@ -881,15 +881,14 @@ def perform_ora(
         enrichment_scores,
         pvalues,
         adjusted_pvalues,
-        method="ora",  # Method-based FDR: 0.05 for ORA
+        method="ora",
+        fdr_threshold=pvalue_threshold,
     )
 
     return EnrichmentResult(
         method="ora",
         n_gene_sets=len(gene_sets),
-        n_significant=sum(
-            1 for p in adjusted_pvalues.values() if p is not None and p < 0.05
-        ),
+        n_significant=n_significant,
         enrichment_scores=filtered_scores,
         pvalues=filtered_pvals,
         adjusted_pvalues=filtered_adj_pvals,
@@ -1057,8 +1056,8 @@ def perform_ssgsea(
             for gs_name in scores_df.index:
                 adata.obs[f"ssgsea_{gs_name}"] = scores_T[gs_name].values
 
-            # Store gene set membership for validation
-            adata.uns["enrichment_gene_sets"] = gene_sets
+            # Store gene set membership keyed by method to avoid cross-analysis overwrite
+            adata.uns["enrichment_ssgsea_gene_sets"] = gene_sets
 
             # Store metadata for scientific provenance tracking
             obs_keys = [f"ssgsea_{gs_name}" for gs_name in scores_df.index]
@@ -1070,7 +1069,7 @@ def perform_ssgsea(
                     "min_size": min_size,
                     "max_size": max_size,
                 },
-                results_keys={"obs": obs_keys, "uns": ["enrichment_gene_sets"]},
+                results_keys={"obs": obs_keys, "uns": ["enrichment_ssgsea_gene_sets"]},
                 statistics={
                     "n_gene_sets": len(gene_sets),
                     "n_samples": adata.n_obs,
@@ -1409,8 +1408,8 @@ async def perform_spatial_enrichment(
             "n_genes": len(validated_gene_sets[sig_name]),
         }
 
-    # Store gene set membership for validation
-    adata.uns["enrichment_gene_sets"] = validated_gene_sets
+    # Store gene set membership keyed by method to avoid cross-analysis overwrite
+    adata.uns["enrichment_spatial_gene_sets"] = validated_gene_sets
 
     # Store metadata for scientific provenance tracking
     store_analysis_metadata(
@@ -1426,7 +1425,7 @@ async def perform_spatial_enrichment(
         },
         results_keys={
             "obs": score_columns,
-            "uns": ["enrichment_gene_sets"],  # gene_contributions not stored
+            "uns": ["enrichment_spatial_gene_sets"],
         },
         statistics={
             "n_gene_sets": len(validated_gene_sets),
@@ -1457,7 +1456,10 @@ async def perform_spatial_enrichment(
     return EnrichmentResult(
         method="spatial_enrichmap",
         n_gene_sets=len(validated_gene_sets),
-        n_significant=len(successful_signatures),
+        # No significance testing in spatial enrichment — n_significant=0
+        # (successful computation != statistical significance)
+        n_significant=0,
+        n_successful_signatures=len(successful_signatures),
         enrichment_scores=enrichment_scores,
         pvalues=pvalues,
         adjusted_pvalues=adjusted_pvalues,

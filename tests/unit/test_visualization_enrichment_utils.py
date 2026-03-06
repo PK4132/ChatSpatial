@@ -106,7 +106,7 @@ async def test_create_pathway_enrichment_visualization_routes_spatial(
 async def test_create_pathway_enrichment_visualization_requires_results_key(
     minimal_spatial_adata,
 ):
-    with pytest.raises(DataNotFoundError, match="GSEA results not found"):
+    with pytest.raises(DataNotFoundError, match="Enrichment results not found"):
         await viz_enrich.create_pathway_enrichment_visualization(
             minimal_spatial_adata,
             VisualizationParameters(plot_type="enrichment", subtype="barplot"),
@@ -540,14 +540,14 @@ def test_create_enrichmap_cross_correlation_validation_and_success(minimal_spati
         dpi=140,
     )
 
-    with pytest.raises(DataNotFoundError, match="enrichment_gene_sets not found"):
+    with pytest.raises(DataNotFoundError, match="Enrichment gene sets not found"):
         viz_enrich._create_enrichmap_cross_correlation(adata, params, "sample_1", em=object())
 
-    adata.uns["enrichment_gene_sets"] = {"PathA": {"G1"}}
+    adata.uns["enrichment_spatial_gene_sets"] = {"PathA": {"G1"}}
     with pytest.raises(DataNotFoundError, match="Need at least 2 pathways"):
         viz_enrich._create_enrichmap_cross_correlation(adata, params, "sample_1", em=object())
 
-    adata.uns["enrichment_gene_sets"] = {"PathA": {"G1"}, "PathB": {"G2"}}
+    adata.uns["enrichment_spatial_gene_sets"] = {"PathA": {"G1"}, "PathB": {"G2"}}
 
     class _PL:
         @staticmethod

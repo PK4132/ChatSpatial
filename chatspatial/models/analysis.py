@@ -340,11 +340,15 @@ class EnrichmentResult(BaseAnalysisResult):
     # Basic information - always included in MCP response
     method: str  # Method used (pathway_gsea, pathway_ora, etc.)
     n_gene_sets: int  # Number of gene sets analyzed
-    n_significant: int  # Number of significant gene sets
+    n_significant: int  # Number of statistically significant gene sets (0 when no test)
 
     # Top results - always included (compact, just pathway names)
     top_gene_sets: list[str]  # Top enriched gene sets (max 10)
     top_depleted_sets: list[str]  # Top depleted gene sets (max 10)
+
+    # Spatial enrichment: number of signatures successfully computed
+    # (distinct from n_significant which requires statistical testing)
+    n_successful_signatures: Optional[int] = None
 
     # Spatial info key - included
     spatial_scores_key: Optional[str] = None  # Key in adata.obsm
