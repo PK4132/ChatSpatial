@@ -739,10 +739,10 @@ async def analyze_cell_communication(
         params: Required - species, cell_type_key, and method
 
     Methods:
-        - liana: Multi-method consensus (default). Use liana_resource for database selection
+        - fastccc: Fast C++ implementation (default). Human and mouse supported
+        - liana: Multi-method consensus. Use liana_resource for database selection
         - cellphonedb: Statistical permutation-based analysis
         - cellchat_r: R-based CellChat (requires rpy2)
-        - fastccc: Fast C++ implementation (human only)
 
     Species configuration:
         - human: liana_resource="consensus" (default)
