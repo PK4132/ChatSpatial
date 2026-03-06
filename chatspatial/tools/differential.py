@@ -278,13 +278,15 @@ async def differential_expression(
             temp_adata.uns["rank_genes_groups"]["pvals_adj"][group1][:n_top_genes]
         )
 
-    # Calculate TRUE fold change from raw counts (Bug #3 Fix)
-    # Issue: scanpy's logfoldchanges uses mean(log(counts)) which is mathematically incorrect
-    # Solution: Calculate log(mean(counts1) / mean(counts2)) from raw data
-
-    # Use get_raw_data_source (single source of truth) for raw count data.
-    # Accept any valid source (adata.raw, layers["counts"], or adata.X).
+    # Calculate fold change from expression data
+    # Prefer raw counts for unbiased FC; fall back to normalized data with warning
     raw_result = get_raw_data_source(adata, prefer_complete_genes=True)
+    if not getattr(raw_result, "is_integer_counts", True):
+        await ctx.warning(
+            f"Using {raw_result.source} (not raw counts) for fold change "
+            "calculation. FC values reflect normalized expression ratios, "
+            "not count-based fold changes."
+        )
     raw_X = raw_result.X
     raw_var_names = raw_result.var_names
     log2fc_values = []

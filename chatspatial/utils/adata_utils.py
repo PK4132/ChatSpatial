@@ -162,7 +162,7 @@ def sample_expression_values(
 
     # Deterministic seed from matrix metadata for reproducibility
     nnz = X.nnz if sparse.issparse(X) else int(np.count_nonzero(X))
-    seed = hash((X.shape[0], X.shape[1], nnz, n_samples)) & 0xFFFFFFFF
+    seed = (X.shape[0] * 2654435761 ^ X.shape[1] * 40503 ^ nnz * 65537 ^ n_samples) & 0xFFFFFFFF
     rng = np.random.default_rng(seed)
 
     # Handle sparse matrices efficiently
@@ -1124,28 +1124,32 @@ def check_is_integer_counts(X: Any, sample_size: int = 1000) -> tuple[bool, bool
     """
     # Deterministic seed from matrix metadata (stable across calls)
     nnz = getattr(X, "nnz", None)
-    seed = hash((X.shape[0], X.shape[1], nnz, sample_size)) & 0xFFFFFFFF
+    seed = (X.shape[0] * 2654435761 ^ X.shape[1] * 40503 ^ int(nnz or 0) * 65537 ^ sample_size) & 0xFFFFFFFF
     rng = np.random.default_rng(seed)
 
     if sparse.issparse(X):
         data = X.data
         if data.size == 0:
             return True, False, False
-        k = min(sample_size, data.size)
-        idx = rng.integers(0, data.size, size=k)
-        sample = data[idx]
+        if sample_size >= data.size:
+            sample = data
+        else:
+            idx = rng.integers(0, data.size, size=sample_size)
+            sample = data[idx]
     else:
         arr = np.asarray(X)
         total = arr.size
         if total == 0:
             return True, False, False
-        k = min(sample_size, total)
-        flat = arr.ravel()
-        idx = rng.integers(0, total, size=k)
-        sample = flat[idx]
+        if sample_size >= total:
+            sample = arr.ravel()
+        else:
+            flat = arr.ravel()
+            idx = rng.integers(0, total, size=sample_size)
+            sample = flat[idx]
 
     has_negatives = bool(np.any(sample < 0))
-    has_decimals = not np.allclose(sample, np.round(sample), atol=1e-6)
+    has_decimals = not np.allclose(sample, np.round(sample), atol=1e-6, rtol=0)
     is_integer = not has_negatives and not has_decimals
 
     return is_integer, has_negatives, bool(has_decimals)

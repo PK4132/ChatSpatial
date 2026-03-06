@@ -299,6 +299,18 @@ async def _identify_spatial_genes_spatialde(
         {"total_counts": counts.sum(axis=1)}, index=counts.index
     )
 
+    # Filter out spots with zero total counts to avoid log(0) in regression
+    zero_count_mask = total_counts["total_counts"] == 0
+    if zero_count_mask.any():
+        n_zero = int(zero_count_mask.sum())
+        await ctx.warning(
+            f"{n_zero} spots have zero total counts for selected genes "
+            "and will be excluded from SpatialDE analysis."
+        )
+        counts = counts.loc[~zero_count_mask]
+        total_counts = total_counts.loc[~zero_count_mask]
+        coords = coords.loc[~zero_count_mask]
+
     # Apply official SpatialDE preprocessing workflow
     # Step 1: Variance stabilization
     norm_expr = NaiveDE.stabilize(counts.T).T

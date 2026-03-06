@@ -946,8 +946,21 @@ async def _analyze_communication_cellphonedb(
 
         # Use nanmin to find minimum p-value across all cell type pairs
         # A pair is significant if its minimum p-value < threshold (after correction)
-        # Convert to numeric to handle any non-numeric values
-        pval_array = pvalues.select_dtypes(include=[np.number]).values
+        # Identify cell-type pair columns (contain "|" separator)
+        # This avoids including non-p-value numeric metadata columns
+        ct_pair_cols = [c for c in pvalues.columns if "|" in str(c)]
+        if ct_pair_cols:
+            try:
+                pval_array = pvalues[ct_pair_cols].values.astype(float)
+            except (ValueError, TypeError):
+                raise ProcessingError(
+                    "CellPhoneDB p-values are not numeric."
+                )
+        else:
+            # Fallback: use numeric columns (may include metadata)
+            pval_array = pvalues.select_dtypes(
+                include=[np.number]
+            ).values
         if pval_array.shape[0] == 0 or pval_array.shape[1] == 0:
             raise ProcessingError("CellPhoneDB p-values are not numeric.")
 
@@ -985,25 +998,46 @@ async def _analyze_communication_cellphonedb(
                 # Get p-values for this L-R pair across all cell type pairs
                 pvals_this_lr = pval_array[i, :]
 
-                # Count uncorrected significance
-                n_uncorrected_sig += (pvals_this_lr < threshold).any()
+                # Filter NaN before multiple testing correction
+                valid_mask_lr = ~np.isnan(pvals_this_lr)
+                pvals_valid = pvals_this_lr[valid_mask_lr]
 
-                # Apply correction across cell type pairs for this L-R pair
-                reject_this_lr, pvals_corrected_this_lr, _, _ = multipletests(
-                    pvals_this_lr,
-                    alpha=threshold,
-                    method=correction_method,
-                    is_sorted=False,
-                    returnsorted=False,
+                # Count uncorrected significance (NaN-safe)
+                n_uncorrected_sig += (
+                    np.any(pvals_valid < threshold)
+                    if pvals_valid.size > 0
+                    else 0
                 )
 
-                # This L-R pair is significant if ANY cell type pair is significant after correction
-                if reject_this_lr.any():
+                if pvals_valid.size == 0:
+                    # All NaN — no valid p-values for this LR pair
+                    continue
+
+                if pvals_valid.size == 1:
+                    # Single p-value — no correction needed
+                    reject_this_lr = pvals_valid < threshold
+                    pvals_corrected_valid = pvals_valid.copy()
+                else:
+                    reject_this_lr, pvals_corrected_valid, _, _ = (
+                        multipletests(
+                            pvals_valid,
+                            alpha=threshold,
+                            method=correction_method,
+                            is_sorted=False,
+                            returnsorted=False,
+                        )
+                    )
+
+                # This L-R pair is significant if ANY cell type pair
+                # is significant after correction
+                if np.any(reject_this_lr):
                     mask[i] = True
                     n_corrected_sig += 1
 
                 # Store minimum corrected p-value for this L-R pair
-                min_pvals_corrected[i] = pvals_corrected_this_lr.min()
+                min_pvals_corrected[i] = float(
+                    np.nanmin(pvals_corrected_valid)
+                )
 
         n_significant_pairs = int(np.sum(mask))
 
@@ -1094,6 +1128,8 @@ async def _analyze_communication_cellphonedb(
             },
         )
 
+    except (ProcessingError, DataNotFoundError):
+        raise
     except Exception as e:
         raise ProcessingError(f"CellPhoneDB analysis failed: {e}") from e
     finally:

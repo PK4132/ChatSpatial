@@ -412,9 +412,13 @@ def _extract_result_summary(
         # Extract gene pair names from bivariate_morans_i keys (format: "GeneA_vs_GeneB")
         bivariate_results = result.get("bivariate_morans_i", {})
         summary["top_features"] = list(bivariate_results.keys())[:10]
-        # Significant correlations (|Moran's I| > 0.3)
-        significant = [k for k, v in bivariate_results.items() if abs(v) > 0.3]
-        summary["n_significant"] = len(significant)
+        # Heuristic threshold: |Moran's I| > 0.3 indicates notable spatial correlation
+        # (not a formal significance test; no p-value available for bivariate Moran's I)
+        notable = [k for k, v in bivariate_results.items() if abs(v) > 0.3]
+        summary["n_significant"] = len(notable)
+        summary["significance_note"] = (
+            "Based on |I| > 0.3 heuristic, not a formal statistical test"
+        )
         summary["summary_metrics"] = {
             "mean_bivariate_i": result.get("mean_bivariate_i", 0),
         }
