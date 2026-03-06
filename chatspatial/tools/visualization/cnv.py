@@ -202,14 +202,15 @@ async def _create_cnv_heatmap(
     # Check if infercnvpy is available (needed for visualization)
     require("infercnvpy", feature="CNV heatmap visualization")
 
-    # For Numbat data, temporarily copy to X_cnv for visualization
+    # For Numbat data, create a working copy with X_cnv mapped from numbat key
+    # so infercnvpy can consume it without polluting the original adata.
     if cnv_method == "numbat":
         if context:
             await context.info(
                 "Converting Numbat CNV data to infercnvpy format for visualization"
             )
+        adata = adata.copy()
         adata.obsm["X_cnv"] = adata.obsm["X_cnv_numbat"]
-        # Also ensure cnv metadata exists for infercnvpy plotting
         if "cnv" not in adata.uns:
             adata.uns["cnv"] = {
                 "genomic_positions": False,

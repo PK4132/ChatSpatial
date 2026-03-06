@@ -364,9 +364,6 @@ async def _create_multi_feature_plot(
         use_tight_layout=False,
     )
 
-    # Temporary column for expression values
-    temp_key = "_feature_viz_temp_99"
-
     for i, feature in enumerate(features):
         if i >= len(axes):
             break
@@ -392,12 +389,11 @@ async def _create_multi_feature_plot(
                 vmax = np.percentile(values[values > 0], 95)
 
             if basis == "spatial":
-                # Use plot_spatial_feature for spatial plots
-                adata.obs[temp_key] = values
+                # Pass values directly to avoid temporary obs column
                 plot_spatial_feature(
                     adata,
                     ax=ax,
-                    feature=temp_key,
+                    values=values,
                     params=params,
                     show_colorbar=False,
                 )
@@ -489,10 +485,6 @@ async def _create_multi_feature_plot(
         if not params.show_axes:
             ax.axis("off")
 
-    # Clean up temporary column
-    if temp_key in adata.obs:
-        del adata.obs[temp_key]
-
     # Adjust spacing
     fig.subplots_adjust(
         top=0.92,
@@ -565,7 +557,6 @@ async def _create_lr_pairs_visualization(
         use_tight_layout=True,
     )
 
-    temp_key = "_lr_viz_temp_99"
     ax_idx = 0
 
     for ligand, receptor in available_pairs:
@@ -585,9 +576,12 @@ async def _create_lr_pairs_visualization(
         if ax_idx < len(axes):
             ax = axes[ax_idx]
             if basis == "spatial":
-                adata.obs[temp_key] = ligand_expr
                 plot_spatial_feature(
-                    adata, ax=ax, feature=temp_key, params=params, show_colorbar=False
+                    adata,
+                    ax=ax,
+                    values=ligand_expr,
+                    params=params,
+                    show_colorbar=False,
                 )
                 if params.show_colorbar and ax.collections:
                     divider = make_axes_locatable(ax)
@@ -620,9 +614,12 @@ async def _create_lr_pairs_visualization(
         if ax_idx < len(axes):
             ax = axes[ax_idx]
             if basis == "spatial":
-                adata.obs[temp_key] = receptor_expr
                 plot_spatial_feature(
-                    adata, ax=ax, feature=temp_key, params=params, show_colorbar=False
+                    adata,
+                    ax=ax,
+                    values=receptor_expr,
+                    params=params,
+                    show_colorbar=False,
                 )
                 if params.show_colorbar and ax.collections:
                     divider = make_axes_locatable(ax)
@@ -679,10 +676,6 @@ async def _create_lr_pairs_visualization(
             p = np.poly1d(z)
             ax.plot(ligand_expr, p(ligand_expr), "r--", alpha=0.8)
             ax_idx += 1
-
-    # Clean up
-    if temp_key in adata.obs:
-        del adata.obs[temp_key]
 
     fig.subplots_adjust(top=0.92, wspace=0.1, hspace=0.3, right=0.98)
     return fig

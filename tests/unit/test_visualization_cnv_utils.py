@@ -223,8 +223,9 @@ async def test_cnv_heatmap_numbat_aggregated_branch(minimal_spatial_adata, monke
         context=ctx,
     )
 
-    assert "X_cnv" in adata.obsm
-    assert "cnv" in adata.uns
+    # After fix: original adata should NOT be mutated (copy is used internally)
+    assert "X_cnv" not in adata.obsm
+    assert "cnv" not in adata.uns
     assert "clone" in fig.axes[0].get_ylabel()
     assert any("Converting Numbat CNV data" in msg for msg in ctx.infos)
     fig.clf()

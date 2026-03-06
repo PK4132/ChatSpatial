@@ -657,22 +657,23 @@ async def _create_palantir_results(
             # CellRank returns ndarray - use argmax
             dominant_fate = fate_probs.argmax(axis=1)
 
-        adata.obs["_dominant_fate"] = dominant_fate.astype(str)
-
-        sc.pl.embedding(
-            adata,
-            basis=basis,
-            color="_dominant_fate",
-            ax=ax,
-            show=False,
-            frameon=params.show_axes,
-            title="Dominant Fate",
-        )
-        if basis == "spatial":
-            ax.invert_yaxis()
-
-        # Clean up temporary column
-        del adata.obs["_dominant_fate"]
+        _fate_temp_key = "_dominant_fate"
+        adata.obs[_fate_temp_key] = dominant_fate.astype(str)
+        try:
+            sc.pl.embedding(
+                adata,
+                basis=basis,
+                color=_fate_temp_key,
+                ax=ax,
+                show=False,
+                frameon=params.show_axes,
+                title="Dominant Fate",
+            )
+            if basis == "spatial":
+                ax.invert_yaxis()
+        finally:
+            if _fate_temp_key in adata.obs.columns:
+                del adata.obs[_fate_temp_key]
 
     title = params.title or "Palantir Trajectory Analysis"
     fig.suptitle(title, fontsize=14, y=1.02)

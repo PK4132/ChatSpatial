@@ -160,24 +160,32 @@ def sample_expression_values(
     # Get the data matrix
     X = adata.layers[layer] if layer is not None else adata.X
 
+    # Deterministic seed from matrix metadata for reproducibility
+    nnz = X.nnz if sparse.issparse(X) else int(np.count_nonzero(X))
+    seed = hash((X.shape[0], X.shape[1], nnz, n_samples)) & 0xFFFFFFFF
+    rng = np.random.default_rng(seed)
+
     # Handle sparse matrices efficiently
     if sparse.issparse(X):
-        # For sparse matrices, sample from .data array (non-zero values only)
-        # This is efficient as it doesn't require converting to dense
-        # Note: All scipy sparse matrices have .data attribute
-        if len(X.data) > 0:
-            return X.data[: min(n_samples, len(X.data))]
+        # Sample from .data array (non-zero values only)
+        data = X.data
+        if len(data) > 0:
+            k = min(n_samples, len(data))
+            idx = rng.integers(0, len(data), size=k)
+            return data[idx]
         else:
-            # Empty sparse matrix - return zeros without densifying.
+            # Empty sparse matrix
             total_values = int(X.shape[0]) * int(X.shape[1])
             return np.zeros(
                 min(n_samples, total_values),
                 dtype=getattr(X, "dtype", float),
             )
     else:
-        # For dense matrices, ravel avoids unnecessary copies.
+        # For dense matrices, sample random positions
         arr = np.asarray(X).ravel()
-        return arr[: min(n_samples, arr.size)]
+        k = min(n_samples, arr.size)
+        idx = rng.integers(0, arr.size, size=k)
+        return arr[idx]
 
 
 def require_spatial_coords(

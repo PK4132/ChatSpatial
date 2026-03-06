@@ -69,8 +69,9 @@ async def test_create_multi_gene_visualization_spatial_success_and_cleanup(
         else np.linspace(1.0, 0.0, _adata.n_obs),
     )
 
-    def _plot_spatial(_adata, ax, feature, params, show_colorbar=False):
-        ax.scatter(_adata.obsm["spatial"][:, 0], _adata.obsm["spatial"][:, 1], c=_adata.obs[feature])
+    def _plot_spatial(_adata, ax, values=None, params=None, show_colorbar=False, **_kw):
+        vals = values if values is not None else np.zeros(_adata.n_obs)
+        ax.scatter(_adata.obsm["spatial"][:, 0], _adata.obsm["spatial"][:, 1], c=vals)
 
     monkeypatch.setattr(viz_mg, "plot_spatial_feature", _plot_spatial)
 
@@ -86,7 +87,8 @@ async def test_create_multi_gene_visualization_spatial_success_and_cleanup(
     ctx = DummyCtx()
     fig = await viz_mg.create_multi_gene_visualization(adata, params, context=ctx)
 
-    assert "multi_gene_expr_temp_viz_99_unique" not in adata.obs.columns
+    # No temporary obs columns should be created (values= is used directly)
+    assert all(not col.startswith("_") for col in adata.obs.columns)
     assert any("Visualizing 2 genes on spatial" in msg for msg in ctx.infos)
     assert "gene_0" in fig.axes[0].get_title()
     fig.clf()
@@ -124,9 +126,10 @@ async def test_create_multi_gene_visualization_umap_branch(minimal_spatial_adata
         ),
         context=DummyCtx(),
     )
-    assert captured["color"] == "multi_gene_expr_temp_viz_99_unique"
+    assert captured["color"] == "_multi_gene_umap_temp"
     assert captured["vmax"] >= captured["vmin"]
-    assert "multi_gene_expr_temp_viz_99_unique" not in adata.obs.columns
+    # try/finally ensures temp column is cleaned up even on error
+    assert "_multi_gene_umap_temp" not in adata.obs.columns
     fig.clf()
 
 
@@ -199,8 +202,9 @@ async def test_create_lr_pairs_visualization_limits_pairs_and_cleans_temp(
     monkeypatch.setattr(
         viz_mg,
         "plot_spatial_feature",
-        lambda _adata, ax, feature, params, show_colorbar=False: ax.scatter(
-            _adata.obsm["spatial"][:, 0], _adata.obsm["spatial"][:, 1], c=_adata.obs[feature]
+        lambda _adata, ax, values=None, params=None, show_colorbar=False, **_kw: ax.scatter(
+            _adata.obsm["spatial"][:, 0], _adata.obsm["spatial"][:, 1],
+            c=values if values is not None else np.zeros(_adata.n_obs),
         ),
     )
 
@@ -216,7 +220,8 @@ async def test_create_lr_pairs_visualization_limits_pairs_and_cleans_temp(
         context=ctx,
     )
     assert any("Limiting to first 4" in msg for msg in ctx.warnings)
-    assert "lr_expr_temp_viz_99_unique" not in adata.obs.columns
+    # No temporary obs columns created (values= passed directly)
+    assert all(not col.startswith("_") for col in adata.obs.columns)
     fig.clf()
 
 
@@ -240,8 +245,9 @@ async def test_create_lr_pairs_visualization_covers_scaling_colorbar_and_pearson
     monkeypatch.setattr(
         viz_mg,
         "plot_spatial_feature",
-        lambda _adata, ax, feature, params, show_colorbar=False: ax.scatter(
-            _adata.obsm["spatial"][:, 0], _adata.obsm["spatial"][:, 1], c=_adata.obs[feature]
+        lambda _adata, ax, values=None, params=None, show_colorbar=False, **_kw: ax.scatter(
+            _adata.obsm["spatial"][:, 0], _adata.obsm["spatial"][:, 1],
+            c=values if values is not None else np.zeros(_adata.n_obs),
         ),
     )
 

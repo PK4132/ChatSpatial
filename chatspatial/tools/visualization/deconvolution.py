@@ -597,8 +597,6 @@ async def _create_spatial_multi_deconvolution(
         default_title=f"{data.method.upper()} Cell Type Proportions",
     )
 
-    temp_feature_key = "_deconv_viz_temp"
-
     for i, cell_type in enumerate(top_cell_types):
         if i < len(axes):
             ax = axes[i]
@@ -608,11 +606,9 @@ async def _create_spatial_multi_deconvolution(
             if pd.isna(proportions_values).any():
                 proportions_values = pd.Series(proportions_values).fillna(0).values
 
-            adata.obs[temp_feature_key] = proportions_values
-
             if "spatial" in adata.obsm:
                 plot_spatial_feature(
-                    adata, feature=temp_feature_key, ax=ax, params=params
+                    adata, values=proportions_values, ax=ax, params=params
                 )
                 ax.set_title(cell_type)
                 ax.invert_yaxis()
@@ -626,9 +622,6 @@ async def _create_spatial_multi_deconvolution(
                 ax.set_title(cell_type)
                 ax.set_xlabel("Spots (sorted)")
                 ax.set_ylabel("Proportion")
-
-    if temp_feature_key in adata.obs.columns:
-        del adata.obs[temp_feature_key]
 
     fig.subplots_adjust(top=0.92, wspace=0.1, hspace=0.3, right=0.98)
     return fig

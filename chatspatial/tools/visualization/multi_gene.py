@@ -92,9 +92,6 @@ async def create_multi_gene_visualization(
         use_tight_layout=False,
     )
 
-    # Use unique temporary column name to avoid conflicts
-    temp_feature_key = "multi_gene_expr_temp_viz_99_unique"
-
     for i, gene in enumerate(available_genes):
         if i < len(axes):
             ax = axes[i]
@@ -106,9 +103,6 @@ async def create_multi_gene_visualization(
                 gene_expr = np.log1p(gene_expr)
             elif params.color_scale == "sqrt":
                 gene_expr = np.sqrt(gene_expr)
-
-            # Add temporary column
-            adata.obs[temp_feature_key] = gene_expr
 
             # Set color limits (percentile-based for sparse data)
             vmin = (
@@ -123,11 +117,11 @@ async def create_multi_gene_visualization(
                 vmax = np.percentile(gene_expr[gene_expr > 0], 95)
 
             if basis == "spatial":
-                # Spatial visualization
+                # Pass values directly to avoid temporary obs column
                 plot_spatial_feature(
                     adata,
                     ax=ax,
-                    feature=temp_feature_key,
+                    values=gene_expr,
                     params=params,
                     show_colorbar=False,
                 )
@@ -150,25 +144,27 @@ async def create_multi_gene_visualization(
                 ax.invert_yaxis()
 
             else:  # umap
-                # UMAP visualization
-                sc.pl.umap(
-                    adata,
-                    color=temp_feature_key,
-                    cmap=params.colormap,
-                    ax=ax,
-                    show=False,
-                    frameon=False,
-                    vmin=vmin,
-                    vmax=vmax,
-                    colorbar_loc="right" if params.show_colorbar else None,
-                )
+                # scanpy requires obs column for color= parameter
+                _umap_temp_key = "_multi_gene_umap_temp"
+                adata.obs[_umap_temp_key] = gene_expr
+                try:
+                    sc.pl.umap(
+                        adata,
+                        color=_umap_temp_key,
+                        cmap=params.colormap,
+                        ax=ax,
+                        show=False,
+                        frameon=False,
+                        vmin=vmin,
+                        vmax=vmax,
+                        colorbar_loc="right" if params.show_colorbar else None,
+                    )
+                finally:
+                    if _umap_temp_key in adata.obs.columns:
+                        del adata.obs[_umap_temp_key]
 
             if params.add_gene_labels:
                 ax.set_title(gene, fontsize=12)
-
-    # Clean up temporary column
-    if temp_feature_key in adata.obs:
-        del adata.obs[temp_feature_key]
 
     # Adjust spacing
     fig.subplots_adjust(top=0.92, wspace=0.1, hspace=0.3, right=0.98)
@@ -300,12 +296,9 @@ async def create_lr_pairs_visualization(
         use_tight_layout=True,
     )
 
-    # Use unique temporary column name
-    temp_feature_key = "lr_expr_temp_viz_99_unique"
     ax_idx = 0
 
     for _pair_idx, (ligand, receptor) in enumerate(available_pairs):
-        # Let errors propagate - don't silently create placeholder images
         # Get expression data using unified utility
         ligand_expr = get_gene_expression(adata, ligand)
         receptor_expr = get_gene_expression(adata, receptor)
@@ -321,11 +314,10 @@ async def create_lr_pairs_visualization(
         # Plot ligand
         if ax_idx < len(axes) and "spatial" in adata.obsm:
             ax = axes[ax_idx]
-            adata.obs[temp_feature_key] = ligand_expr
             plot_spatial_feature(
                 adata,
                 ax=ax,
-                feature=temp_feature_key,
+                values=ligand_expr,
                 params=params,
                 show_colorbar=False,
             )
@@ -347,11 +339,10 @@ async def create_lr_pairs_visualization(
         # Plot receptor
         if ax_idx < len(axes) and "spatial" in adata.obsm:
             ax = axes[ax_idx]
-            adata.obs[temp_feature_key] = receptor_expr
             plot_spatial_feature(
                 adata,
                 ax=ax,
-                feature=temp_feature_key,
+                values=receptor_expr,
                 params=params,
                 show_colorbar=False,
             )
@@ -401,10 +392,6 @@ async def create_lr_pairs_visualization(
             ax.plot(ligand_expr, p(ligand_expr), "r--", alpha=0.8)
 
             ax_idx += 1
-
-    # Clean up temporary column
-    if temp_feature_key in adata.obs:
-        del adata.obs[temp_feature_key]
 
     # Adjust spacing
     fig.subplots_adjust(top=0.92, wspace=0.1, hspace=0.3, right=0.98)
