@@ -20,7 +20,11 @@ from ..models.data import SpatialPlatform
 if TYPE_CHECKING:
     from zarr.core.array import Array
     from zarr.core.group import Group
-from .adata_utils import ensure_unique_var_names, get_adata_profile
+from .adata_utils import (
+    check_is_integer_counts,
+    ensure_unique_var_names,
+    get_adata_profile,
+)
 from .dependency_manager import is_available
 from .exceptions import (
     DataCompatibilityError,
@@ -102,8 +106,22 @@ def _load_xenium_zarr(data_path: str) -> Any:
 
     adata = ad.AnnData(X=X, obs=obs, var=var)
 
-    # Set spatial coordinates (cell_centroid_x, cell_centroid_y)
-    adata.obsm["spatial"] = cell_summary[:, :2]
+    # Set spatial coordinates using column names instead of hardcoded indices
+    x_col = None
+    y_col = None
+    for i, name in enumerate(column_names):
+        lower = name.lower()
+        if x_col is None and ("centroid_x" in lower or lower == "x_centroid"):
+            x_col = i
+        elif y_col is None and ("centroid_y" in lower or lower == "y_centroid"):
+            y_col = i
+    if x_col is not None and y_col is not None:
+        adata.obsm["spatial"] = np.column_stack(
+            [cell_summary[:, x_col], cell_summary[:, y_col]]
+        )
+    else:
+        # Fallback: assume first two columns are x, y
+        adata.obsm["spatial"] = cell_summary[:, :2]
 
     return adata
 
@@ -438,17 +456,27 @@ async def load_spatial_data(
     import anndata as ad
 
     if adata.raw is None:
-        # Save current data state to .raw
-        # This ensures downstream tools always have access to original loaded data
-        # Note: Raw only stores X, var, varm - obs is NOT stored in raw
         adata.raw = ad.AnnData(X=adata.X.copy(), var=adata.var)
 
-    # Also ensure layers["counts"] exists for scVI-tools compatibility
-    # Reference raw.X instead of creating another copy - safe because:
-    # 1. adata.copy() creates deep copies of layers (won't affect original raw.X)
-    # 2. Preprocessing modifies adata.X, not layers["counts"]
+    # Validate whether the data looks like raw integer counts.
+    # If the loaded X is already normalized (non-integer or has negatives),
+    # do NOT create a counts layer — it would mislead count-based models
+    # (scVI, scANVI, Cell2location, etc.).
+    is_int, has_neg, _ = check_is_integer_counts(adata.X)
     if "counts" not in adata.layers:
-        adata.layers["counts"] = adata.raw.X
+        if is_int and not has_neg:
+            # Data appears to be raw counts — safe to label as such
+            adata.layers["counts"] = adata.raw.X
+        else:
+            logger.info(
+                "Loaded data does not appear to contain raw integer counts "
+                "(has_decimals=%s, has_negatives=%s). "
+                "Skipping layers['counts'] creation. "
+                "Run preprocess_data() to generate a proper counts layer "
+                "from the original data.",
+                not is_int,
+                has_neg,
+            )
 
     # Get metadata profile for LLM understanding
     profile = get_adata_profile(adata)

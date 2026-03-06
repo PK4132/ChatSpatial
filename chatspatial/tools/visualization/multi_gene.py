@@ -628,11 +628,26 @@ async def create_spatial_interaction_visualization(
         ax.set_xlabel("Spatial X")
         ax.set_ylabel("Spatial Y")
         ax.set_title(
-            f"Spatial Ligand-Receptor Interactions\n({interaction_count} connections shown)",
+            "Spatial Ligand-Receptor Co-expression (Exploratory)\n"
+            f"({interaction_count} proximity connections shown)",
             fontsize=14,
             fontweight="bold",
         )
         ax.set_aspect("equal")
+
+        # Add method note so users don't interpret proximity lines as
+        # statistically validated interactions
+        ax.text(
+            0.01,
+            0.01,
+            "Lines = spatial proximity, not statistical significance.\n"
+            "Use cell communication analysis for formal testing.",
+            transform=ax.transAxes,
+            fontsize=7,
+            verticalalignment="bottom",
+            fontstyle="italic",
+            alpha=0.6,
+        )
         ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
 
         plt.tight_layout()

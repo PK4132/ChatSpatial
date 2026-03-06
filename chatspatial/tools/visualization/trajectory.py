@@ -13,6 +13,7 @@ This module contains:
 from typing import TYPE_CHECKING, Optional
 
 import matplotlib.pyplot as plt
+import numpy as np
 import scanpy as sc
 
 if TYPE_CHECKING:
@@ -130,8 +131,13 @@ async def _create_trajectory_pseudotime_plot(
 
     validate_obs_column(adata, pseudotime_key, "Pseudotime")
 
-    # Check if RNA velocity is available
-    has_velocity = "velocity_graph" in adata.uns
+    # Check if RNA velocity graph is a real transition matrix (not a bool placeholder)
+    import scipy.sparse
+
+    vg = adata.uns.get("velocity_graph")
+    has_velocity = vg is not None and (
+        scipy.sparse.issparse(vg) or isinstance(vg, np.ndarray)
+    )
 
     # Determine basis for plotting
     basis = infer_basis(adata, preferred=params.basis)

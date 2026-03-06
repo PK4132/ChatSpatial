@@ -403,6 +403,6 @@ async def test_spatial_interaction_visualization_success_and_missing_gene_warnin
         ),
         context=ctx,
     )
-    assert "Spatial Ligand-Receptor Interactions" in fig.axes[0].get_title()
+    assert "Ligand-Receptor" in fig.axes[0].get_title()
     assert any("not found in expression data" in msg for msg in ctx.warnings)
     fig.clf()
