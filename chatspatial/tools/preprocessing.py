@@ -150,6 +150,14 @@ async def preprocess_data(
             "This may indicate non-standard gene naming or imaging-based data."
         )
 
+    # Re-validate after filtering — aggressive thresholds can empty the dataset
+    if adata.n_obs == 0 or adata.n_vars == 0:
+        raise DataError(
+            f"No data remaining after filtering: {adata.n_obs} cells, "
+            f"{adata.n_vars} genes. Relax filtering parameters "
+            f"(filter_genes_min_cells, filter_cells_min_genes, filter_mito_pct)."
+        )
+
     # Apply spot subsampling if requested
     if params.subsample_spots is not None and params.subsample_spots < adata.n_obs:
         sc.pp.subsample(
@@ -387,7 +395,8 @@ async def preprocess_data(
                 )
 
             # Reconstruct sparse matrix and run SCTransform in R
-            ro.r("""
+            ro.r(
+                """
                 library(Matrix)
                 library(sctransform)
 
@@ -418,7 +427,8 @@ async def preprocess_data(
                 residual_variance <- vst_result$gene_attr$residual_variance
                 # Extract gene names that survived SCTransform filtering
                 kept_genes <- rownames(vst_result$y)
-            """)
+            """
+            )
 
             # Extract results from R
             with localconverter(ro.default_converter + numpy2ri.converter):

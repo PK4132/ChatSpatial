@@ -253,11 +253,16 @@ async def _create_cnv_heatmap(
         # Get CNV matrix
         cnv_matrix = adata.obsm["X_cnv"]
 
+        # Normalize feature to a single string
+        feature = params.feature
+        if isinstance(feature, list):
+            feature = feature[0] if feature else None
+
         # Aggregate by feature (e.g., clone) for cleaner visualization
-        if params.feature and params.feature in adata.obs.columns:
+        if feature and feature in adata.obs.columns:
             # Group cells by feature and compute mean CNV per group
-            feature_values = adata.obs[params.feature]
-            unique_groups = sorted(feature_values.unique())
+            feature_values = adata.obs[feature]
+            unique_groups = sorted(feature_values.dropna().unique(), key=str)
 
             # Compute mean CNV for each group
             aggregated_cnv_list: list[Any] = []
@@ -301,12 +306,7 @@ async def _create_cnv_heatmap(
                     for label, size in zip(group_labels, group_sizes, strict=False)
                 ]
             )
-            feature_label = (
-                params.feature
-                if isinstance(params.feature, str)
-                else ", ".join(params.feature) if params.feature else ""
-            )
-            ax.set_ylabel(feature_label, fontsize=12, fontweight="bold")
+            ax.set_ylabel(feature, fontsize=12, fontweight="bold")
 
             # Set x-axis
             ax.set_xlabel("Genomic position (binned)", fontsize=12)

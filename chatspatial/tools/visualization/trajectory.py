@@ -640,7 +640,11 @@ async def _create_palantir_results(
 
         if isinstance(fate_probs, pd.DataFrame):
             # Palantir returns DataFrame - use idxmax
-            dominant_fate = fate_probs.idxmax(axis=1)
+            # All-NaN rows produce NaN from idxmax; label as "unassigned"
+            nan_rows = fate_probs.isna().all(axis=1)
+            dominant_fate = fate_probs.idxmax(axis=1).astype(object)
+            if nan_rows.any():
+                dominant_fate[nan_rows] = "unassigned"
         else:
             # CellRank returns ndarray - use argmax
             dominant_fate = fate_probs.argmax(axis=1)
@@ -648,7 +652,6 @@ async def _create_palantir_results(
             # NaN rows (failed computation) should not be assigned a fate
             nan_rows = np.isnan(fate_probs).any(axis=1)
             if nan_rows.any():
-                # Convert to object array to allow string labels
                 dominant_fate = dominant_fate.astype(object)
                 dominant_fate[nan_rows] = "unassigned"
 
