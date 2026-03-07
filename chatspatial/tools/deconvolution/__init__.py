@@ -439,12 +439,11 @@ async def _store_results(
     dominant_types[zero_mask] = "unassigned"
     spatial_adata.obs[dominant_key] = pd.Categorical(dominant_types)
 
-    # Build the full label space: proportions columns + "unassigned" if any
-    # zero-sum rows exist.  This keeps metadata (cell_types, n_cell_types)
-    # consistent with the actual labels in obs[dominant_key].
-    all_cell_types: list[str] = list(cell_types)
-    if zero_mask.any() and "unassigned" not in all_cell_types:
-        all_cell_types.append("unassigned")
+    # Note: "unassigned" is a label in obs[dominant_key] for zero-sum rows,
+    # NOT a column in the proportions matrix.  Metadata cell_types must
+    # match the proportions matrix columns exactly to avoid downstream
+    # DataFrame construction errors.
+    has_unassigned = bool(zero_mask.any())
 
     # Store metadata for provenance tracking
     analysis_key = _build_deconvolution_key(method, reference_data_id)
@@ -463,11 +462,12 @@ async def _store_results(
             "uns": [f"{proportions_key}_cell_types"],
         },
         statistics={
-            "n_cell_types": len(all_cell_types),
+            "n_cell_types": len(cell_types),
             "n_spots": len(full_proportions),
-            "cell_types": all_cell_types,
+            "cell_types": cell_types,
             "proportions_key": proportions_key,
             "dominant_type_key": dominant_key,
+            "has_unassigned_spots": has_unassigned,
         },
     )
 
@@ -492,8 +492,8 @@ async def _store_results(
         data_id=data_id,
         method=method,
         dominant_type_key=dominant_key,
-        n_cell_types=len(all_cell_types),
-        cell_types=all_cell_types,
+        n_cell_types=len(cell_types),
+        cell_types=cell_types,
         proportions_key=proportions_key,
         n_spots=stats.get("n_spots", 0),
         genes_used=stats.get("genes_used", stats.get("common_genes", 0)),

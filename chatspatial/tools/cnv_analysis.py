@@ -2,6 +2,7 @@
 Copy Number Variation (CNV) analysis tools for spatial transcriptomics data.
 """
 
+import glob
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -256,9 +257,7 @@ async def _infer_cnv_infercnvpy(
                 statistics["median_cnv"] = 0.0
             elif n_total <= 10_000_000:
                 # Small enough to compute exact median via dense conversion
-                statistics["median_cnv"] = float(
-                    np.median(cnv_matrix.toarray())
-                )
+                statistics["median_cnv"] = float(np.median(cnv_matrix.toarray()))
             else:
                 # Large matrix: merge sorted non-zero values with
                 # zero count to find exact median without densifying
@@ -274,13 +273,10 @@ async def _infer_cnv_infercnvpy(
                         return float(nz_sorted[idx - n_zeros])
 
                 if n_total % 2 == 1:
-                    statistics["median_cnv"] = _val_at(
-                        n_total // 2
-                    )
+                    statistics["median_cnv"] = _val_at(n_total // 2)
                 else:
                     statistics["median_cnv"] = (
-                        _val_at(n_total // 2 - 1)
-                        + _val_at(n_total // 2)
+                        _val_at(n_total // 2 - 1) + _val_at(n_total // 2)
                     ) / 2
 
             # Per-cell CNV scores: compute on sparse matrix
@@ -529,7 +525,8 @@ def _infer_cnv_numbat(
                 ro.globalenv["skip_nj"] = params.numbat_skip_nj
 
                 # Run Numbat via R (inside context!)
-                ro.r("""
+                ro.r(
+                    """
                     library(numbat)
                     library(dplyr)
 
@@ -575,23 +572,31 @@ def _infer_cnv_numbat(
                     }, error = function(e) {
                         stop(paste("Numbat execution failed:", e$message))
                     })
-                    """)
+                    """
+                )
 
         # Read results from output files (Numbat saves to TSV files, not R objects)
+        # The suffix (e.g., _2) is the iteration number and varies by run.
+        # Discover the actual iteration by finding clone_post_*.tsv files.
         import pandas as pd
 
-        # 1. Read clone posteriors (cell-level assignments)
-        clone_post_file = os.path.join(out_dir, "clone_post_2.tsv")
-        if not os.path.exists(clone_post_file):
-            raise DataNotFoundError(
-                f"Numbat output file not found: {clone_post_file}\n"
-                f"Expected output files in: {out_dir}"
-            )
+        clone_post_files = sorted(glob.glob(os.path.join(out_dir, "clone_post_*.tsv")))
+        if not clone_post_files:
+            raise DataNotFoundError(f"No Numbat clone_post output found in: {out_dir}")
+        # Use the highest iteration (last in sorted order)
+        clone_post_file = clone_post_files[-1]
+        # Extract iteration suffix (e.g., "2" from "clone_post_2.tsv")
+        iter_suffix = (
+            os.path.basename(clone_post_file)
+            .replace("clone_post_", "")
+            .replace(".tsv", "")
+        )
 
+        # 1. Read clone posteriors (cell-level assignments)
         clone_post = pd.read_csv(clone_post_file, sep="\t")
 
         # 2. Read genotype matrix (CNV states per segment)
-        geno_file = os.path.join(out_dir, "geno_2.tsv")
+        geno_file = os.path.join(out_dir, f"geno_{iter_suffix}.tsv")
         if not os.path.exists(geno_file):
             raise DataNotFoundError(
                 f"Numbat output file not found: {geno_file}\n"
@@ -601,13 +606,13 @@ def _infer_cnv_numbat(
         geno = pd.read_csv(geno_file, sep="\t")
 
         # 3. Read consensus segments (optional metadata)
-        segs_file = os.path.join(out_dir, "segs_consensus_2.tsv")
+        segs_file = os.path.join(out_dir, f"segs_consensus_{iter_suffix}.tsv")
         segs = None
         if os.path.exists(segs_file):
             segs = pd.read_csv(segs_file, sep="\t")
 
         # 4. Check for phylogeny tree (if skip_nj=FALSE)
-        tree_file = os.path.join(out_dir, "tree_final_2.rds")
+        tree_file = os.path.join(out_dir, f"tree_final_{iter_suffix}.rds")
         has_phylo = os.path.exists(tree_file)
 
         # Process genotype matrix for AnnData storage

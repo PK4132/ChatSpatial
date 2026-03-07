@@ -540,16 +540,18 @@ async def _run_pydeseq2(
     # Create pseudobulk aggregation
 
     # Build aggregation key
+    # Cast obs values to str for comparison (group1/group2 are already str
+    # from the .astype(str) on unique_groups above)
+    obs_group_str = adata.obs[group_key].astype(str)
     if group2 == "rest":
         # Binary comparison: group1 vs rest
-        # Use vectorized where() instead of apply(lambda) for efficiency
-        condition = np.where(adata.obs[group_key].to_numpy() == group1, group1, "rest")
+        condition = np.where(obs_group_str.to_numpy() == group1, group1, "rest")
         sample_values = adata.obs[sample_key].astype(str).to_numpy()
         raw_X_work = raw_X
     else:
         # Pairwise comparison: filter to only group1 and group2
-        mask = adata.obs[group_key].isin([group1, group2]).to_numpy()
-        condition = adata.obs.loc[mask, group_key].astype(str).to_numpy()
+        mask = obs_group_str.isin([group1, group2]).to_numpy()
+        condition = obs_group_str[mask].to_numpy()
         sample_values = adata.obs.loc[mask, sample_key].astype(str).to_numpy()
         raw_X_work = raw_X[mask]
 

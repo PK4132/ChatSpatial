@@ -650,7 +650,7 @@ def test_infer_cnv_numbat_missing_output_files_raises_processing_error(
 
     monkeypatch.setattr(__import__("tempfile"), "mkdtemp", _mkdtemp_missing)
 
-    with pytest.raises(ProcessingError, match="Numbat output file not found"):
+    with pytest.raises(ProcessingError, match="No Numbat clone_post output found"):
         cnv._infer_cnv_numbat(
             "d11",
             adata,
@@ -935,7 +935,7 @@ def test_infer_cnv_numbat_cleanup_failure_is_swallowed(
         lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("rm fail")),
     )
 
-    with pytest.raises(ProcessingError, match="Numbat output file not found"):
+    with pytest.raises(ProcessingError, match="No Numbat clone_post output found"):
         cnv._infer_cnv_numbat(
             "d17",
             adata,

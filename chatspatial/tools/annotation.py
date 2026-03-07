@@ -307,8 +307,14 @@ async def _annotate_with_singler(
                         f"{low_delta}/{n_deltas} cells have low "
                         f"confidence scores (delta < 0.05)"
                     )
-        except Exception:
-            pass  # Delta scores unavailable — confidence from scores only
+        except Exception as exc:
+            import logging
+
+            logging.getLogger(__name__).debug(
+                "Delta scores unavailable (%s: %s) — confidence from scores only",
+                type(exc).__name__,
+                exc,
+            )
 
     # Process results
     cell_types = list(best_labels)
@@ -322,11 +328,14 @@ async def _annotate_with_singler(
     confidence_scores: dict[str, float] = {}
 
     # Prefer delta scores (more meaningful confidence measure)
+    # delta→confidence: 1 - exp(-delta), clamped to [0, 1].
+    # Negative delta (second-best > best) → confidence 0.
     if delta_scores is not None:
         try:
             for i in range(n_cells):
                 if i < len(delta_scores) and delta_scores[i] is not None:
-                    per_cell_confidence[i] = round(1.0 - np.exp(-delta_scores[i]), 3)
+                    raw = 1.0 - np.exp(-delta_scores[i])
+                    per_cell_confidence[i] = round(max(0.0, raw), 3)
         except Exception:
             per_cell_confidence[:] = 0.0
 

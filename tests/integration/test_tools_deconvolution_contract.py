@@ -185,11 +185,12 @@ async def test_store_results_persists_expected_keys_and_calls_set_adata(
 
 @pytest.mark.integration
 @pytest.mark.asyncio
-async def test_store_results_includes_unassigned_when_zero_sum_rows_exist(
+async def test_store_results_handles_zero_sum_rows(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):
-    """When some spots have all-zero proportions, 'unassigned' must appear
-    in cell_types and n_cell_types to match the actual label space."""
+    """When some spots have all-zero proportions, 'unassigned' appears in
+    obs[dominant_key] but NOT in cell_types/n_cell_types (which must match
+    the proportions matrix columns exactly)."""
     adata = minimal_spatial_adata.copy()
     ctx = DummyCtx({"d1": adata})
 
@@ -201,7 +202,7 @@ async def test_store_results_includes_unassigned_when_zero_sum_rows_exist(
     )
     monkeypatch.setattr(deconv_module, "export_analysis_result", lambda *a, **k: None)
 
-    # First row all-zero → "unassigned"
+    # First row all-zero → "unassigned" in dominant type annotation
     proportions = pd.DataFrame(
         {
             "T": np.concatenate([[0.0], np.full(adata.n_obs - 1, 0.6)]),
@@ -220,15 +221,16 @@ async def test_store_results_includes_unassigned_when_zero_sum_rows_exist(
         ctx=ctx,
     )
 
-    # Result object must include "unassigned"
-    assert "unassigned" in result.cell_types
-    assert result.n_cell_types == 3  # T, B, unassigned
+    # cell_types/n_cell_types must match proportions matrix columns (no unassigned)
+    assert result.cell_types == ["T", "B"]
+    assert result.n_cell_types == 2
 
-    # Metadata statistics must be consistent
-    assert "unassigned" in captured["statistics"]["cell_types"]
-    assert captured["statistics"]["n_cell_types"] == 3
+    # Metadata cell_types must also match matrix columns
+    assert captured["statistics"]["cell_types"] == ["T", "B"]
+    assert captured["statistics"]["n_cell_types"] == 2
+    assert captured["statistics"]["has_unassigned_spots"] is True
 
-    # obs label must match
+    # But obs[dominant_key] labels zero-sum rows as "unassigned"
     dominant = adata.obs["dominant_celltype_flashdeconv"]
     assert "unassigned" in dominant.values
 
