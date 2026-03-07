@@ -633,7 +633,7 @@ def _add_spatial_info_to_adata(adata: Any, spatial_path: str) -> Any:
                 "-1" in bc for bc in positions.index[:10]
             ):
                 # Spatial has -1 suffix, expression doesn't
-                positions.index = positions.index.str.replace("-1", "")
+                positions.index = positions.index.str.replace(r"-1$", "", regex=True)
 
             # Try again
             common_barcodes = adata.obs_names.intersection(positions.index)

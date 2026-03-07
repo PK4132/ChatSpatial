@@ -885,7 +885,7 @@ async def _identify_domains_graphst(
 
                     for _ in range(max_iterations):
                         mid = (low + high) / 2
-                        sc.tl.leiden(adata_graphst, resolution=mid, random_state=0)
+                        sc.tl.leiden(adata_graphst, resolution=mid, random_state=params.graphst_random_seed)
                         current_clusters = len(adata_graphst.obs["leiden"].unique())
 
                         diff = abs(current_clusters - n_clusters)
@@ -905,7 +905,7 @@ async def _identify_domains_graphst(
                             break
 
                     # Final clustering with best resolution
-                    sc.tl.leiden(adata_graphst, resolution=best_res, random_state=0)
+                    sc.tl.leiden(adata_graphst, resolution=best_res, random_state=params.graphst_random_seed)
                     adata_graphst.obs["domain"] = adata_graphst.obs["leiden"]
 
                     # Apply refinement if requested

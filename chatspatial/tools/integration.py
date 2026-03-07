@@ -466,7 +466,7 @@ def integrate_multiple_samples(
 
                 # Run Scanorama integration
                 integrated, corrected_genes = scanorama.integrate(
-                    datasets, genes_list, dimred=100
+                    datasets, genes_list, dimred=n_pcs
                 )
 
                 # Reassemble in original row order (handles interleaved batches)
@@ -544,20 +544,25 @@ def integrate_multiple_samples(
     return combined
 
 
-def align_spatial_coordinates(
+def rescale_spatial_coordinates(
     combined_adata: ad.AnnData,
     batch_key: str = "batch",
     reference_batch: Optional[str] = None,
 ) -> ad.AnnData:
-    """Align spatial coordinates of multiple samples.
+    """Rescale spatial coordinates to a common scale across batches.
+
+    Applies z-score standardization using the reference batch's statistics,
+    so all batches share comparable coordinate ranges. This is NOT geometric
+    registration (rotation/translation) -- use spatial_registration tools
+    for that.
 
     Args:
         combined_adata: Combined AnnData containing multiple samples.
         batch_key: Batch information key in obs.
-        reference_batch: Reference batch for alignment. Uses first batch if None.
+        reference_batch: Reference batch for rescaling. Uses first batch if None.
 
     Returns:
-        AnnData with aligned spatial coordinates.
+        AnnData with rescaled spatial coordinates in obsm['spatial_aligned'].
 
     Raises:
         DataNotFoundError: If spatial coordinates are missing.
@@ -593,7 +598,7 @@ def align_spatial_coordinates(
     scaler = StandardScaler()
     ref_coords_scaled = scaler.fit_transform(ref_coords)
 
-    # Align spatial coordinates for each batch
+    # Rescale spatial coordinates for each batch
     aligned_coords = []
 
     for batch in batches:
@@ -821,11 +826,11 @@ async def integrate_samples(
         params=params,
     )
 
-    # Align spatial coordinates if requested and available
-    # Note: Spatial alignment is optional - BBKNN, Harmony, MNN, Scanorama
+    # Rescale spatial coordinates if requested and available
+    # Note: Spatial rescaling is optional - BBKNN, Harmony, MNN, Scanorama
     # work on gene expression/PCA space without spatial coordinates
     if params.align_spatial and get_spatial_key(combined_adata):
-        combined_adata = align_spatial_coordinates(
+        combined_adata = rescale_spatial_coordinates(
             combined_adata,
             batch_key=params.batch_key,
             reference_batch=params.reference_batch,

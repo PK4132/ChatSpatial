@@ -25,7 +25,7 @@ import numpy as np
 import scanpy as sc
 
 from .adata_utils import ensure_categorical
-from .exceptions import DataNotFoundError
+from .exceptions import DataError, DataNotFoundError
 
 if TYPE_CHECKING:
     import anndata as ad
@@ -88,6 +88,12 @@ def ensure_pca(
     # Adjust n_comps if necessary
     max_comps = min(adata.n_obs, adata.n_vars) - 1
     n_comps = min(n_comps, max_comps)
+
+    if n_comps < 1:
+        raise DataError(
+            f"Cannot compute PCA: dataset has {adata.n_obs} cells and "
+            f"{adata.n_vars} genes (need at least 2 of each)."
+        )
 
     sc.tl.pca(
         adata,

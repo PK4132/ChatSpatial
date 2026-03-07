@@ -26,6 +26,7 @@ import scanpy as sc
 from ...models.data import VisualizationParameters
 from ...utils.exceptions import (
     DataCompatibilityError,
+    DataError,
     DataNotFoundError,
     ParameterError,
     ProcessingError,
@@ -122,8 +123,8 @@ async def visualize_data(
         adata = await ctx.get_adata(data_id)
 
         # Validate AnnData object - basic validation
-        if adata.n_obs < 5:
-            raise DataNotFoundError("Dataset has too few cells (minimum 5 required)")
+        if adata.n_obs < 1:
+            raise DataNotFoundError("Dataset has no observations")
 
         # Only enforce gene count for plot types that read adata.X / var.
         # Integration, deconvolution, cnv, trajectory, statistics, etc.
@@ -157,7 +158,7 @@ async def visualize_data(
         plt.close("all")
 
         # Re-raise known error types directly
-        if isinstance(e, (DataNotFoundError, ParameterError, DataCompatibilityError)):
+        if isinstance(e, (DataError, DataNotFoundError, ParameterError, DataCompatibilityError)):
             raise
 
         # Wrap unknown errors in ProcessingError
