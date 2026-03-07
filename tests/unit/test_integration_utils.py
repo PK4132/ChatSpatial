@@ -85,6 +85,10 @@ def test_integrate_multiple_samples_scvi_metadata_uses_x_scvi_key(
     captured: dict[str, object] = {}
 
     monkeypatch.setattr(
+        "chatspatial.tools.integration.check_is_integer_counts",
+        lambda *_a, **_k: (False, False, False),
+    )
+    monkeypatch.setattr(
         "chatspatial.tools.integration.validate_adata_basics",
         lambda *_args, **_kwargs: None,
     )
@@ -438,6 +442,10 @@ def _install_classical_integration_mocks(
     captured: dict[str, object],
 ) -> None:
     monkeypatch.setattr(
+        "chatspatial.tools.integration.check_is_integer_counts",
+        lambda *_a, **_k: (False, False, False),
+    )
+    monkeypatch.setattr(
         "chatspatial.tools.integration.validate_adata_basics",
         lambda *_args, **_kwargs: None,
     )
@@ -668,24 +676,6 @@ def test_integrate_multiple_samples_cleans_var_na_and_diffmap_artifacts(
     assert not out.var["symbol"].isna().any()
     assert "X_diffmap" not in out.obsm
     assert "diffmap_evals" not in out.uns
-
-
-def test_integrate_multiple_samples_warns_for_high_nonraw_values(
-    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
-):
-    adata = minimal_spatial_adata.copy()
-    adata.obs["batch"] = np.where(np.arange(adata.n_obs) < adata.n_obs // 2, "b1", "b2")
-    adata.var["highly_variable"] = True
-    adata.X = adata.X.astype(np.float32) / 10.0 + 55.0
-
-    captured: dict[str, object] = {}
-    _install_classical_integration_mocks(monkeypatch, captured)
-    monkeypatch.setattr("scanpy.tl.umap", lambda *_args, **_kwargs: None)
-
-    with caplog.at_level(logging.WARNING):
-        integrate_multiple_samples(adata, method="not_real", batch_key="batch", n_pcs=3)
-
-    assert any("very high values" in rec.message for rec in caplog.records)
 
 
 def test_integrate_multiple_samples_raises_when_hvg_recalc_still_empty(
@@ -947,6 +937,10 @@ def test_integrate_multiple_samples_raises_when_too_few_pca_components_possible(
     adata.var["highly_variable"] = True
 
     monkeypatch.setattr(
+        "chatspatial.tools.integration.check_is_integer_counts",
+        lambda *_a, **_k: (False, False, False),
+    )
+    monkeypatch.setattr(
         "chatspatial.tools.integration.validate_adata_basics",
         lambda *_args, **_kwargs: None,
     )
@@ -1079,6 +1073,10 @@ def test_integrate_multiple_samples_deletes_incomplete_diffmap_artifacts_with_co
     _set_obsm(combined, "X_diffmap", np.zeros((20, 2), dtype=np.float32))
     combined.uns["diffmap_evals"] = np.array([1.0, 0.5], dtype=np.float32)
 
+    monkeypatch.setattr(
+        "chatspatial.tools.integration.check_is_integer_counts",
+        lambda *_a, **_k: (False, False, False),
+    )
     monkeypatch.setattr(
         "chatspatial.tools.integration.ad.concat",
         lambda *_args, **_kwargs: combined,

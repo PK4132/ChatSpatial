@@ -11,6 +11,7 @@ import scanpy as sc
 
 from ..models.analysis import IntegrationResult
 from ..models.data import IntegrationParameters
+from ..utils.adata_utils import check_is_integer_counts
 from ..utils.dependency_manager import require
 from ..utils.device_utils import get_accelerator
 from ..utils.exceptions import (
@@ -121,24 +122,10 @@ def integrate_multiple_samples(
                 f"Merged dataset is missing batch information key '{batch_key}'"
             )
 
-    # Validate input data is preprocessed
-    # Check if data appears to be raw (high values without log transformation)
-    max_val = combined.X.max() if hasattr(combined.X, "max") else np.max(combined.X)
-    min_val = combined.X.min() if hasattr(combined.X, "min") else np.min(combined.X)
-
-    # Raw count data typically has high integer values and no negative values
-    # Properly preprocessed data should be either:
-    # 1. Log-transformed (positive values, typically 0-15 range)
-    # 2. Scaled (centered around 0, can have negative values)
-    if min_val >= 0 and max_val > 100:
+    # Validate input data is preprocessed using SSOT integer check
+    is_int, _, _ = check_is_integer_counts(combined.X)
+    if is_int:
         raise DataError("Data appears to be raw counts. Run preprocessing first.")
-
-    # Check if data appears to be normalized (reasonable range after preprocessing)
-    if max_val > 50:
-        logger.warning(
-            f"Data has very high values (max={max_val:.1f}). "
-            "Consider log transformation if not already applied."
-        )
 
     # Validate data quality before processing
     validate_adata_basics(combined, min_obs=10, min_vars=10, check_empty_ratio=True)

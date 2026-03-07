@@ -539,7 +539,12 @@ def _create_spatial_lr_visualization(
             "No spatial communication scores found. Run spatial analysis first."
         )
 
-    n_pairs = min(params.plot_top_pairs or 6, len(data.lr_pairs), 6)
+    plot_top = (
+        params.plot_top_pairs
+        if params.plot_top_pairs is not None
+        else 6
+    )
+    n_pairs = min(plot_top, len(data.lr_pairs))
 
     # Use pre-computed top_lr_pairs from analysis (single source of truth)
     if data.top_lr_pairs:
@@ -595,7 +600,7 @@ def _create_spatial_lr_visualization(
             c=scores,
             cmap=params.colormap or "viridis",
             s=spot_size,
-            alpha=params.alpha or 0.8,
+            alpha=params.alpha if params.alpha is not None else 0.8,
             edgecolors="none",
         )
 
@@ -736,7 +741,7 @@ def _create_fallback_dotplot(
         s=top_df["dot_size"],
         c=top_df[expr_col] if expr_col else "steelblue",
         cmap=params.colormap or "viridis",
-        alpha=params.alpha or 0.8,
+        alpha=params.alpha if params.alpha is not None else 0.8,
         edgecolors="black",
         linewidths=0.5,
     )

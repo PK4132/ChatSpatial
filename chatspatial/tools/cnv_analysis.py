@@ -471,8 +471,11 @@ def _infer_cnv_numbat(
             f"Available uns keys: {list(adata.uns.keys())}"
         )
 
-    # Get expression matrix
-    count_mat = adata.X
+    # Get raw integer count matrix (required by Numbat)
+    from ..utils.adata_utils import get_raw_data_source
+
+    raw_result = get_raw_data_source(adata, require_integer_counts=True)
+    count_mat = raw_result.X
 
     # Prepare metadata
     gene_names = list(adata.var_names)

@@ -99,11 +99,11 @@ async def create_multi_gene_visualization(
             # Get gene expression using unified utility
             gene_expr = get_gene_expression(adata, gene)
 
-            # Apply color scaling
+            # Apply color scaling (clamp negatives to 0 for log/sqrt safety)
             if params.color_scale == "log":
-                gene_expr = np.log1p(gene_expr)
+                gene_expr = np.log1p(np.maximum(gene_expr, 0))
             elif params.color_scale == "sqrt":
-                gene_expr = np.sqrt(gene_expr)
+                gene_expr = np.sqrt(np.maximum(gene_expr, 0))
 
             # Set color limits (percentile-based for sparse data)
             vmin = (
@@ -300,13 +300,13 @@ async def create_lr_pairs_visualization(
         ligand_expr = get_gene_expression(adata, ligand)
         receptor_expr = get_gene_expression(adata, receptor)
 
-        # Apply color scaling
+        # Apply color scaling (clamp negatives to 0 for log/sqrt safety)
         if params.color_scale == "log":
-            ligand_expr = np.log1p(ligand_expr)
-            receptor_expr = np.log1p(receptor_expr)
+            ligand_expr = np.log1p(np.maximum(ligand_expr, 0))
+            receptor_expr = np.log1p(np.maximum(receptor_expr, 0))
         elif params.color_scale == "sqrt":
-            ligand_expr = np.sqrt(ligand_expr)
-            receptor_expr = np.sqrt(receptor_expr)
+            ligand_expr = np.sqrt(np.maximum(ligand_expr, 0))
+            receptor_expr = np.sqrt(np.maximum(receptor_expr, 0))
 
         # Plot ligand
         if ax_idx < len(axes) and get_spatial_key(adata) is not None:
@@ -431,11 +431,11 @@ async def create_gene_correlation_visualization(
     # Get expression matrix using unified utility
     expr_matrix = get_genes_expression(adata, available_genes)
 
-    # Apply color scaling
+    # Apply color scaling (clamp negatives to 0 for log/sqrt safety)
     if params.color_scale == "log":
-        expr_matrix = np.log1p(expr_matrix)
+        expr_matrix = np.log1p(np.maximum(expr_matrix, 0))
     elif params.color_scale == "sqrt":
-        expr_matrix = np.sqrt(expr_matrix)
+        expr_matrix = np.sqrt(np.maximum(expr_matrix, 0))
 
     # Create DataFrame for correlation
     expr_df = pd.DataFrame(expr_matrix, columns=available_genes)

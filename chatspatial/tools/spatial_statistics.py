@@ -668,7 +668,11 @@ def _analyze_co_occurrence(
     """
     cluster_key = params.cluster_key
     # Get interval from params (default: 50)
-    interval = params.co_occurrence_interval or 50
+    interval = (
+        params.co_occurrence_interval
+        if params.co_occurrence_interval is not None
+        else 50
+    )
 
     sq.gr.co_occurrence(adata, cluster_key=cluster_key, interval=interval)
 
@@ -1545,10 +1549,16 @@ def _analyze_local_moran(
                 )  # Raises ImportError with install instructions if missing
                 from statsmodels.stats.multitest import multipletests
 
-                _, p_corrected, _, _ = multipletests(
-                    p_values, alpha=alpha, method="fdr_bh"
+                # Filter NaN p-values before FDR correction
+                valid_mask = ~np.isnan(p_values)
+                p_corrected = np.full_like(p_values, np.nan)
+                if valid_mask.any():
+                    _, p_corrected[valid_mask], _, _ = multipletests(
+                        p_values[valid_mask], alpha=alpha, method="fdr_bh"
+                    )
+                significant = np.where(
+                    valid_mask, p_corrected < alpha, False
                 )
-                significant = p_corrected < alpha
             else:
                 significant = p_values < alpha
 

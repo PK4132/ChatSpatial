@@ -136,9 +136,15 @@ async def _annotate_with_singler(
                 "Applying log1p normalization for SingleR..."
             )
             test_mat = np.log1p(test_mat)
+        elif raw_result.has_negatives:
+            await ctx.warning(
+                "Data contains negative values (likely scaled). "
+                "Skipping log1p to avoid NaN for SingleR."
+            )
         elif "log1p" not in adata.uns:
             await ctx.warning(
-                "Data may not be log-normalized. " "Applying log1p for SingleR..."
+                "Data may not be log-normalized. "
+                "Applying log1p for SingleR..."
             )
             test_mat = np.log1p(test_mat)
 
@@ -208,8 +214,14 @@ async def _annotate_with_singler(
         else:
             ref_mat = reference_adata.X
 
-        # Ensure log-normalization for reference
-        if "log1p" not in reference_adata.uns:
+        # Ensure log-normalization for reference (skip if negatives present)
+        ref_min = ref_mat.min() if hasattr(ref_mat, "min") else np.min(ref_mat)
+        if ref_min < 0:
+            await ctx.warning(
+                "Reference data contains negative values (likely scaled). "
+                "Skipping log1p to avoid NaN for SingleR."
+            )
+        elif "log1p" not in reference_adata.uns:
             await ctx.warning(
                 "Reference data may not be log-normalized. Applying log1p..."
             )
@@ -2037,8 +2049,13 @@ def _softmax(scores_array: np.ndarray) -> np.ndarray:
     NaN values are treated as -inf (zero probability) so they don't
     propagate through the entire output.
     """
-    clean = np.where(np.isnan(scores_array), -np.inf, scores_array)
-    shifted = clean - np.nanmax(clean)
+    clean = np.where(
+        np.isnan(scores_array) | np.isinf(scores_array), -np.inf, scores_array
+    )
+    max_val = clean.max()
+    if np.isinf(max_val) and max_val < 0:
+        return np.zeros_like(scores_array, dtype=float)
+    shifted = clean - max_val
     exp_scores = np.exp(shifted)
     total = np.sum(exp_scores)
     if total == 0:
