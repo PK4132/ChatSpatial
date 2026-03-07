@@ -632,10 +632,20 @@ def _create_gsea_dotplot(
 
     n_top = getattr(params, "n_top_pathways", 10)
 
-    # Handle nested dict (multi-condition)
-    if isinstance(gsea_results, dict) and all(
-        isinstance(v, dict) for v in gsea_results.values()
-    ):
+    # Handle nested dict (multi-condition): {condition: {pathway: {stats}}}
+    # vs standard dict: {pathway: {NES, pval, ...}}
+    # Distinguish by checking if inner values are themselves dicts-of-dicts
+    is_nested = (
+        isinstance(gsea_results, dict)
+        and len(gsea_results) > 0
+        and all(isinstance(v, dict) for v in gsea_results.values())
+        and all(
+            all(isinstance(vv, dict) for vv in v.values())
+            for v in gsea_results.values()
+            if v  # skip empty inner dicts
+        )
+    )
+    if is_nested:
         df, x_col = _nested_dict_to_dataframe(gsea_results)
     else:
         df = _gsea_results_to_dataframe(gsea_results)

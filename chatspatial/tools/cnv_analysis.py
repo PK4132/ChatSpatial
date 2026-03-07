@@ -477,8 +477,8 @@ def _infer_cnv_numbat(
     raw_result = get_raw_data_source(adata, require_integer_counts=True)
     count_mat = raw_result.X
 
-    # Prepare metadata
-    gene_names = list(adata.var_names)
+    # Prepare metadata — gene names must match count_mat dimensions
+    gene_names = list(raw_result.var_names)
     cell_barcodes = list(adata.obs_names)
 
     # Identify reference cells (1-indexed for R)

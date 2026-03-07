@@ -378,12 +378,17 @@ def _create_moran_visualization(
     # Add vertical line at I=0 for reference
     ax.axvline(x=0, color="gray", linestyle="--", alpha=0.5, linewidth=1)
 
-    # Add annotation for significance
+    # Add annotation for significance (match the actual criterion used)
     n_significant = top_genes["significant"].sum()
+    sig_label = (
+        "FDR < 0.05"
+        if "pval_norm_fdr" in moran_data.columns
+        else "p < 0.05"
+    )
     ax.text(
         0.98,
         0.02,
-        f"* p < 0.05 ({n_significant}/{n_actual} significant)",
+        f"* {sig_label} ({n_significant}/{n_actual} significant)",
         transform=ax.transAxes,
         ha="right",
         va="bottom",
