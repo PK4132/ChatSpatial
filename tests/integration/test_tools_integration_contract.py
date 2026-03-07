@@ -71,7 +71,7 @@ async def test_integrate_samples_adds_integrated_dataset_and_exports(
         }
         return integrated
 
-    def fake_align_spatial_coordinates(combined_adata, batch_key, reference_batch):
+    def fake_rescale_spatial_coordinates(combined_adata, batch_key, reference_batch):
         called["align"] = {
             "batch_key": batch_key,
             "reference_batch": reference_batch,
@@ -86,7 +86,7 @@ async def test_integrate_samples_adds_integrated_dataset_and_exports(
         integration_module, "integrate_multiple_samples", fake_integrate_multiple_samples
     )
     monkeypatch.setattr(
-        integration_module, "align_spatial_coordinates", fake_align_spatial_coordinates
+        integration_module, "rescale_spatial_coordinates", fake_rescale_spatial_coordinates
     )
     monkeypatch.setattr(
         integration_module, "export_analysis_result", fake_export_analysis_result

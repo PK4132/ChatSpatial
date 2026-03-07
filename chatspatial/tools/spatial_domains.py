@@ -229,7 +229,9 @@ async def identify_spatial_domains(
 
         # Store domain labels in original adata
         # Suffix encodes method + distinguishing param for coexistence
-        suffix = _build_domain_suffix(params.method, params.resolution, params.n_domains)
+        suffix = _build_domain_suffix(
+            params.method, params.resolution, params.n_domains
+        )
         domain_key = f"spatial_domains_{suffix}"
         adata.obs[domain_key] = domain_labels
         ensure_categorical(adata, domain_key)
@@ -356,23 +358,34 @@ async def _identify_domains_spagcn(
         img = None
         scale_factor = 1.0  # Default scale factor
 
-        # Try to get histology image from adata.uns (10x Visium data)
-        if params.spagcn_use_histology and "spatial" in adata.uns:
-            # Get the first available library ID
-            library_ids = list(adata.uns["spatial"].keys())
+        # Try to get histology image from adata.uns (10x Visium data).
+        # Use local flag to avoid mutating the shared params object.
+        use_histology = params.spagcn_use_histology
 
-            if library_ids:
+        if use_histology and "spatial" in adata.uns:
+            # Select library matching the spatial key, or fall back to
+            # the only available library.  Blindly taking [0] on
+            # multi-library data may pick an image that doesn't match
+            # the coordinates.
+            library_ids = list(adata.uns["spatial"].keys())
+            lib_id = None
+            if len(library_ids) == 1:
                 lib_id = library_ids[0]
+            elif hasattr(adata, "uns") and "library_id" in adata.obs.columns:
+                # Use the most common library in the data
+                lib_id = adata.obs["library_id"].mode().iloc[0]
+                if lib_id not in library_ids:
+                    lib_id = library_ids[0]
+            elif library_ids:
+                lib_id = library_ids[0]
+
+            if lib_id is not None:
                 spatial_data = adata.uns["spatial"][lib_id]
 
-                # Try to get image from spatial data
                 if "images" in spatial_data:
                     img_dict = spatial_data["images"]
-
-                    # Try to get scalefactors
                     scalefactors = spatial_data.get("scalefactors", {})
 
-                    # Prefer high-res image, fall back to low-res
                     if "hires" in img_dict and "tissue_hires_scalef" in scalefactors:
                         img = img_dict["hires"]
                         scale_factor = scalefactors["tissue_hires_scalef"]
@@ -382,18 +395,15 @@ async def _identify_domains_spagcn(
                         img = img_dict["lowres"]
                         scale_factor = scalefactors["tissue_lowres_scalef"]
                     elif "hires" in img_dict:
-                        # Try without scalefactor
                         img = img_dict["hires"]
                     elif "lowres" in img_dict:
-                        # Try without scalefactor
                         img = img_dict["lowres"]
 
         if img is None:
-            # Create dummy image or disable histology
-            params.spagcn_use_histology = False
-            img = np.ones((100, 100, 3), dtype=np.uint8) * 255  # White dummy image
+            # No histology available — fall back to expression-only mode
+            use_histology = False
+            img = np.ones((100, 100, 3), dtype=np.uint8) * 255
         else:
-            # Apply scale factor to get pixel coordinates
             x_pixel = [int(x * scale_factor) for x in x_array]
             y_pixel = [int(y * scale_factor) for y in y_array]
 
@@ -431,7 +441,7 @@ async def _identify_domains_spagcn(
                             x_pixel,
                             y_pixel,
                             n_clusters=params.n_domains,
-                            histology=params.spagcn_use_histology,
+                            histology=use_histology,
                             s=params.spagcn_s,
                             b=params.spagcn_b,
                             p=params.spagcn_p,
@@ -470,7 +480,7 @@ async def _identify_domains_spagcn(
             "s_parameter": params.spagcn_s,
             "b_parameter": params.spagcn_b,
             "p_parameter": params.spagcn_p,
-            "use_histology": params.spagcn_use_histology,
+            "use_histology": use_histology,
         }
 
         return domain_labels, None, statistics
@@ -885,7 +895,11 @@ async def _identify_domains_graphst(
 
                     for _ in range(max_iterations):
                         mid = (low + high) / 2
-                        sc.tl.leiden(adata_graphst, resolution=mid, random_state=params.graphst_random_seed)
+                        sc.tl.leiden(
+                            adata_graphst,
+                            resolution=mid,
+                            random_state=params.graphst_random_seed,
+                        )
                         current_clusters = len(adata_graphst.obs["leiden"].unique())
 
                         diff = abs(current_clusters - n_clusters)
@@ -905,7 +919,11 @@ async def _identify_domains_graphst(
                             break
 
                     # Final clustering with best resolution
-                    sc.tl.leiden(adata_graphst, resolution=best_res, random_state=params.graphst_random_seed)
+                    sc.tl.leiden(
+                        adata_graphst,
+                        resolution=best_res,
+                        random_state=params.graphst_random_seed,
+                    )
                     adata_graphst.obs["domain"] = adata_graphst.obs["leiden"]
 
                     # Apply refinement if requested

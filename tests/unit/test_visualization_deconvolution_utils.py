@@ -68,18 +68,20 @@ def _mock_deconv_data(adata, method: str = "mock"):
     )
 
 
-def test_get_available_methods_prefers_metadata_then_fallback(minimal_spatial_adata):
+def test_get_available_runs_prefers_metadata_then_fallback(minimal_spatial_adata):
     adata = minimal_spatial_adata.copy()
-    adata.uns["deconvolution_a_metadata"] = {"parameters": {}}
-    adata.uns["deconvolution_b_metadata"] = {"parameters": {}}
+    adata.uns["deconvolution_a_metadata"] = {"method": "a", "parameters": {}}
+    adata.uns["deconvolution_b_metadata"] = {"method": "b", "parameters": {}}
     adata.obsm["deconvolution_legacy"] = np.zeros((adata.n_obs, 2))
 
-    methods = viz_deconv._get_available_methods(adata)
-    assert set(methods) == {"a", "b"}
+    runs = viz_deconv._get_available_runs(adata)
+    methods = {m for m, _ in runs}
+    assert methods == {"a", "b"}
 
     adata2 = minimal_spatial_adata.copy()
     adata2.obsm["deconvolution_rctd"] = np.zeros((adata2.n_obs, 2))
-    assert viz_deconv._get_available_methods(adata2) == ["rctd"]
+    runs2 = viz_deconv._get_available_runs(adata2)
+    assert [m for m, _ in runs2] == ["rctd"]
 
 
 @pytest.mark.asyncio

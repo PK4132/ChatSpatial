@@ -138,8 +138,7 @@ async def _annotate_with_singler(
             test_mat = np.log1p(test_mat)
         elif "log1p" not in adata.uns:
             await ctx.warning(
-                "Data may not be log-normalized. "
-                "Applying log1p for SingleR..."
+                "Data may not be log-normalized. " "Applying log1p for SingleR..."
             )
             test_mat = np.log1p(test_mat)
 
@@ -295,17 +294,21 @@ async def _annotate_with_singler(
         best_labels = results.column("best")
         scores = results.column("scores")
 
-        # Try to get delta scores for confidence (higher delta = higher confidence)
+        # Try to get delta scores for confidence (higher delta = higher confidence).
+        # Wrapped in a single try/except because results.column() may return
+        # non-iterable types depending on the SingleR version.
         try:
             delta_scores = results.column("delta")
-            if delta_scores:
-                low_delta = sum(1 for d in delta_scores if d and d < 0.05)
-                if low_delta > len(delta_scores) * 0.3:
+            n_deltas = len(delta_scores)
+            if n_deltas > 0:
+                low_delta = sum(1 for d in delta_scores if d is not None and d < 0.05)
+                if low_delta > n_deltas * 0.3:
                     await ctx.warning(
-                        f"{low_delta}/{len(delta_scores)} cells have low confidence scores (delta < 0.05)"
+                        f"{low_delta}/{n_deltas} cells have low "
+                        f"confidence scores (delta < 0.05)"
                     )
         except Exception:
-            delta_scores = None
+            pass  # Delta scores unavailable — confidence from scores only
 
     # Process results
     cell_types = list(best_labels)

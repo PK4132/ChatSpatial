@@ -19,12 +19,13 @@ from ..utils.adata_utils import (
     ensure_unique_var_names,
     find_common_genes,
     get_spatial_key,
+    require_spatial_coords,
     shallow_copy_adata,
     store_analysis_metadata,
 )
 from ..utils.dependency_manager import require
 from ..utils.device_utils import get_device, get_ot_backend
-from ..utils.exceptions import ParameterError, ProcessingError
+from ..utils.exceptions import DataError, ParameterError, ProcessingError
 from ..utils.results_export import export_analysis_result
 
 logger = logging.getLogger(__name__)
@@ -35,14 +36,14 @@ logger = logging.getLogger(__name__)
 
 
 def _validate_spatial_coords(adata_list: list["ad.AnnData"]) -> str:
-    """
-    Validate all slices have spatial coordinates under the same key.
+    """Validate all slices have spatial coordinates under the same key.
+
+    Delegates per-slice validation (NaN, Inf, dims, degeneracy) to the
+    SSOT ``require_spatial_coords``.  Adds cross-slice key consistency.
 
     Returns the common spatial key.
-    Raises ParameterError if any slice is missing coordinates or
-    if slices use different spatial keys.
     """
-    spatial_key = None
+    spatial_key: str | None = None
     for i, adata in enumerate(adata_list):
         key = get_spatial_key(adata)
         if key is None:
@@ -58,19 +59,8 @@ def _validate_spatial_coords(adata_list: list["ad.AnnData"]) -> str:
                 f"but slice {i} uses '{key}'. All slices must store "
                 f"coordinates under the same obsm key."
             )
-
-        # Validate coordinate values
-        coords = adata.obsm[key]
-        if np.isnan(coords).any():
-            raise ParameterError(
-                f"Slice {i} has NaN values in spatial coordinates "
-                f"('{key}'). Clean the data before registration."
-            )
-        if np.isinf(coords).any():
-            raise ParameterError(
-                f"Slice {i} has Inf values in spatial coordinates "
-                f"('{key}'). Clean the data before registration."
-            )
+        # Full validation via SSOT (dims, NaN, Inf, degeneracy, dtype)
+        require_spatial_coords(adata, spatial_key=key)
     return spatial_key or "spatial"
 
 
@@ -201,6 +191,12 @@ def _register_paste(
     # Memory optimization: keep lightweight working copies and avoid duplicating X.
     registered = [shallow_copy_adata(adata) for adata in adata_list]
     common_genes = _get_common_genes(registered)
+    if len(common_genes) == 0:
+        raise DataError(
+            "No common genes found across slices. "
+            "Registration requires shared gene space; "
+            "check that input datasets use the same gene naming convention."
+        )
 
     # Unified preparation: gene subset + normalize + ensure obsm["spatial"]
     slices = _prepare_paste_slices(registered, common_genes, spatial_key)
@@ -220,15 +216,9 @@ def _register_paste(
         )
 
         # Stack and extract aligned coordinates
-        aligned = pst.stack_slices_pairwise(
-            [slices[ref_idx], slices[other_idx]], [pi]
-        )
-        registered[ref_idx].obsm["spatial_registered"] = (
-            aligned[0].obsm["spatial"]
-        )
-        registered[other_idx].obsm["spatial_registered"] = (
-            aligned[1].obsm["spatial"]
-        )
+        aligned = pst.stack_slices_pairwise([slices[ref_idx], slices[other_idx]], [pi])
+        registered[ref_idx].obsm["spatial_registered"] = aligned[0].obsm["spatial"]
+        registered[other_idx].obsm["spatial_registered"] = aligned[1].obsm["spatial"]
 
     else:
         # Multi-slice center alignment
@@ -305,6 +295,12 @@ def _register_stalign(
     # Prepare intensity
     if params.stalign_use_expression:
         common_genes = _get_common_genes(registered)
+        if len(common_genes) == 0:
+            raise DataError(
+                "No common genes found between the two slices. "
+                "Expression-based STalign registration requires "
+                "shared gene space; check gene naming conventions."
+            )
         if len(common_genes) < 100:
             logger.warning(f"Only {len(common_genes)} common genes found")
 

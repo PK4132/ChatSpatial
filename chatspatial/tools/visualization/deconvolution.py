@@ -46,32 +46,39 @@ from .core import (
 # =============================================================================
 
 
-def _get_available_methods(adata: "ad.AnnData") -> list[str]:
-    """Get available deconvolution methods from metadata or key names.
+def _get_available_runs(
+    adata: "ad.AnnData",
+) -> list[tuple[str, str]]:
+    """Get available deconvolution runs as (method, analysis_key) pairs.
 
-    Priority:
-        1. Read from stored metadata (most reliable)
-        2. Fall back to key name search (for legacy data)
+    Reads the ``method`` field from stored metadata to avoid brittle
+    key-name parsing (analysis keys may contain reference_data_id).
+
+    Returns:
+        List of (method_name, analysis_key) tuples.
     """
-    methods = []
+    runs: list[tuple[str, str]] = []
+    seen_keys: set[str] = set()
 
-    # First: try to get from stored metadata
+    # Primary: read from stored metadata
     for key in adata.uns.keys():
         if key.startswith("deconvolution_") and key.endswith("_metadata"):
-            # Extract method name: deconvolution_{method}_metadata -> {method}
-            method = key.replace("deconvolution_", "").replace("_metadata", "")
-            if method not in methods:
-                methods.append(method)
+            analysis_key = key.removesuffix("_metadata")
+            meta = adata.uns[key]
+            method = meta.get("method", analysis_key.removeprefix("deconvolution_"))
+            if analysis_key not in seen_keys:
+                runs.append((method, analysis_key))
+                seen_keys.add(analysis_key)
 
-    # Fallback: search obsm keys (for legacy data without metadata)
-    if not methods:
+    # Fallback: search obsm keys (legacy data without metadata)
+    if not runs:
         for key in adata.obsm.keys():
-            if key.startswith("deconvolution_"):
-                method = key.replace("deconvolution_", "")
-                if method not in methods:
-                    methods.append(method)
+            if key.startswith("deconvolution_") and key not in seen_keys:
+                method = key.removeprefix("deconvolution_")
+                runs.append((method, key))
+                seen_keys.add(key)
 
-    return methods
+    return runs
 
 
 async def get_deconvolution_data(
@@ -106,36 +113,38 @@ async def get_deconvolution_data(
         DataNotFoundError: No deconvolution results found
         ValueError: Multiple results found but method not specified
     """
-    available_methods = _get_available_methods(adata)
+    runs = _get_available_runs(adata)
+    method_names = [m for m, _k in runs]
 
     # Handle method specification
     if method is not None:
-        if method not in available_methods:
+        # Find runs matching the requested method name
+        matching = [(m, k) for m, k in runs if m == method]
+        if not matching:
             raise DataNotFoundError(
                 f"Deconvolution '{method}' not found. "
-                f"Available: {available_methods if available_methods else 'None'}. "
+                f"Available: {method_names if method_names else 'None'}. "
                 f"Run deconvolve_data() first."
             )
+        # Use the last matching run (most recent)
+        _method, analysis_name = matching[-1]
     else:
         # Auto-detect
-        if not available_methods:
+        if not runs:
             raise DataNotFoundError(
                 "No deconvolution results found. Run deconvolve_data() first."
             )
 
-        if len(available_methods) > 1:
+        if len(runs) > 1:
             raise ParameterError(
-                f"Multiple deconvolution results: {available_methods}. "
+                f"Multiple deconvolution results: {method_names}. "
                 f"Specify deconv_method parameter."
             )
 
         # Single result - auto-select
-        method = available_methods[0]
+        method, analysis_name = runs[0]
         if context:
             await context.info(f"Auto-selected deconvolution method: {method}")
-
-    # Get data from metadata or fall back to convention
-    analysis_name = f"deconvolution_{method}"
 
     # Try to get from stored metadata (these live under "statistics", not "parameters")
     stats = get_analysis_metadata_field(adata, analysis_name, "statistics") or {}
@@ -671,8 +680,10 @@ async def _create_card_imputation(
     imputed_proportions = impute_data["proportions"]
     imputed_coords = impute_data["coordinates"]
 
-    # Determine what to visualize
+    # Determine what to visualize (normalize to string)
     feature = params.feature
+    if isinstance(feature, list):
+        feature = feature[0] if feature else "dominant"
     if not feature:
         feature = "dominant"
 

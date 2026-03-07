@@ -69,17 +69,17 @@ def deconvolve(
         reference_data = data.reference
 
         # Get spatial coordinates from prepared data
-        if data.spatial_coords is not None:
-            coords = pd.DataFrame(
-                data.spatial_coords[:, :2],
-                index=spatial_data.obs_names,
-                columns=["x", "y"],
+        if data.spatial_coords is None:
+            raise DataError(
+                "RCTD requires real spatial coordinates for spatially-informed "
+                "deconvolution. No spatial coordinates found. "
+                "Use a non-spatial method (e.g., NNLS, DestVI) instead."
             )
-        else:
-            coords = pd.DataFrame(
-                {"x": range(spatial_data.n_obs), "y": [0] * spatial_data.n_obs},
-                index=spatial_data.obs_names,
-            )
+        coords = pd.DataFrame(
+            data.spatial_coords[:, :2],
+            index=spatial_data.obs_names,
+            columns=["x", "y"],
+        )
 
         # Prepare cell type information
         cell_types = reference_data.obs[data.cell_type_key].copy()
@@ -210,7 +210,7 @@ def deconvolve(
         return proportions, stats
 
     except Exception as e:
-        if isinstance(e, (ParameterError, ProcessingError)):
+        if isinstance(e, (DataError, ParameterError, ProcessingError)):
             raise
         raise ProcessingError(f"RCTD deconvolution failed: {e}") from e
 

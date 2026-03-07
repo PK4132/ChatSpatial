@@ -1439,7 +1439,7 @@ async def test_analyze_communication_cellphonedb_rejects_missing_significant_mea
         cellphonedb_use_microenvironments=False,
     )
 
-    with pytest.raises(ProcessingError, match="found no L-R interactions"):
+    with pytest.raises(DataNotFoundError, match="found no L-R interactions"):
         await ccc._analyze_communication_cellphonedb(adata, params, DummyCtx())
 
 
@@ -1744,7 +1744,7 @@ async def test_analyze_communication_cellphonedb_handles_missing_pvalues_and_ind
         lambda *_args, **_kwargs: "/tmp/fake_cpdb.zip",
     )
 
-    with pytest.raises(ProcessingError, match="p-values unavailable"):
+    with pytest.raises(DataNotFoundError, match="p-values unavailable"):
         await ccc._analyze_communication_cellphonedb(
             adata,
             CellCommunicationParameters(

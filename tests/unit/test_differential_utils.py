@@ -168,7 +168,7 @@ async def test_differential_specific_group_accepts_any_raw_source(monkeypatch: p
     monkeypatch.setattr(
         differential_mod,
         "get_raw_data_source",
-        lambda *_a, **_k: SimpleNamespace(source="X", X=adata.X, var_names=adata.var_names),
+        lambda *_a, **_k: SimpleNamespace(source="X", X=adata.X, var_names=adata.var_names, is_integer_counts=False),
     )
 
     params = DifferentialExpressionParameters(
@@ -197,7 +197,7 @@ async def test_differential_specific_group_warns_on_missing_genes(monkeypatch: p
     monkeypatch.setattr(
         differential_mod,
         "get_raw_data_source",
-        lambda *_a, **_k: SimpleNamespace(source="raw", X=adata.raw.X, var_names=adata.raw.var_names),
+        lambda *_a, **_k: SimpleNamespace(source="raw", X=adata.raw.X, var_names=adata.raw.var_names, is_integer_counts=True),
     )
     monkeypatch.setattr(differential_mod, "store_analysis_metadata", lambda *a, **k: None)
     monkeypatch.setattr(differential_mod, "export_analysis_result", lambda *a, **k: None)
@@ -524,6 +524,7 @@ async def test_differential_specific_group_uses_fallback_name_column_and_float16
             source="raw",
             X=adata.raw.X,
             var_names=adata.raw.var_names,
+            is_integer_counts=True,
         ),
     )
     monkeypatch.setattr(differential_mod, "store_analysis_metadata", lambda *a, **k: None)
@@ -561,6 +562,7 @@ async def test_differential_specific_group_raises_when_rank_results_have_no_name
             source="raw",
             X=adata.raw.X,
             var_names=adata.raw.var_names,
+            is_integer_counts=True,
         ),
     )
 
@@ -595,6 +597,7 @@ async def test_differential_specific_group_sets_none_mean_log2fc_when_all_genes_
             source="raw",
             X=adata.raw.X,
             var_names=adata.raw.var_names,
+            is_integer_counts=True,
         ),
     )
     monkeypatch.setattr(differential_mod, "store_analysis_metadata", lambda *a, **k: None)
@@ -648,6 +651,7 @@ async def test_differential_specific_group_warns_on_extreme_fold_change(
             source="raw",
             X=adata.raw.X,
             var_names=adata.raw.var_names,
+            is_integer_counts=True,
         ),
     )
     monkeypatch.setattr(differential_mod, "store_analysis_metadata", lambda *a, **k: None)

@@ -883,3 +883,82 @@ def test_perform_ora_parametrized_key_with_database(
 
     assert captured["analysis_name"] == "enrichment_ora_GO_Biological_Process"
     assert "ora_results_ora_GO_Biological_Process" in adata.uns
+
+
+# ============================================================================
+# Bug-fix regression tests
+# ============================================================================
+
+
+def test_check_is_integer_counts_default_sample_size_catches_low_frequency_decimals():
+    """With sample_size=1000, a matrix with 1% decimals is reliably detected."""
+    from chatspatial.utils.adata_utils import check_is_integer_counts
+
+    rng = np.random.default_rng(42)
+    # 10_000 integer values with 1% replaced by decimals
+    data = rng.integers(0, 100, size=10_000).astype(float)
+    n_decimal = int(len(data) * 0.01)
+    decimal_indices = rng.choice(len(data), size=n_decimal, replace=False)
+    data[decimal_indices] += 0.5
+
+    mat = sparse.csr_matrix(data.reshape(100, 100))
+    is_int, _has_neg, has_dec = check_is_integer_counts(mat)
+    # Default sample_size=1000 should detect the decimals
+    assert not is_int, "Expected non-integer detection with 1% decimals"
+    assert has_dec, "Expected has_decimals=True"
+
+
+def test_map_gene_set_database_to_enrichr_library_raises_for_zebrafish_kegg():
+    """Zebrafish KEGG should raise ParameterError, not silently fall back to mouse."""
+    with pytest.raises(ParameterError, match="KEGG_Pathways is only available"):
+        map_gene_set_database_to_enrichr_library("KEGG_Pathways", "zebrafish")
+
+
+def test_load_kegg_gene_sets_raises_for_unsupported_species():
+    """load_kegg_gene_sets should raise for non-human/mouse species."""
+    with pytest.raises(ParameterError, match="KEGG_Pathways is only available"):
+        enrichment_module.load_kegg_gene_sets("zebrafish")
+
+
+def test_perform_enrichr_passes_pvalue_cutoff_through(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """perform_enrichr should forward pvalue_cutoff to gp.enrichr cutoff."""
+    captured: dict[str, object] = {}
+
+    class _EnrResult:
+        def __init__(self):
+            self.results = pd.DataFrame(
+                {
+                    "Term": ["Path_A", "Path_B"],
+                    "Combined Score": [5.0, 8.0],
+                    "P-value": [0.001, 0.001],
+                    "Adjusted P-value": [0.005, 0.02],
+                    "Z-score": [2.0, 1.5],
+                    "Overlap": ["2/10", "1/10"],
+                    "Genes": ["GENE1;GENE2", "GENE3"],
+                    "Odds Ratio": [2.0, 1.5],
+                }
+            )
+
+    def _fake_enrichr(**kwargs):
+        captured.update(kwargs)
+        return _EnrResult()
+
+    monkeypatch.setattr(
+        enrichment_module.gp, "enrichr", _fake_enrichr, raising=False
+    )
+
+    # Use a stricter cutoff of 0.01
+    out = enrichment_module.perform_enrichr(
+        gene_list=["GENE1", "GENE2"],
+        gene_sets="GO_Biological_Process",
+        organism="human",
+        pvalue_cutoff=0.01,
+    )
+
+    assert captured["cutoff"] == 0.01, (
+        "gp.enrichr should receive the user-specified cutoff"
+    )
+    # Path_A has adj-pval 0.005 < 0.01, Path_B has 0.02 >= 0.01
+    assert out.n_significant == 1

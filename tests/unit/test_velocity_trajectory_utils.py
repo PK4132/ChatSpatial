@@ -686,35 +686,51 @@ def test_compute_rna_velocity_uses_params_mode_override(
 
 
 @pytest.mark.asyncio
-async def test_prepare_velovi_data_warns_and_continues_on_scv_failures(
+async def test_prepare_velovi_data_raises_on_scv_preprocessing_failure(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):
     adata = minimal_spatial_adata.copy()
     adata.layers["spliced"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
     adata.layers["unspliced"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
 
+    def _raise_pp(*_a, **_k):
+        raise RuntimeError("pp fail")
+
     fake_scv = ModuleType("scvelo")
     fake_scv.pp = SimpleNamespace(
-        filter_and_normalize=lambda *_a, **_k: (_ for _ in ()).throw(
-            RuntimeError("pp fail")
-        ),
-        moments=lambda *_a, **_k: (_ for _ in ()).throw(RuntimeError("moments fail")),
+        filter_and_normalize=_raise_pp,
+        moments=lambda *_a, **_k: None,
     )
     monkeypatch.setitem(__import__("sys").modules, "scvelo", fake_scv)
 
-    class _WarnCtx:
-        def __init__(self):
-            self.messages: list[str] = []
+    with pytest.raises(
+        ProcessingError, match="VELOVI preprocessing failed"
+    ):
+        await vel._prepare_velovi_data(adata, None)
 
-        async def warning(self, message: str):
-            self.messages.append(message)
 
-    ctx = _WarnCtx()
-    out = await vel._prepare_velovi_data(adata, ctx)
-    assert "Ms" in out.layers and "Mu" in out.layers
-    assert len(ctx.messages) == 2
-    assert "scvelo preprocessing warning" in ctx.messages[0]
-    assert "moments computation warning" in ctx.messages[1]
+@pytest.mark.asyncio
+async def test_prepare_velovi_data_raises_on_moments_failure(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    adata = minimal_spatial_adata.copy()
+    adata.layers["spliced"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+    adata.layers["unspliced"] = np.ones((adata.n_obs, adata.n_vars), dtype=float)
+
+    def _raise_moments(*_a, **_k):
+        raise RuntimeError("moments fail")
+
+    fake_scv = ModuleType("scvelo")
+    fake_scv.pp = SimpleNamespace(
+        filter_and_normalize=lambda *_a, **_k: None,
+        moments=_raise_moments,
+    )
+    monkeypatch.setitem(__import__("sys").modules, "scvelo", fake_scv)
+
+    with pytest.raises(
+        ProcessingError, match="Moments computation failed"
+    ):
+        await vel._prepare_velovi_data(adata, None)
 
 
 @pytest.mark.asyncio
@@ -1375,7 +1391,8 @@ def test_compute_dpt_trajectory_valid_root_and_fillna(
     out = traj.compute_dpt_trajectory(adata, root_cells=[root])
     assert out is adata
     assert int(adata.uns["iroot"]) == 3
-    assert adata.obs["dpt_pseudotime"].isna().sum() == 0
+    # NaN pseudotime is preserved (unreachable cells), not filled with 0
+    assert adata.obs["dpt_pseudotime"].isna().sum() == 1
 
 
 def test_compute_dpt_trajectory_raises_when_dpt_column_missing(

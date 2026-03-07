@@ -55,7 +55,7 @@ async def test_singler_celldex_reference_without_labels_raises(
     monkeypatch.setattr(
         ann,
         "get_raw_data_source",
-        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X),
+        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X, is_integer_counts=True),
     )
 
     with pytest.raises(DataNotFoundError, match="Could not find labels"):
@@ -189,7 +189,7 @@ async def test_singler_delta_extraction_failure_falls_back_to_score_confidence(
     monkeypatch.setattr(
         ann,
         "get_raw_data_source",
-        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X),
+        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X, is_integer_counts=True),
     )
 
     out = await ann._annotate_with_singler(
@@ -260,7 +260,7 @@ async def test_singler_delta_confidence_computation_failure_falls_back_to_scores
     monkeypatch.setattr(
         ann,
         "get_raw_data_source",
-        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X),
+        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X, is_integer_counts=True),
     )
 
     out = await ann._annotate_with_singler(
@@ -911,7 +911,7 @@ async def test_singler_default_celldex_reference_path_runs_successfully(
     monkeypatch.setattr(
         ann,
         "get_raw_data_source",
-        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X),
+        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X, is_integer_counts=True),
     )
 
     out = await ann._annotate_with_singler(
@@ -962,7 +962,7 @@ async def test_singler_celldex_label_fallback_and_integrated_branch(
     monkeypatch.setattr(
         ann,
         "get_raw_data_source",
-        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X),
+        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X, is_integer_counts=True),
     )
 
     out = await ann._annotate_with_singler(
@@ -1001,7 +1001,7 @@ async def test_singler_custom_reference_requires_cell_type_key(
     monkeypatch.setattr(
         ann,
         "get_raw_data_source",
-        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X),
+        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X, is_integer_counts=True),
     )
 
     params = AnnotationParameters(method="singler", reference_data_id="r").model_copy(
@@ -1072,7 +1072,7 @@ async def test_singler_score_fallback_handles_non_dataframe_score_objects(
     monkeypatch.setattr(
         ann,
         "get_raw_data_source",
-        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X),
+        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X, is_integer_counts=True),
     )
 
     out = await ann._annotate_with_singler(

@@ -12,7 +12,7 @@ import scipy.sparse as sp
 from anndata import AnnData, ImplicitModificationWarning
 
 from chatspatial.tools.integration import (
-    align_spatial_coordinates,
+    rescale_spatial_coordinates,
     integrate_multiple_samples,
     integrate_with_scvi,
 )
@@ -51,7 +51,7 @@ def _install_fake_scvi(monkeypatch: pytest.MonkeyPatch, calls: dict[str, object]
     monkeypatch.setitem(__import__("sys").modules, "scvi", fake_scvi)
 
 
-def test_align_spatial_coordinates_preserves_row_mapping_for_interleaved_batches(
+def test_rescale_spatial_coordinates_preserves_row_mapping_for_interleaved_batches(
     minimal_spatial_adata,
 ):
     adata = minimal_spatial_adata.copy()
@@ -68,7 +68,7 @@ def test_align_spatial_coordinates_preserves_row_mapping_for_interleaved_batches
     expected[ref_mask.to_numpy()] = (ref_coords - mean) / std
     expected[b_mask.to_numpy()] = (b_coords - mean) / std
 
-    out = align_spatial_coordinates(adata, batch_key="batch", reference_batch="A")
+    out = rescale_spatial_coordinates(adata, batch_key="batch", reference_batch="A")
 
     np.testing.assert_allclose(out.obsm["spatial_aligned"], expected, atol=1e-8)
 
@@ -413,7 +413,7 @@ async def test_integrate_samples_scvi_exports_and_adds_dataset(monkeypatch: pyte
         lambda adatas, **kwargs: adatas[0],
     )
     monkeypatch.setattr(
-        "chatspatial.tools.integration.align_spatial_coordinates",
+        "chatspatial.tools.integration.rescale_spatial_coordinates",
         lambda combined_adata, **kwargs: (combined_adata.obsm.__setitem__("spatial_aligned", combined_adata.obsm["spatial"]), combined_adata)[1],
     )
     monkeypatch.setattr(
@@ -871,22 +871,22 @@ def test_integrate_multiple_samples_scanorama_raw_fallback_path(
     assert captured["neighbors"][0]["use_rep"] == "X_scanorama"
 
 
-def test_align_spatial_coordinates_error_branches(minimal_spatial_adata):
+def test_rescale_spatial_coordinates_error_branches(minimal_spatial_adata):
     adata_missing = minimal_spatial_adata.copy()
     del adata_missing.obsm["spatial"]
     with pytest.raises(DataNotFoundError, match="spatial coordinates"):
-        align_spatial_coordinates(adata_missing, batch_key="batch")
+        rescale_spatial_coordinates(adata_missing, batch_key="batch")
 
     adata_empty = minimal_spatial_adata.copy()[:0].copy()
     adata_empty.obsm["spatial"] = np.zeros((0, 2), dtype=float)
     adata_empty.obs["batch"] = []
     with pytest.raises(DataError, match="Dataset is empty"):
-        align_spatial_coordinates(adata_empty, batch_key="batch")
+        rescale_spatial_coordinates(adata_empty, batch_key="batch")
 
     adata = minimal_spatial_adata.copy()
     adata.obs["batch"] = "only"
     with pytest.raises(ParameterError, match="Reference batch 'missing' not found"):
-        align_spatial_coordinates(adata, batch_key="batch", reference_batch="missing")
+        rescale_spatial_coordinates(adata, batch_key="batch", reference_batch="missing")
 
 
 def test_integrate_with_scvi_auto_epochs_for_medium_and_large_datasets(
@@ -1107,7 +1107,7 @@ def test_integrate_multiple_samples_deletes_incomplete_diffmap_artifacts_with_co
     assert "diffmap_evals" not in out.uns
 
 
-def test_align_spatial_coordinates_uses_first_batch_when_reference_is_none(
+def test_rescale_spatial_coordinates_uses_first_batch_when_reference_is_none(
     minimal_spatial_adata,
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -1120,7 +1120,7 @@ def test_align_spatial_coordinates_uses_first_batch_when_reference_is_none(
         lambda _adata, **kwargs: captured.update(kwargs),
     )
 
-    out = align_spatial_coordinates(adata, batch_key="batch", reference_batch=None)
+    out = rescale_spatial_coordinates(adata, batch_key="batch", reference_batch=None)
 
     assert out.obsm["spatial_aligned"].shape == (adata.n_obs, 2)
     assert captured["parameters"]["reference_batch"] == "first"

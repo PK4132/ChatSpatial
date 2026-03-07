@@ -241,9 +241,11 @@ async def load_spatial_data(
                                             "scalefactors": scalefactors
                                         }
                             except Exception as e:
-                                logger.warning(
-                                    f"Could not load spatial information: {e}"
-                                )
+                                raise DataCompatibilityError(
+                                    f"Visium spatial information failed to load: {e}. "
+                                    "Spatial coordinates are required for Visium data. "
+                                    "If you only need expression data, use platform='auto'."
+                                ) from e
                     else:
                         raise DataCompatibilityError(
                             f"Directory {mtx_dir} is missing matrix.mtx or matrix.mtx.gz"
@@ -262,7 +264,11 @@ async def load_spatial_data(
                     try:
                         adata = _add_spatial_info_to_adata(adata, spatial_path)
                     except Exception as e:
-                        logger.warning(f"Could not add spatial information: {e}")
+                        raise DataCompatibilityError(
+                            f"Visium spatial information failed to load: {e}. "
+                            "Spatial coordinates are required for Visium data. "
+                            "If you only need expression data, use platform='auto'."
+                        ) from e
             elif os.path.isfile(data_path) and data_path.endswith(".h5ad"):
                 # If it's an h5ad file but marked as visium, read it as h5ad
                 adata = sc.read_h5ad(data_path)

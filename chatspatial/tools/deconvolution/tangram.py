@@ -53,10 +53,18 @@ def deconvolve(
         if "cell_type" not in ref_data.obs.columns:
             ref_data.obs["cell_type"] = ref_data.obs[data.cell_type_key]
 
-        # Select marker genes for training (tangram recommendation: 100-1000 genes)
-        # Use up to 500 genes from common genes for efficiency
-        n_training_genes = min(500, len(data.common_genes))
-        training_genes = data.common_genes[:n_training_genes]
+        # Select training genes (tangram recommendation: 100-1000 genes).
+        # Prefer highly variable genes from reference for biological relevance;
+        # fall back to all common genes if HVG annotation is unavailable.
+        n_max = min(500, len(data.common_genes))
+        if "highly_variable" in ref_data.var.columns:
+            hvg_set = set(ref_data.var_names[ref_data.var["highly_variable"]])
+            hvg_common = [g for g in data.common_genes if g in hvg_set]
+            training_genes = (
+                hvg_common[:n_max] if hvg_common else data.common_genes[:n_max]
+            )
+        else:
+            training_genes = data.common_genes[:n_max]
 
         # Preprocess with tangram (this sets up required annotations)
         tg.pp_adatas(ref_data, spatial_data, genes=training_genes)
@@ -120,7 +128,7 @@ def deconvolve(
             n_epochs=n_epochs,
             mode=mode,
             density_prior=density_prior,
-            n_training_genes=n_training_genes,
+            n_training_genes=len(training_genes),
         )
 
         # Memory cleanup

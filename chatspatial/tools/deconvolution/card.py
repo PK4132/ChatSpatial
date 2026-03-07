@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 from ...utils.dependency_manager import validate_r_package
-from ...utils.exceptions import ProcessingError
+from ...utils.exceptions import DataError, ProcessingError
 from .base import PreparedDeconvolutionData, create_deconvolution_stats
 
 
@@ -64,17 +64,17 @@ def deconvolve(
         reference_data = data.reference
 
         # Get spatial coordinates from prepared data
-        if data.spatial_coords is not None:
-            spatial_location = pd.DataFrame(
-                data.spatial_coords[:, :2],
-                index=spatial_data.obs_names,
-                columns=["x", "y"],
+        if data.spatial_coords is None:
+            raise DataError(
+                "CARD requires real spatial coordinates for spatially-informed "
+                "deconvolution. No spatial coordinates found. "
+                "Use a non-spatial method (e.g., NNLS, DestVI) instead."
             )
-        else:
-            spatial_location = pd.DataFrame(
-                {"x": range(spatial_data.n_obs), "y": [0] * spatial_data.n_obs},
-                index=spatial_data.obs_names,
-            )
+        spatial_location = pd.DataFrame(
+            data.spatial_coords[:, :2],
+            index=spatial_data.obs_names,
+            columns=["x", "y"],
+        )
 
         # Prepare metadata
         sc_meta = reference_data.obs[[data.cell_type_key]].copy()
@@ -228,6 +228,6 @@ def deconvolve(
         return proportions, stats
 
     except Exception as e:
-        if isinstance(e, ProcessingError):
+        if isinstance(e, (DataError, ProcessingError)):
             raise
         raise ProcessingError(f"CARD deconvolution failed: {e}") from e

@@ -674,9 +674,7 @@ def perform_gsea(
         return EnrichmentResult(
             method="gsea",
             n_gene_sets=len(gene_sets),
-            n_significant=len(
-                results_df[results_df["FDR q-val"] < pvalue_cutoff]
-            ),
+            n_significant=len(results_df[results_df["FDR q-val"] < pvalue_cutoff]),
             enrichment_scores=filtered_scores,
             pvalues=filtered_pvals,
             adjusted_pvalues=filtered_adj_pvals,
@@ -1098,10 +1096,9 @@ def perform_ssgsea(
                     "size": len(gene_sets.get(gs_name, [])),
                 }
 
-            # Add scores to adata - fill NaN with 0 for storage (downstream
-            # viz/export needs numeric values)
-            scores_for_storage = scores_df.fillna(0)
-            scores_T = scores_for_storage.T
+            # Store per-cell scores in adata.obs, preserving NaN to
+            # distinguish "not estimable" from "zero enrichment".
+            scores_T = scores_df.T
             for gs_name in scores_df.index:
                 adata.obs[f"ssgsea_{gs_name}"] = scores_T[gs_name].values
 
@@ -1286,7 +1283,9 @@ def perform_enrichr(
         return EnrichmentResult(
             method="enrichr",
             n_gene_sets=len(all_results),
-            n_significant=len(all_results[all_results["Adjusted P-value"] < pvalue_cutoff]),
+            n_significant=len(
+                all_results[all_results["Adjusted P-value"] < pvalue_cutoff]
+            ),
             enrichment_scores=filtered_scores,
             pvalues=filtered_pvals,
             adjusted_pvalues=filtered_adj_pvals,

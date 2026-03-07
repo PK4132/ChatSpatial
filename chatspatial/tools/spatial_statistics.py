@@ -426,9 +426,9 @@ def _extract_result_summary(
     elif analysis_type == "join_count":
         # Binary join count - always 2 categories
         summary["n_features_analyzed"] = 2
-        # Significant if p_value < 0.05
+        alpha = result.get("alpha", 0.05)
         p_value = result.get("p_value")
-        summary["n_significant"] = 1 if p_value is not None and p_value < 0.05 else 0
+        summary["n_significant"] = 1 if p_value is not None and p_value < alpha else 0
         summary["summary_metrics"] = {
             "bb_joins": result.get("bb", 0),
             "ww_joins": result.get("ww", 0),
@@ -552,13 +552,9 @@ def _analyze_morans_i(
         elif nan_mask.any():
             fdr_pvals = np.full_like(raw_pvals, np.nan)
             valid = ~nan_mask
-            _, fdr_pvals[valid], _, _ = multipletests(
-                raw_pvals[valid], method="fdr_bh"
-            )
+            _, fdr_pvals[valid], _, _ = multipletests(raw_pvals[valid], method="fdr_bh")
         else:
-            _, fdr_pvals, _, _ = multipletests(
-                raw_pvals, method="fdr_bh"
-            )
+            _, fdr_pvals, _, _ = multipletests(raw_pvals, method="fdr_bh")
         results_df["pval_norm_fdr"] = fdr_pvals
         adata.uns[moran_key] = results_df
 
@@ -846,23 +842,28 @@ def _analyze_getis_ord(
                 from statsmodels.stats.multitest import multipletests
 
                 for gene in genes:
-                    p_values = all_pvalues[gene]
-                    _, p_corrected, _, _ = multipletests(
-                        p_values, alpha=params.getis_ord_alpha, method="fdr_bh"
-                    )
+                    p_values = np.asarray(all_pvalues[gene], dtype=float)
+                    valid = np.isfinite(p_values)
+                    p_corrected = np.full_like(p_values, np.nan)
+                    if valid.any():
+                        _, p_corrected[valid], _, _ = multipletests(
+                            p_values[valid],
+                            alpha=params.getis_ord_alpha,
+                            method="fdr_bh",
+                        )
                     obs_updates[f"{gene}_getis_ord_p_corrected"] = p_corrected
 
+                    sig_mask = p_corrected < params.getis_ord_alpha
                     getis_ord_results[gene]["n_significant_corrected"] = int(
-                        np.sum(p_corrected < params.getis_ord_alpha)
+                        np.nansum(sig_mask)
                     )
 
                     z_scores = all_z_scores[gene]
-                    significant_mask = p_corrected < params.getis_ord_alpha
                     getis_ord_results[gene]["n_hot_spots_corrected"] = int(
-                        np.sum((z_scores > z_threshold) & significant_mask)
+                        np.sum((z_scores > z_threshold) & sig_mask)
                     )
                     getis_ord_results[gene]["n_cold_spots_corrected"] = int(
-                        np.sum((z_scores < -z_threshold) & significant_mask)
+                        np.sum((z_scores < -z_threshold) & sig_mask)
                     )
 
         # Single batch update to adata.obs (avoids DataFrame fragmentation warning)
@@ -1214,14 +1215,9 @@ def _analyze_local_join_count(
                 "total_joins": float(ljc.LJC.sum()),
                 "mean_local_joins": float(ljc.LJC.mean()),
                 "std_local_joins": float(ljc.LJC.std()),
-                "n_significant": int(
-                    (ljc.p_sim < params.local_join_count_alpha).sum()
-                ),
+                "n_significant": int((ljc.p_sim < params.local_join_count_alpha).sum()),
                 "n_hotspots": int(
-                    (
-                        (ljc.LJC > 0)
-                        & (ljc.p_sim < params.local_join_count_alpha)
-                    ).sum()
+                    ((ljc.LJC > 0) & (ljc.p_sim < params.local_join_count_alpha)).sum()
                 ),
             }
 
@@ -1242,15 +1238,17 @@ def _analyze_local_join_count(
             "per_category_stats": results,
         }
 
+        alpha = params.local_join_count_alpha
         return {
             "method": "Local Join Count Statistics (Anselin & Li 2019)",
             "n_categories": n_categories,
             "categories": [str(c) for c in categories],
             "per_category_stats": results,
+            "alpha": alpha,
             "interpretation": (
                 "Local Join Count statistics identify spatial clusters for each category. "
                 "High LJC values indicate locations where category members cluster together. "
-                "P-values < 0.05 indicate statistically significant local clustering. "
+                f"P-values < {alpha} indicate statistically significant local clustering. "
                 "Results stored in adata.obs as 'ljc_{category}' and 'ljc_{category}_pvalue'."
             ),
         }

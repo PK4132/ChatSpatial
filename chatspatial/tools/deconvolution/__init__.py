@@ -415,9 +415,7 @@ async def _store_results(
         )
         # Store mask so downstream can distinguish real zeros
         # from method failures
-        spatial_adata.obs[
-            f"{proportions_key}_nan_flag"
-        ] = method_nan_mask.values
+        spatial_adata.obs[f"{proportions_key}_nan_flag"] = method_nan_mask.values
 
     # Fill all NaN with 0 for downstream compatibility
     full_proportions = reindexed.fillna(0).values
@@ -450,6 +448,10 @@ async def _store_results(
 
     # Store metadata for provenance tracking
     analysis_key = _build_deconvolution_key(method, reference_data_id)
+    nan_flag_key = f"{proportions_key}_nan_flag"
+    obs_keys: list[str] = [dominant_key]
+    if nan_flag_key in spatial_adata.obs:
+        obs_keys.append(nan_flag_key)
     store_analysis_metadata(
         spatial_adata,
         analysis_name=analysis_key,
@@ -457,7 +459,7 @@ async def _store_results(
         parameters={},  # Method-specific params already in stats
         results_keys={
             "obsm": [proportions_key],
-            "obs": [dominant_key],
+            "obs": obs_keys,
             "uns": [f"{proportions_key}_cell_types"],
         },
         statistics={
@@ -468,6 +470,17 @@ async def _store_results(
             "dominant_type_key": dominant_key,
         },
     )
+
+    # Store CARD imputation data if present (bridge analysis → visualization)
+    imputation = stats.get("imputation")
+    if imputation and method == "card":
+        n_original = len(full_proportions)
+        n_imputed = imputation.get("n_imputed_locations", 0)
+        spatial_adata.uns["card_imputation"] = {
+            "proportions": imputation["imputed_proportions"],
+            "coordinates": imputation["imputed_coordinates"],
+            "resolution_increase": n_imputed / max(n_original, 1),
+        }
 
     # Export results to CSV for reproducibility
     export_analysis_result(spatial_adata, data_id, analysis_key)

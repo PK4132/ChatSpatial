@@ -14,7 +14,7 @@ from chatspatial.tools.deconvolution import card as card_module
 from chatspatial.tools.deconvolution import rctd as rctd_module
 from chatspatial.tools.deconvolution import spotlight as spotlight_module
 from chatspatial.tools.deconvolution.base import PreparedDeconvolutionData
-from chatspatial.utils.exceptions import ParameterError, ProcessingError
+from chatspatial.utils.exceptions import DataError, ParameterError, ProcessingError
 
 
 class DummyCtx:
@@ -248,7 +248,7 @@ def test_rctd_deconvolve_filters_rare_types_and_raises_when_insufficient_types(
 
     with pytest.warns(UserWarning, match="Filtering 1 rare types"):
         with pytest.raises(
-            ProcessingError, match="RCTD requires at least 2 cell types"
+            DataError, match="RCTD requires at least 2 cell types"
         ):
             rctd_module.deconvolve(data, mode="full")
 
@@ -290,36 +290,17 @@ def test_rctd_deconvolve_warns_on_nan_and_returns_stats(
     assert stats["method"] == "RCTD-full"
 
 
-def test_rctd_deconvolve_without_spatial_coords_uses_default_coords(
+def test_rctd_deconvolve_without_spatial_coords_raises_error(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):
+    """RCTD must fail-fast when spatial coordinates are missing."""
     data = replace(_prepared_data(minimal_spatial_adata), spatial_coords=None)
 
     _install_fake_r_modules(monkeypatch, ro_r=lambda _code: None)
     monkeypatch.setattr(rctd_module, "validate_r_package", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(
-        rctd_module,
-        "_extract_rctd_results",
-        lambda _mode: pd.DataFrame(
-            {
-                "A": np.tile([0.8, 0.1], data.n_spots // 2 + data.n_spots % 2)[: data.n_spots],
-                "B": np.tile([0.2, 0.9], data.n_spots // 2 + data.n_spots % 2)[: data.n_spots],
-            },
-            index=list(data.spatial.obs_names),
-        ),
-    )
 
-    proportions, stats = rctd_module.deconvolve(data, mode="full")
-
-    import rpy2.robjects as ro
-
-    coords = ro.globalenv["coords"]
-    assert list(coords.columns) == ["x", "y"]
-    assert list(coords.index) == list(data.spatial.obs_names)
-    assert list(coords["x"]) == list(range(data.n_spots))
-    assert list(coords["y"]) == [0] * data.n_spots
-    assert proportions.shape == (data.n_spots, 2)
-    assert stats["method"] == "RCTD-full"
+    with pytest.raises(DataError, match="RCTD requires real spatial coordinates"):
+        rctd_module.deconvolve(data, mode="full")
 
 
 def test_card_wraps_runtime_errors_as_processing_error(
@@ -366,10 +347,23 @@ def test_card_success_with_fake_r_outputs(
     assert stats["common_genes"] == len(data.common_genes)
 
 
-def test_card_uses_default_spatial_coords_and_reference_sample_info(
+def test_card_raises_error_without_spatial_coords(
     minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
 ):
+    """CARD must fail-fast when spatial coordinates are missing."""
     data = replace(_prepared_data(minimal_spatial_adata), spatial_coords=None)
+
+    _install_fake_r_modules(monkeypatch, ro_r=lambda _code: None)
+    monkeypatch.setattr(card_module, "validate_r_package", lambda *_args, **_kwargs: None)
+
+    with pytest.raises(DataError, match="CARD requires real spatial coordinates"):
+        card_module.deconvolve(data)
+
+
+def test_card_uses_reference_sample_info(
+    minimal_spatial_adata, monkeypatch: pytest.MonkeyPatch
+):
+    data = _prepared_data(minimal_spatial_adata)
     data.reference.obs["sample_id"] = [f"s{i % 3}" for i in range(data.reference.n_obs)]
 
     def _ro_r(code: str):
@@ -389,10 +383,7 @@ def test_card_uses_default_spatial_coords_and_reference_sample_info(
 
     import rpy2.robjects as ro
 
-    spatial_location = ro.globalenv["spatial_location"]
     sc_meta = ro.globalenv["sc_meta"]
-    assert list(spatial_location["x"]) == list(range(data.spatial.n_obs))
-    assert list(spatial_location["y"]) == [0] * data.spatial.n_obs
     assert sc_meta["sampleInfo"].tolist() == data.reference.obs["sample_id"].tolist()
     assert proportions.shape == (2, 2)
 

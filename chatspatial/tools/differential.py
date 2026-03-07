@@ -525,6 +525,18 @@ async def _run_pydeseq2(
         # Compare group1 vs all others combined as "rest"
         group2 = "rest"
 
+    # Validate that specified groups actually exist
+    if group1 not in unique_groups:
+        raise ParameterError(
+            f"Group '{group1}' not found in adata.obs['{group_key}']. "
+            f"Available groups: {unique_groups}"
+        )
+    if group2 != "rest" and group2 not in unique_groups:
+        raise ParameterError(
+            f"Group '{group2}' not found in adata.obs['{group_key}']. "
+            f"Available groups: {unique_groups}"
+        )
+
     # Create pseudobulk aggregation
 
     # Build aggregation key
@@ -553,14 +565,10 @@ async def _run_pydeseq2(
     # Aggregate counts using (sample, condition) tuple to avoid
     # string-concatenation collisions (e.g. sample="A_B" + cond="C"
     # vs sample="A" + cond="B_C" both producing "A_B_C").
-    pseudobulk_groups = pseudobulk_obs.groupby(
-        ["sample", "condition"]
-    ).indices
+    pseudobulk_groups = pseudobulk_obs.groupby(["sample", "condition"]).indices
     pseudobulk_tuples = list(pseudobulk_groups.keys())
     # Create collision-free string IDs using unit separator (\x1f)
-    pseudobulk_ids = [
-        f"{s}\x1f{c}" for s, c in pseudobulk_tuples
-    ]
+    pseudobulk_ids = [f"{s}\x1f{c}" for s, c in pseudobulk_tuples]
     n_samples = len(pseudobulk_ids)
 
     if n_samples < 4:

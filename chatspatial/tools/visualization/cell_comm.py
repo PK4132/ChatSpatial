@@ -209,15 +209,11 @@ def _matrix_to_liana_format(
     """
     rows = []
 
-    # Get numeric columns (cell type pairs)
+    # Identify cell type pair columns by the canonical "|" separator.
+    # Using select_dtypes alone would include numeric metadata columns,
+    # producing false interactions in the visualization.
     numeric_cols = results.select_dtypes(include=[np.number]).columns.tolist()
-
-    # Also handle CellPhoneDB which has metadata columns
-    # Filter to columns that look like cell type pairs (contain "|")
     cell_pair_cols = [c for c in numeric_cols if "|" in str(c)]
-    if not cell_pair_cols:
-        # Fallback: use all numeric columns
-        cell_pair_cols = numeric_cols
 
     if not cell_pair_cols:
         return pd.DataFrame()
@@ -367,8 +363,16 @@ async def get_cell_communication_data(
         method_key = f"ccc_{method}"
         if method_key in adata.uns:
             ccc = CCCStorage.from_dict(adata.uns[method_key])
+        else:
+            # Explicit method requested but no results for that method exist.
+            # Do NOT silently fall back to the shared slot which may hold
+            # a different method's results — that would be semantic drift.
+            raise DataNotFoundError(
+                f"No cell communication results found for method='{method}'. "
+                f"Run analyze_cell_communication(method='{method}') first."
+            )
 
-    # Fall back to shared (latest) result
+    # No method specified — use shared (latest) result
     if ccc is None:
         ccc = get_ccc_results(adata)
 
@@ -379,18 +383,14 @@ async def get_cell_communication_data(
             "'cellphonedb', 'fastccc', or 'cellchat_r'."
         )
 
-    # Get spatial data from obsm — prefer per-method keys when method
-    # is specified, fall back to shared keys for backward compatibility.
-    scores_key = (
-        f"ccc_spatial_scores_{method}"
-        if method and f"ccc_spatial_scores_{method}" in adata.obsm
-        else CCC_SPATIAL_SCORES_KEY
-    )
-    pvals_key = (
-        f"ccc_spatial_pvals_{method}"
-        if method and f"ccc_spatial_pvals_{method}" in adata.obsm
-        else CCC_SPATIAL_PVALS_KEY
-    )
+    # Get spatial data from obsm — use per-method keys when method is
+    # specified; only fall back to shared keys when no method is given.
+    if method:
+        scores_key = f"ccc_spatial_scores_{method}"
+        pvals_key = f"ccc_spatial_pvals_{method}"
+    else:
+        scores_key = CCC_SPATIAL_SCORES_KEY
+        pvals_key = CCC_SPATIAL_PVALS_KEY
     spatial_scores = adata.obsm.get(scores_key)
     spatial_pvals = adata.obsm.get(pvals_key)
 

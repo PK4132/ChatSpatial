@@ -107,6 +107,7 @@ def deconvolve(
             ro.globalenv["min_prop"] = min_prop
             ro.globalenv["scale_data"] = scale
             ro.globalenv["weight_id"] = weight_id
+            ro.globalenv["n_top_genes"] = n_top_genes
 
         # Create SCE and SPE objects, run SPOTlight
         ro.r("""
@@ -139,7 +140,7 @@ def deconvolve(
 
             for (ct in cell_type_names) {
                 ct_markers <- markers[[ct]]
-                n_markers <- min(50, nrow(ct_markers))
+                n_markers <- min(n_top_genes, nrow(ct_markers))
                 top_markers <- head(ct_markers[order(ct_markers$p.value), ], n_markers)
 
                 mgs_df <- data.frame(

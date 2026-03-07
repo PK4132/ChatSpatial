@@ -35,9 +35,9 @@ async def test_visualize_data_rejects_unknown_plot_type():
         await viz_main.visualize_data("d1", _Ctx(None), _params(plot_type="unknown"))
 
 
-async def test_visualize_data_rejects_dataset_with_too_few_cells():
-    adata = SimpleNamespace(n_obs=4, n_vars=8)
-    with pytest.raises(DataNotFoundError, match="too few cells"):
+async def test_visualize_data_rejects_dataset_with_no_observations():
+    adata = SimpleNamespace(n_obs=0, n_vars=8)
+    with pytest.raises(DataNotFoundError, match="no observations"):
         await viz_main.visualize_data("d1", _Ctx(adata), _params())
 
 

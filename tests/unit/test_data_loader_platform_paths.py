@@ -195,12 +195,16 @@ async def test_load_visium_mtx_directory_parses_header_positions_file(
 
 
 @pytest.mark.asyncio
-async def test_load_visium_mtx_directory_warns_when_spatial_alignment_fails(
+async def test_load_visium_mtx_directory_errors_when_spatial_alignment_fails(
     minimal_spatial_adata,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ):
+    """Visium loader must fail-fast when spatial info cannot be loaded.
+
+    Silently degrading to expression-only data would violate the user's
+    explicit platform='visium' intent and cause confusing downstream errors.
+    """
     visium_dir = tmp_path / "sample_mtx_bad_spatial"
     mtx_dir = visium_dir / "filtered_feature_bc_matrix"
     spatial_dir = visium_dir / "spatial"
@@ -230,11 +234,8 @@ async def test_load_visium_mtx_directory_warns_when_spatial_alignment_fails(
     fake_scanpy._read_10x_mtx_ret = adata
     monkeypatch.setitem(sys.modules, "scanpy", fake_scanpy)
 
-    with caplog.at_level("WARNING"):
-        out = await dl.load_spatial_data(str(visium_dir), "visium")
-
-    assert out["spatial_coordinates_available"] is False
-    assert "Could not load spatial information" in caplog.text
+    with pytest.raises(ProcessingError, match="Visium spatial information failed"):
+        await dl.load_spatial_data(str(visium_dir), "visium")
 
 
 @pytest.mark.asyncio
@@ -269,12 +270,12 @@ async def test_load_visium_h5_path_calls_spatial_helpers(
 
 
 @pytest.mark.asyncio
-async def test_load_visium_h5_path_warns_when_spatial_helper_fails(
+async def test_load_visium_h5_path_errors_when_spatial_helper_fails(
     minimal_spatial_adata,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    caplog: pytest.LogCaptureFixture,
 ):
+    """Visium H5 loader must fail-fast when spatial helper raises."""
     h5_path = tmp_path / "sample_with_bad_spatial.h5"
     h5_path.write_text("h5")
 
@@ -288,11 +289,8 @@ async def test_load_visium_h5_path_warns_when_spatial_helper_fails(
         lambda _adata, _spatial_path: (_ for _ in ()).throw(RuntimeError("bad spatial")),
     )
 
-    with caplog.at_level("WARNING"):
-        out = await dl.load_spatial_data(str(h5_path), "visium")
-
-    assert out["type"] == "visium"
-    assert "Could not add spatial information" in caplog.text
+    with pytest.raises(ProcessingError, match="Visium spatial information failed"):
+        await dl.load_spatial_data(str(h5_path), "visium")
 
 
 @pytest.mark.asyncio

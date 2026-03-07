@@ -372,7 +372,7 @@ async def test_annotate_with_singler_custom_reference_success_deterministic_orde
     monkeypatch.setattr(
         ann,
         "get_raw_data_source",
-        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X),
+        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X, is_integer_counts=True),
     )
 
     ctx = DummyWarnCtx({"q": adata, "r": ref})
@@ -692,7 +692,7 @@ async def test_annotate_with_singler_raises_when_no_reference_available(
     monkeypatch.setattr(
         ann,
         "get_raw_data_source",
-        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X),
+        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X, is_integer_counts=True),
     )
 
     with pytest.raises(DataNotFoundError, match="No reference data"):
@@ -725,7 +725,7 @@ async def test_annotate_with_singler_raises_on_insufficient_gene_overlap(
     monkeypatch.setattr(
         ann,
         "get_raw_data_source",
-        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X),
+        lambda _adata, prefer_complete_genes=False: SimpleNamespace(X=_adata.X, is_integer_counts=True),
     )
 
     with pytest.raises(DataError, match="Insufficient gene overlap"):

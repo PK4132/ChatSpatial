@@ -85,10 +85,11 @@ async def test_spatial_cnv_auto_detect_priority_and_categorical_colormap(
     fig, ax = plt.subplots()
     monkeypatch.setattr(viz_cnv, "create_figure_from_params", lambda *_a, **_k: (fig, [ax]))
 
-    captured: dict[str, str] = {}
+    captured: dict[str, Any] = {}
 
     def _plot_spatial(_adata, _ax, feature, params):
         captured["feature"] = feature
+        captured["colormap"] = params.colormap
         _ax.scatter([0], [0], c=[1.0])
 
     monkeypatch.setattr(viz_cnv, "plot_spatial_feature", _plot_spatial)
@@ -99,7 +100,9 @@ async def test_spatial_cnv_auto_detect_priority_and_categorical_colormap(
 
     assert out is fig
     assert captured["feature"] == "numbat_clone"
-    assert params.colormap == "tab20"
+    # Colormap should be applied to the local copy, not mutate the original
+    assert captured["colormap"] == "tab20"
+    assert params.colormap == ""  # original params unchanged
     assert any("using 'numbat_clone'" in msg for msg in ctx.infos)
     fig.clf()
 
@@ -112,15 +115,21 @@ async def test_spatial_cnv_numeric_feature_sets_rdbu(minimal_spatial_adata, monk
     monkeypatch.setattr(viz_cnv, "require_spatial_coords", lambda _a: _a.obsm["spatial"])
     fig, ax = plt.subplots()
     monkeypatch.setattr(viz_cnv, "create_figure_from_params", lambda *_a, **_k: (fig, [ax]))
+    captured_cmap: dict[str, str] = {}
     monkeypatch.setattr(
         viz_cnv,
         "plot_spatial_feature",
-        lambda _adata, _ax, feature, params: _ax.scatter([0], [0], c=[1.0]),
+        lambda _adata, _ax, feature, params: (
+            captured_cmap.__setitem__("colormap", params.colormap),
+            _ax.scatter([0], [0], c=[1.0]),
+        ),
     )
 
     params = VisualizationParameters(plot_type="cnv", subtype="spatial", colormap="")
     await viz_cnv._create_spatial_cnv(adata, params, context=DummyCtx())
-    assert params.colormap == "RdBu_r"
+    # Colormap applied to local copy, not mutating original
+    assert captured_cmap["colormap"] == "RdBu_r"
+    assert params.colormap == ""  # original unchanged
     fig.clf()
 
 

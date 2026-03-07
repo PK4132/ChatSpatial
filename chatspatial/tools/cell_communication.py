@@ -661,10 +661,17 @@ def _run_liana_spatial_analysis(
 
     n_lr_pairs = lrdata.n_vars
 
-    # FDR correction for significance
+    # FDR correction for significance (NaN-safe)
     pvals_col = f"{global_metric}_pvals"
-    pvals = lrdata.var[pvals_col]
-    reject, pvals_corrected, _, _ = multipletests(pvals, alpha=alpha, method="fdr_bh")
+    pvals = lrdata.var[pvals_col].values.astype(float)
+    valid_mask = np.isfinite(pvals)
+
+    reject = np.zeros(len(pvals), dtype=bool)
+    pvals_corrected = np.full(len(pvals), np.nan)
+    if valid_mask.any():
+        reject[valid_mask], pvals_corrected[valid_mask], _, _ = multipletests(
+            pvals[valid_mask], alpha=alpha, method="fdr_bh"
+        )
     n_significant = int(reject.sum())
 
     # Store corrected p-values in results
@@ -861,26 +868,17 @@ async def _analyze_communication_cellphonedb(
                         X_csc = adata_for_analysis.X
 
                     # Write gene-by-gene (memory constant)
-                    for i, gene_name in enumerate(
-                        adata_for_analysis.var_names
-                    ):
-                        gene_expression = to_dense(
-                            X_csc[:, i]
-                        ).flatten()
-                        writer.writerow(
-                            [gene_name] + list(gene_expression)
-                        )
+                    for i, gene_name in enumerate(adata_for_analysis.var_names):
+                        gene_expression = to_dense(X_csc[:, i]).flatten()
+                        writer.writerow([gene_name] + list(gene_expression))
 
                 meta_df.to_csv(meta_file, sep="\t", index=False)
 
                 try:
-                    db_path = _ensure_cellphonedb_database(
-                        temp_dir, ctx
-                    )
+                    db_path = _ensure_cellphonedb_database(temp_dir, ctx)
                 except Exception as db_error:
                     raise DependencyError(
-                        f"CellPhoneDB database setup failed: "
-                        f"{db_error}"
+                        f"CellPhoneDB database setup failed: " f"{db_error}"
                     ) from db_error
 
                 # Run the analysis using CellPhoneDB v5 API
@@ -892,9 +890,7 @@ async def _analyze_communication_cellphonedb(
                         counts_file_path=counts_file,
                         counts_data="hgnc_symbol",
                         threshold=params.cellphonedb_threshold,
-                        result_precision=(
-                            params.cellphonedb_result_precision
-                        ),
+                        result_precision=(params.cellphonedb_result_precision),
                         pvalue=params.cellphonedb_pvalue,
                         iterations=params.cellphonedb_iterations,
                         debug_seed=debug_seed,
@@ -976,14 +972,10 @@ async def _analyze_communication_cellphonedb(
             try:
                 pval_array = pvalues[ct_pair_cols].values.astype(float)
             except (ValueError, TypeError):
-                raise ProcessingError(
-                    "CellPhoneDB p-values are not numeric."
-                )
+                raise ProcessingError("CellPhoneDB p-values are not numeric.")
         else:
             # Fallback: use numeric columns (may include metadata)
-            pval_array = pvalues.select_dtypes(
-                include=[np.number]
-            ).values
+            pval_array = pvalues.select_dtypes(include=[np.number]).values
         if pval_array.shape[0] == 0 or pval_array.shape[1] == 0:
             raise ProcessingError("CellPhoneDB p-values are not numeric.")
 
@@ -1027,9 +1019,7 @@ async def _analyze_communication_cellphonedb(
 
                 # Count uncorrected significance (NaN-safe)
                 n_uncorrected_sig += (
-                    np.any(pvals_valid < threshold)
-                    if pvals_valid.size > 0
-                    else 0
+                    np.any(pvals_valid < threshold) if pvals_valid.size > 0 else 0
                 )
 
                 if pvals_valid.size == 0:
@@ -1041,14 +1031,12 @@ async def _analyze_communication_cellphonedb(
                     reject_this_lr = pvals_valid < threshold
                     pvals_corrected_valid = pvals_valid.copy()
                 else:
-                    reject_this_lr, pvals_corrected_valid, _, _ = (
-                        multipletests(
-                            pvals_valid,
-                            alpha=threshold,
-                            method=correction_method,
-                            is_sorted=False,
-                            returnsorted=False,
-                        )
+                    reject_this_lr, pvals_corrected_valid, _, _ = multipletests(
+                        pvals_valid,
+                        alpha=threshold,
+                        method=correction_method,
+                        is_sorted=False,
+                        returnsorted=False,
                     )
 
                 # This L-R pair is significant if ANY cell type pair
@@ -1058,9 +1046,7 @@ async def _analyze_communication_cellphonedb(
                     n_corrected_sig += 1
 
                 # Store minimum corrected p-value for this L-R pair
-                min_pvals_corrected[i] = float(
-                    np.nanmin(pvals_corrected_valid)
-                )
+                min_pvals_corrected[i] = float(np.nanmin(pvals_corrected_valid))
 
         n_significant_pairs = int(np.sum(mask))
 
@@ -1305,8 +1291,7 @@ def _analyze_communication_cellchat_r(
             # Memory optimization: Get CellChatDB gene list and pre-filter
             # This reduces memory from O(n_cells × n_all_genes) to O(n_cells × n_db_genes)
             # Typical savings: 20000 genes → 1500 genes = 13x memory reduction
-            ro.r(
-                f"""
+            ro.r(f"""
                 CellChatDB <- {db_name}
                 # Get all genes used in CellChatDB (ligands, receptors, cofactors)
                 cellchat_genes <- unique(c(
@@ -1315,8 +1300,7 @@ def _analyze_communication_cellchat_r(
                     unlist(strsplit(CellChatDB$interaction$receptor, "_"))
                 ))
                 cellchat_genes <- cellchat_genes[!is.na(cellchat_genes)]
-            """
-            )
+            """)
             cellchat_genes_r = ro.r("cellchat_genes")
             cellchat_genes = set(cellchat_genes_r)
 
@@ -1381,8 +1365,7 @@ def _analyze_communication_cellchat_r(
                 spatial_tol = params.cellchat_spatial_tol
                 ro.globalenv["pixel_ratio"] = pixel_ratio
                 ro.globalenv["spatial_tol"] = spatial_tol
-                ro.r(
-                    """
+                ro.r("""
                     spatial.factors <- data.frame(
                         ratio = pixel_ratio,
                         tol = spatial_tol
@@ -1396,65 +1379,52 @@ def _analyze_communication_cellchat_r(
                         coordinates = as.matrix(spatial_locs),
                         spatial.factors = spatial.factors
                     )
-                """
-                )
+                """)
             else:
                 # Non-spatial mode
-                ro.r(
-                    """
+                ro.r("""
                     cellchat <- createCellChat(
                         object = as.matrix(expr_matrix),
                         meta = meta_df,
                         group.by = "labels"
                     )
-                """
-                )
+                """)
 
             # Set database
-            ro.r(
-                f"""
+            ro.r(f"""
                 CellChatDB <- {db_name}
-            """
-            )
+            """)
 
             # Subset database by category if specified
             if params.cellchat_db_category != "All":
-                ro.r(
-                    f"""
+                ro.r(f"""
                     CellChatDB.use <- subsetDB(
                         CellChatDB,
                         search = "{params.cellchat_db_category}"
                     )
                     cellchat@DB <- CellChatDB.use
-                """
-                )
+                """)
             else:
-                ro.r(
-                    """
+                ro.r("""
                     cellchat@DB <- CellChatDB
-                """
-                )
+                """)
 
             # Preprocessing
-            ro.r(
-                """
+            ro.r("""
                 cellchat <- subsetData(cellchat)
                 cellchat <- identifyOverExpressedGenes(cellchat)
                 cellchat <- identifyOverExpressedInteractions(cellchat)
-            """
-            )
+            """)
 
             # Project data (optional but recommended)
-            ro.r(
-                """
+            ro.r("""
                 # Project data onto PPI network (optional)
                 tryCatch({
                     cellchat <- projectData(cellchat, PPI.human)
                 }, error = function(e) {
                     message("Skipping data projection: ", e$message)
                 })
-            """
-            )
+            """)
 
             # Compute communication probability
             if has_spatial and params.cellchat_distance_use:
@@ -1465,8 +1435,7 @@ def _analyze_communication_cellchat_r(
                 else:
                     contact_param = f"contact.knn.k = {params.cellchat_contact_knn_k}"
 
-                ro.r(
-                    f"""
+                ro.r(f"""
                     cellchat <- computeCommunProb(
                         cellchat,
                         type = "{params.cellchat_type}",
@@ -1477,45 +1446,35 @@ def _analyze_communication_cellchat_r(
                         scale.distance = {params.cellchat_scale_distance},
                         {contact_param}
                     )
-                """
-                )
+                """)
             else:
                 # Non-spatial mode
-                ro.r(
-                    f"""
+                ro.r(f"""
                     cellchat <- computeCommunProb(
                         cellchat,
                         type = "{params.cellchat_type}",
                         trim = {params.cellchat_trim},
                         population.size = {str(params.cellchat_population_size).upper()}
                     )
-                """
-                )
+                """)
 
             # Filter communication
-            ro.r(
-                f"""
+            ro.r(f"""
                 cellchat <- filterCommunication(cellchat, min.cells = {params.cellchat_min_cells})
-            """
-            )
+            """)
 
             # Compute pathway-level communication
-            ro.r(
-                """
+            ro.r("""
                 cellchat <- computeCommunProbPathway(cellchat)
-            """
-            )
+            """)
 
             # Aggregate network
-            ro.r(
-                """
+            ro.r("""
                 cellchat <- aggregateNet(cellchat)
-            """
-            )
+            """)
 
             # Extract results
-            ro.r(
-                """
+            ro.r("""
                 # Get LR pairs
                 lr_pairs <- cellchat@LR$LRsig
 
@@ -1549,8 +1508,7 @@ def _analyze_communication_cellchat_r(
                 } else {
                     top_lr <- character(0)
                 }
-            """
-            )
+            """)
 
             # Convert results back to Python (force native types for h5ad compatibility)
             n_lr_pairs = int(ro.r("n_lr_pairs")[0])
@@ -1824,22 +1782,33 @@ async def _analyze_communication_fastccc(
         if pvalues is not None and hasattr(pvalues, "values"):
             from statsmodels.stats.multitest import multipletests
 
-            # Get minimum p-value across all cell type pairs for each LR pair
-            pval_array = pvalues.select_dtypes(include=[np.number]).values
-            n_ct_pairs = pval_array.shape[1]
-            min_pvals = np.nanmin(pval_array, axis=1)
-            # Bonferroni-correct for #cell-type-pairs tested per LR pair,
-            # then BH-FDR across LR pairs for a consistent significance count
-            corrected_min = np.minimum(min_pvals * n_ct_pairs, 1.0)
-            valid_mask = ~np.isnan(corrected_min)
-            if valid_mask.any():
-                reject = np.zeros(len(corrected_min), dtype=bool)
-                reject[valid_mask], _, _, _ = multipletests(
-                    corrected_min[valid_mask], alpha=threshold, method="fdr_bh"
-                )
-                n_significant_pairs = int(reject.sum())
-            else:
+            # Get minimum p-value across cell type pair columns only.
+            # Filter by "|" separator to exclude any numeric metadata columns.
+            ct_pair_cols = [
+                c
+                for c in pvalues.select_dtypes(include=[np.number]).columns
+                if "|" in str(c)
+            ]
+            if not ct_pair_cols:
                 n_significant_pairs = 0
+            else:
+                pval_array = pvalues[ct_pair_cols].values
+                n_ct_pairs = pval_array.shape[1]
+                min_pvals = np.nanmin(pval_array, axis=1)
+                # Bonferroni-correct for #cell-type-pairs tested per LR pair,
+                # then BH-FDR across LR pairs for a consistent significance
+                corrected_min = np.minimum(min_pvals * n_ct_pairs, 1.0)
+                valid_mask = ~np.isnan(corrected_min)
+                if valid_mask.any():
+                    reject = np.zeros(len(corrected_min), dtype=bool)
+                    reject[valid_mask], _, _, _ = multipletests(
+                        corrected_min[valid_mask],
+                        alpha=threshold,
+                        method="fdr_bh",
+                    )
+                    n_significant_pairs = int(reject.sum())
+                else:
+                    n_significant_pairs = 0
         else:
             n_significant_pairs = 0
 
@@ -1854,11 +1823,23 @@ async def _analyze_communication_fastccc(
                 standardize_lr_pair(str(p)) for p in interactions_strength.index
             ]
 
-            # Sort by mean interaction strength across cell type pairs
+            # Sort by mean interaction strength across cell type pair columns
             if hasattr(interactions_strength, "select_dtypes"):
-                strength_array = interactions_strength.select_dtypes(
-                    include=[np.number]
-                ).values
+                str_ct_cols = [
+                    c
+                    for c in interactions_strength.select_dtypes(
+                        include=[np.number]
+                    ).columns
+                    if "|" in str(c)
+                ]
+                if not str_ct_cols:
+                    # No cell-pair columns found; skip ranking
+                    str_ct_cols = []
+                strength_array = (
+                    interactions_strength[str_ct_cols].values
+                    if str_ct_cols
+                    else np.empty((len(interactions_strength), 0))
+                )
                 mean_strength = np.nanmean(strength_array, axis=1)
                 top_indices = top_n_desc_indices(
                     mean_strength, params.plot_top_pairs, sanitize_nonfinite=True

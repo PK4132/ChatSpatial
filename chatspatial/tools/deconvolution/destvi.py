@@ -33,7 +33,9 @@ def deconvolve(
 
     Args:
         data: Prepared deconvolution data (immutable)
-        n_epochs: Total epochs (split between CondSCVI and DestVI)
+        n_epochs: Base epoch count. CondSCVI trains for max(400, n_epochs//5),
+            DestVI trains for max(200, n_epochs//10). Default 2500 yields
+            500 CondSCVI + 250 DestVI epochs.
         n_hidden: Hidden units in neural networks
         n_latent: Latent space dimensionality
         n_layers: Number of layers
