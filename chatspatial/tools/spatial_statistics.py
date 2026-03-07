@@ -173,6 +173,7 @@ async def analyze_spatial_statistics(
         raise ParameterError(f"Unsupported analysis type: {params.analysis_type}")
     if params.n_neighbors <= 0:
         raise ParameterError(f"n_neighbors must be positive, got {params.n_neighbors}")
+    # Defer n_neighbors >= n_obs check until after adata is loaded
 
     # Retrieve dataset via ToolContext
     try:
@@ -181,6 +182,13 @@ async def analyze_spatial_statistics(
         # Basic validation: min 10 cells, spatial coordinates exist
         validate_adata_basics(adata, min_obs=10)
         require_spatial_coords(adata)
+
+        # n_neighbors must be < n_obs for KNN graph construction
+        if params.n_neighbors >= adata.n_obs:
+            raise ParameterError(
+                f"n_neighbors ({params.n_neighbors}) must be less than "
+                f"the number of cells ({adata.n_obs})"
+            )
 
         # Validate cluster_key for analyses that require it (derived from registry)
         if _ANALYSIS_REGISTRY[params.analysis_type].needs_cluster:

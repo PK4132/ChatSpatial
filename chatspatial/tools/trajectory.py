@@ -47,7 +47,7 @@ def _build_trajectory_key(params: "TrajectoryParameters") -> str:
     """
     method = params.method
     if method == "cellrank":
-        sw = f"{params.spatial_weight:.1f}".replace(".", "_")
+        sw = f"{params.spatial_weight:.2f}".replace(".", "_")
         return f"trajectory_cellrank_sw{sw}"
     if params.root_cells:
         root_tag = params.root_cells[0]
@@ -536,7 +536,7 @@ async def analyze_trajectory(
             method_used = "cellrank"
 
             # Per-run suffix for CellRank result coexistence
-            sw_str = f"{params.spatial_weight:.1f}".replace(".", "_")
+            sw_str = f"{params.spatial_weight:.2f}".replace(".", "_")
             cellrank_suffix = f"cellrank_sw{sw_str}"
 
             # Save per-run copies for provenance (shared keys kept for viz)
@@ -591,7 +591,7 @@ async def analyze_trajectory(
 
     # For CellRank, use per-run keys in results_keys for provenance accuracy
     if method_used == "cellrank":
-        sw_str = f"{params.spatial_weight:.1f}".replace(".", "_")
+        sw_str = f"{params.spatial_weight:.2f}".replace(".", "_")
         cellrank_suffix = f"cellrank_sw{sw_str}"
         results_keys_dict["obs"] = [f"pseudotime_{cellrank_suffix}"]
 

@@ -3,6 +3,7 @@ Copy Number Variation (CNV) analysis tools for spatial transcriptomics data.
 """
 
 import glob
+import logging
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -12,6 +13,8 @@ if TYPE_CHECKING:
     import anndata as ad
 
     from ..spatial_mcp_adapter import ToolContext
+
+logger = logging.getLogger(__name__)
 
 from ..models.analysis import CNVResult
 from ..models.data import CNVParameters
@@ -638,9 +641,23 @@ def _infer_cnv_numbat(
             )
 
         # Reorder genotype matrix to match AnnData cell order
-        cnv_matrix = np.zeros((len(cell_barcodes), geno_segments.shape[1]))
+        # Use NaN for cells not in Numbat output (not analyzed, not "no CNV")
+        geno_cell_set = set(geno_cells)
+        cnv_matrix = np.full(
+            (len(cell_barcodes), geno_segments.shape[1]), np.nan
+        )
         for geno_idx, adata_idx in enumerate(geno_sorted_indices):
             cnv_matrix[adata_idx, :] = geno_segments[geno_idx, :]
+
+        # Track cells missing from Numbat results
+        n_missing = len(cell_barcodes) - len(geno_cell_set)
+        if n_missing > 0:
+            logger.warning(
+                "%d / %d cells not in Numbat output — "
+                "marked as NaN/unassigned (not analyzed, not 'no CNV')",
+                n_missing,
+                len(cell_barcodes),
+            )
 
         # Store results in AnnData
         adata.obsm["X_cnv_numbat"] = cnv_matrix
@@ -650,14 +667,17 @@ def _infer_cnv_numbat(
         clone_dict = clone_post.set_index("cell").to_dict()
 
         # Convert numpy types to Python native types for H5AD compatibility
+        # Use "unassigned" for cells not in Numbat output (distinct from clone IDs)
         adata.obs["numbat_clone"] = [
-            str(clone_dict["clone_opt"].get(cell, "unknown")) for cell in cell_barcodes
+            str(clone_dict["clone_opt"].get(cell, "unassigned"))
+            for cell in cell_barcodes
         ]
         adata.obs["numbat_p_cnv"] = [
-            float(clone_dict["p_cnv"].get(cell, 0.0)) for cell in cell_barcodes
+            float(clone_dict["p_cnv"].get(cell, np.nan))
+            for cell in cell_barcodes
         ]
         adata.obs["numbat_compartment"] = [
-            str(clone_dict["compartment_opt"].get(cell, "unknown"))
+            str(clone_dict["compartment_opt"].get(cell, "unassigned"))
             for cell in cell_barcodes
         ]
 

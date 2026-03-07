@@ -1286,9 +1286,11 @@ async def _annotate_with_cellassign(
                 marker_gene_matrix.loc[gene, cell_type] = 1
 
     # Compute size factors BEFORE subsetting (official CellAssign requirement)
+    # Size factors MUST come from the same count source as the modeling matrix
+    # (raw_result.X) to satisfy the statistical assumptions of the NB model.
     if "size_factors" not in adata.obs:
-        # Calculate size factors from FULL dataset
-        size_factors = adata.X.sum(axis=1)
+        sf_X = raw_result.X
+        size_factors = sf_X.sum(axis=1)
         if hasattr(size_factors, "A1"):  # sparse matrix
             size_factors = size_factors.A1
         size_factors = np.asarray(size_factors).flatten()

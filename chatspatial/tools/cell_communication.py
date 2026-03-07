@@ -33,10 +33,13 @@ Storage Structure:
 
 from collections import defaultdict
 from dataclasses import dataclass, field
+import logging
 from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..spatial_mcp_adapter import ToolContext
@@ -1273,10 +1276,23 @@ def _analyze_communication_cellchat_r(
         spatial_key = get_spatial_key(adata)
         has_spatial = spatial_key is not None
 
-        # Prepare expression matrix (genes x cells, normalized)
-        # CellChat requires normalized data with comprehensive gene coverage
-        # Use get_raw_data_source (single source of truth) - directly use raw_result
+        # CellChat internally normalizes via identifyOverExpressedGenes,
+        # so raw counts are the correct input (avoids double-normalization).
+        # Use get_raw_data_source (single source of truth) for complete gene coverage.
         raw_result = get_raw_data_source(adata, prefer_complete_genes=True)
+
+        if not raw_result.is_integer_counts:
+            logger.warning(
+                "CellChat input from '%s' is not raw counts. "
+                "CellChat normalizes internally — non-count data may cause "
+                "double-normalization. Results should be interpreted with caution.",
+                raw_result.source,
+            )
+        if raw_result.has_negatives:
+            logger.warning(
+                "Negative values detected in expression data. "
+                "Clamping to zero for CellChat compatibility."
+            )
 
         # Run CellChat in R - start early to get gene list for pre-filtering
         with localconverter(
@@ -1322,8 +1338,12 @@ def _analyze_communication_cellchat_r(
 
             # Create expression matrix with only CellChatDB genes (memory efficient)
             gene_indices = [raw_result.var_names.get_loc(g) for g in common_genes]
+            expr_data = to_dense(raw_result.X[:, gene_indices]).T
+            # Clamp negatives (scaled/centered data can have negatives)
+            if raw_result.has_negatives:
+                expr_data = np.maximum(expr_data, 0)
             expr_matrix = pd.DataFrame(
-                to_dense(raw_result.X[:, gene_indices]).T,
+                expr_data,
                 index=common_genes,
                 columns=adata.obs_names,
             )

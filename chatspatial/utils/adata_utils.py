@@ -1108,34 +1108,26 @@ async def ensure_unique_var_names_async(
 
 
 def check_is_integer_counts(X: Any, sample_size: int = 1000) -> tuple[bool, bool, bool]:
-    """Check if a matrix contains integer counts via global random sampling.
+    """Check if a matrix contains integer counts.
 
-    Uses unbiased random sampling instead of a fixed sub-block so results
-    do not depend on row/column ordering, batch concatenation order, or
-    gene sorting.  The seed is derived deterministically from the matrix
-    shape and sparsity so repeated calls on the same input are stable.
+    For sparse matrices, checks ALL non-zero values (typically a small
+    fraction of the matrix) to avoid missing rare decimals.
+    For dense matrices, uses random sampling with a larger default.
 
     Args:
         X: Data matrix (sparse or dense)
-        sample_size: Number of elements to sample for efficiency
+        sample_size: Number of elements to sample for dense matrices
 
     Returns:
         Tuple of (is_integer, has_negatives, has_decimals)
     """
-    # Deterministic seed from matrix metadata (stable across calls)
-    nnz = getattr(X, "nnz", None)
-    seed = (X.shape[0] * 2654435761 ^ X.shape[1] * 40503 ^ int(nnz or 0) * 65537 ^ sample_size) & 0xFFFFFFFF
-    rng = np.random.default_rng(seed)
-
     if sparse.issparse(X):
         data = X.data
         if data.size == 0:
             return True, False, False
-        if sample_size >= data.size:
-            sample = data
-        else:
-            idx = rng.integers(0, data.size, size=sample_size)
-            sample = data[idx]
+        # For sparse matrices, non-zero values are typically a small
+        # fraction — check them all for reliable detection.
+        sample = data
     else:
         arr = np.asarray(X)
         total = arr.size
@@ -1144,8 +1136,18 @@ def check_is_integer_counts(X: Any, sample_size: int = 1000) -> tuple[bool, bool
         if sample_size >= total:
             sample = arr.ravel()
         else:
+            # Use larger sample for big matrices to reduce false negatives
+            effective_size = min(max(sample_size, total // 100), total)
+            nnz = getattr(X, "nnz", None)
+            seed = (
+                X.shape[0] * 2654435761
+                ^ X.shape[1] * 40503
+                ^ int(nnz or 0) * 65537
+                ^ effective_size
+            ) & 0xFFFFFFFF
+            rng = np.random.default_rng(seed)
             flat = arr.ravel()
-            idx = rng.integers(0, total, size=sample_size)
+            idx = rng.integers(0, total, size=effective_size)
             sample = flat[idx]
 
     has_negatives = bool(np.any(sample < 0))
@@ -1197,11 +1199,38 @@ def ensure_counts_layer(
     if adata.raw is not None:
         # Get raw counts, subsetting to current var_names
         # Note: adata.raw may have full genes while adata has HVG subset
-        raw_X = adata.raw[:, adata.var_names].X
-        is_int, has_neg, _ = check_is_integer_counts(raw_X)
-        if is_int and not has_neg:
-            adata.layers[layer_name] = raw_X
-            return True
+        # Use intersection to avoid KeyError when gene names don't fully overlap
+        shared_genes = adata.var_names.intersection(adata.raw.var_names)
+        if len(shared_genes) == len(adata.var_names):
+            raw_X = adata.raw[:, adata.var_names].X
+        elif len(shared_genes) > 0:
+            # Partial overlap: subset to shared genes, then reindex to full var_names
+            raw_subset = adata.raw[:, shared_genes].X
+            if sparse.issparse(raw_subset):
+                raw_X = sparse.lil_matrix(
+                    (adata.n_obs, adata.n_vars), dtype=raw_subset.dtype
+                )
+                col_idx = [
+                    adata.var_names.get_loc(g) for g in shared_genes
+                ]
+                raw_X[:, col_idx] = raw_subset
+                raw_X = raw_X.tocsr()
+            else:
+                raw_X = np.zeros(
+                    (adata.n_obs, adata.n_vars), dtype=raw_subset.dtype
+                )
+                col_idx = [
+                    adata.var_names.get_loc(g) for g in shared_genes
+                ]
+                raw_X[:, col_idx] = raw_subset
+        else:
+            raw_X = None  # No overlap — skip .raw
+
+        if raw_X is not None:
+            is_int, has_neg, _ = check_is_integer_counts(raw_X)
+            if is_int and not has_neg:
+                adata.layers[layer_name] = raw_X
+                return True
         # .raw exists but doesn't contain valid integer counts — fall through
 
     # Fallback: check if adata.X itself is valid integer counts

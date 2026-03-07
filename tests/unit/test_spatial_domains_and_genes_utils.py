@@ -106,11 +106,11 @@ async def test_identify_spatial_domains_leiden_happy_path_stores_metadata(
         SpatialDomainParameters(method="leiden", refine_domains=False),
     )
     assert out.method == "leiden"
-    assert out.domain_key == "spatial_domains_leiden_res0_5"
+    assert out.domain_key == "spatial_domains_leiden_res0_50"
     assert out.refined_domain_key is None
-    assert captured["analysis_name"] == "spatial_domains_leiden_res0_5"
+    assert captured["analysis_name"] == "spatial_domains_leiden_res0_50"
     assert captured["results_keys"] == {
-        "obs": ["spatial_domains_leiden_res0_5"],
+        "obs": ["spatial_domains_leiden_res0_50"],
         "obsm": ["X_fake"],
     }
 
@@ -1008,11 +1008,11 @@ async def test_identify_spatial_domains_refinement_success_updates_metadata(
         SpatialDomainParameters(method="leiden", refine_domains=True),
     )
 
-    assert out.refined_domain_key == "spatial_domains_leiden_res0_5_refined"
+    assert out.refined_domain_key == "spatial_domains_leiden_res0_50_refined"
     assert captured["results_keys"] == {
         "obs": [
-            "spatial_domains_leiden_res0_5",
-            "spatial_domains_leiden_res0_5_refined",
+            "spatial_domains_leiden_res0_50",
+            "spatial_domains_leiden_res0_50_refined",
         ]
     }
 

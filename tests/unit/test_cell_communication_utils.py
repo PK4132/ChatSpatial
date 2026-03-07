@@ -1276,7 +1276,7 @@ async def test_analyze_communication_fastccc_success_standard_path(
         ccc,
         "get_raw_data_source",
         lambda *_a, **_k: type(
-            "Raw", (), {"X": adata.X, "var_names": adata.var_names}
+            "Raw", (), {"X": adata.X, "var_names": adata.var_names, "is_integer_counts": True, "has_negatives": False, "source": "X"}
         )(),
     )
 
@@ -1329,7 +1329,7 @@ async def test_analyze_communication_fastccc_cauchy_without_outputs_raises(
         ccc,
         "get_raw_data_source",
         lambda *_a, **_k: type(
-            "Raw", (), {"X": adata.X, "var_names": adata.var_names}
+            "Raw", (), {"X": adata.X, "var_names": adata.var_names, "is_integer_counts": True, "has_negatives": False, "source": "X"}
         )(),
     )
 
@@ -1883,7 +1883,7 @@ async def test_analyze_communication_fastccc_missing_database_files_raises(
         ccc,
         "get_raw_data_source",
         lambda *_a, **_k: type(
-            "Raw", (), {"X": np.asarray(adata.X), "var_names": adata.var_names}
+            "Raw", (), {"X": np.asarray(adata.X), "var_names": adata.var_names, "is_integer_counts": True, "has_negatives": False, "source": "X"}
         )(),
     )
     monkeypatch.setattr("os.path.exists", lambda _p: False)
@@ -1931,7 +1931,7 @@ async def test_analyze_communication_fastccc_cauchy_reads_saved_outputs_and_none
         ccc,
         "get_raw_data_source",
         lambda *_a, **_k: type(
-            "Raw", (), {"X": np.asarray(adata.X), "var_names": adata.var_names}
+            "Raw", (), {"X": np.asarray(adata.X), "var_names": adata.var_names, "is_integer_counts": True, "has_negatives": False, "source": "X"}
         )(),
     )
     import os.path as osp
@@ -1989,7 +1989,7 @@ async def test_analyze_communication_fastccc_none_pvalues_sets_zero_significant(
         ccc,
         "get_raw_data_source",
         lambda *_a, **_k: type(
-            "Raw", (), {"X": np.asarray(adata.X), "var_names": adata.var_names}
+            "Raw", (), {"X": np.asarray(adata.X), "var_names": adata.var_names, "is_integer_counts": True, "has_negatives": False, "source": "X"}
         )(),
     )
     import os.path as osp
@@ -2103,7 +2103,13 @@ def test_analyze_communication_cellchat_r_non_spatial_success(
         lambda _adata, prefer_complete_genes=True: type(
             "Raw",
             (),
-            {"X": np.asarray(_adata.X), "var_names": pd.Index(_adata.var_names)},
+            {
+                "X": np.asarray(_adata.X),
+                "var_names": pd.Index(_adata.var_names),
+                "is_integer_counts": True,
+                "has_negatives": False,
+                "source": "X",
+            },
         )(),
     )
 
@@ -2146,7 +2152,13 @@ def test_analyze_communication_cellchat_r_spatial_contact_range_and_db_category(
         lambda _adata, prefer_complete_genes=True: type(
             "Raw",
             (),
-            {"X": np.asarray(_adata.X), "var_names": pd.Index(_adata.var_names)},
+            {
+                "X": np.asarray(_adata.X),
+                "var_names": pd.Index(_adata.var_names),
+                "is_integer_counts": True,
+                "has_negatives": False,
+                "source": "X",
+            },
         )(),
     )
 
@@ -2192,7 +2204,13 @@ def test_analyze_communication_cellchat_r_spatial_uses_contact_knn_when_range_is
         lambda _adata, prefer_complete_genes=True: type(
             "Raw",
             (),
-            {"X": np.asarray(_adata.X), "var_names": pd.Index(_adata.var_names)},
+            {
+                "X": np.asarray(_adata.X),
+                "var_names": pd.Index(_adata.var_names),
+                "is_integer_counts": True,
+                "has_negatives": False,
+                "source": "X",
+            },
         )(),
     )
 
@@ -2228,7 +2246,13 @@ def test_analyze_communication_cellchat_r_no_gene_overlap_is_wrapped(
         lambda _adata, prefer_complete_genes=True: type(
             "Raw",
             (),
-            {"X": np.asarray(_adata.X), "var_names": pd.Index(_adata.var_names)},
+            {
+                "X": np.asarray(_adata.X),
+                "var_names": pd.Index(_adata.var_names),
+                "is_integer_counts": True,
+                "has_negatives": False,
+                "source": "X",
+            },
         )(),
     )
 

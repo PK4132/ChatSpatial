@@ -67,13 +67,13 @@ class TestBuildTrajectoryKey:
     def test_cellrank_default(self):
         from chatspatial.tools.trajectory import _build_trajectory_key
 
-        assert _build_trajectory_key(self._make_params()) == "trajectory_cellrank_sw0_5"
+        assert _build_trajectory_key(self._make_params()) == "trajectory_cellrank_sw0_50"
 
     def test_cellrank_different_weight(self):
         from chatspatial.tools.trajectory import _build_trajectory_key
 
         p = self._make_params(spatial_weight=0.0)
-        assert _build_trajectory_key(p) == "trajectory_cellrank_sw0_0"
+        assert _build_trajectory_key(p) == "trajectory_cellrank_sw0_00"
 
     def test_cellrank_weights_coexist(self):
         from chatspatial.tools.trajectory import _build_trajectory_key
@@ -216,13 +216,13 @@ class TestCellRankPerRunCopies:
 
         p = SimpleNamespace(method="cellrank", spatial_weight=0.3, root_cells=None)
         key = _build_trajectory_key(p)
-        expected_suffix = "cellrank_sw0_3"
+        expected_suffix = "cellrank_sw0_30"
         assert key == f"trajectory_{expected_suffix}"
 
     def test_cellrank_per_run_obs_keys(self, minimal_spatial_adata):
         """Per-run copies must exist alongside shared keys after CellRank."""
         adata = minimal_spatial_adata.copy()
-        suffix = "cellrank_sw0_5"
+        suffix = "cellrank_sw0_50"
 
         # Simulate shared + per-run write
         adata.obs["pseudotime"] = np.linspace(0, 1, adata.n_obs)

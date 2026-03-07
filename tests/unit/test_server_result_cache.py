@@ -105,8 +105,8 @@ async def test_velocity_trajectory_deconv_cnv_coexist(dm):
     await dm.save_result("d1", "velocity_scvelo_stochastic", {"mode": "stochastic"})
     await dm.save_result("d1", "velocity_scvelo_dynamical", {"mode": "dynamical"})
     # Trajectory: cellrank with different spatial weights
-    await dm.save_result("d1", "trajectory_cellrank_sw0_5", {"sw": 0.5})
-    await dm.save_result("d1", "trajectory_cellrank_sw0_0", {"sw": 0.0})
+    await dm.save_result("d1", "trajectory_cellrank_sw0_50", {"sw": 0.5})
+    await dm.save_result("d1", "trajectory_cellrank_sw0_00", {"sw": 0.0})
     # Deconvolution: same method, different references
     await dm.save_result("d1", "deconvolution_flashdeconv_ref_a", {"ref": "a"})
     await dm.save_result("d1", "deconvolution_flashdeconv_ref_b", {"ref": "b"})
@@ -120,8 +120,8 @@ async def test_velocity_trajectory_deconv_cnv_coexist(dm):
     assert (await dm.get_result("d1", "velocity_scvelo_dynamical"))[
         "mode"
     ] == "dynamical"
-    assert (await dm.get_result("d1", "trajectory_cellrank_sw0_5"))["sw"] == 0.5
-    assert (await dm.get_result("d1", "trajectory_cellrank_sw0_0"))["sw"] == 0.0
+    assert (await dm.get_result("d1", "trajectory_cellrank_sw0_50"))["sw"] == 0.5
+    assert (await dm.get_result("d1", "trajectory_cellrank_sw0_00"))["sw"] == 0.0
     assert (await dm.get_result("d1", "deconvolution_flashdeconv_ref_a"))["ref"] == "a"
     assert (await dm.get_result("d1", "deconvolution_flashdeconv_ref_b"))["ref"] == "b"
     assert (await dm.get_result("d1", "cnv_infercnvpy_immune"))["cats"] == "immune"

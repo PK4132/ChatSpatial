@@ -265,7 +265,7 @@ async def test_velocity_and_trajectory_wrappers_save_expected_result_keys(
     assert isinstance(velocity_result, RNAVelocityResult)
     assert isinstance(trajectory_result, TrajectoryResult)
     assert ("d4", "velocity_scvelo_stochastic") in saved_calls
-    assert ("d4", "trajectory_cellrank_sw0_5") in saved_calls
+    assert ("d4", "trajectory_cellrank_sw0_50") in saved_calls
 
 
 @pytest.mark.integration
@@ -494,7 +494,7 @@ async def test_deconvolution_domains_comm_and_spatial_genes_save_expected_keys(
     assert isinstance(comm_result, CellCommunicationResult)
     assert isinstance(spatial_gene_result, SpatialVariableGenesResult)
     assert ("d5", "deconvolution_flashdeconv_ref_1") in saved_calls
-    # leiden with default resolution=0.5 → suffix "leiden_res0_5"
-    assert ("d5", "spatial_domains_leiden_res0_5") in saved_calls
+    # leiden with default resolution=0.5 → suffix "leiden_res0_50"
+    assert ("d5", "spatial_domains_leiden_res0_50") in saved_calls
     assert ("d5", "cell_communication_liana") in saved_calls
     assert ("d5", "spatial_genes_flashs") in saved_calls

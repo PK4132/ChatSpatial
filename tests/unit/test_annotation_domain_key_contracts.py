@@ -47,12 +47,12 @@ class TestBuildAnnotationSuffix:
 
 class TestBuildDomainSuffix:
     def test_leiden_encodes_resolution(self):
-        assert _build_domain_suffix("leiden", 0.5, 7) == "leiden_res0_5"
-        assert _build_domain_suffix("leiden", 1.0, 7) == "leiden_res1_0"
-        assert _build_domain_suffix("leiden", 0.3, 7) == "leiden_res0_3"
+        assert _build_domain_suffix("leiden", 0.5, 7) == "leiden_res0_50"
+        assert _build_domain_suffix("leiden", 1.0, 7) == "leiden_res1_00"
+        assert _build_domain_suffix("leiden", 0.3, 7) == "leiden_res0_30"
 
     def test_louvain_encodes_resolution(self):
-        assert _build_domain_suffix("louvain", 0.8, 5) == "louvain_res0_8"
+        assert _build_domain_suffix("louvain", 0.8, 5) == "louvain_res0_80"
 
     def test_non_clustering_encodes_n_domains(self):
         assert _build_domain_suffix("spagcn", 0.5, 7) == "spagcn_n7"
@@ -105,10 +105,10 @@ async def test_annotation_refs_coexist_in_cache(dm):
 @pytest.mark.asyncio
 async def test_domain_resolutions_coexist_in_cache(dm):
     """leiden res0.5 and leiden res1.0 must coexist."""
-    await dm.save_result("d1", "spatial_domains_leiden_res0_5", {"res": 0.5})
-    await dm.save_result("d1", "spatial_domains_leiden_res1_0", {"res": 1.0})
+    await dm.save_result("d1", "spatial_domains_leiden_res0_50", {"res": 0.5})
+    await dm.save_result("d1", "spatial_domains_leiden_res1_00", {"res": 1.0})
 
-    r1 = await dm.get_result("d1", "spatial_domains_leiden_res0_5")
-    r2 = await dm.get_result("d1", "spatial_domains_leiden_res1_0")
+    r1 = await dm.get_result("d1", "spatial_domains_leiden_res0_50")
+    r2 = await dm.get_result("d1", "spatial_domains_leiden_res1_00")
     assert r1["res"] == 0.5
     assert r2["res"] == 1.0

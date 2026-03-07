@@ -54,7 +54,7 @@ def _build_domain_suffix(
     - other methods: n_domains (e.g. ``spagcn_n7``)
     """
     if method in ("leiden", "louvain"):
-        res_str = f"{resolution:.1f}".replace(".", "_")
+        res_str = f"{resolution:.2f}".replace(".", "_")
         return f"{method}_res{res_str}"
     return f"{method}_n{n_domains}"
 
@@ -366,9 +366,7 @@ async def _identify_domains_spagcn(
 
         if use_histology and "spatial" in adata.uns:
             # Select library matching the spatial key, or fall back to
-            # the only available library.  Blindly taking [0] on
-            # multi-library data may pick an image that doesn't match
-            # the coordinates.
+            # the only available library.
             library_ids = list(adata.uns["spatial"].keys())
             lib_id = None
             if len(library_ids) == 1:
@@ -380,6 +378,16 @@ async def _identify_domains_spagcn(
                     lib_id = library_ids[0]
             elif library_ids:
                 lib_id = library_ids[0]
+
+            # Warn about image-coordinate mismatch in multi-library data
+            if len(library_ids) > 1:
+                await ctx.warning(
+                    f"Multi-library data detected ({len(library_ids)} libraries). "
+                    f"SpaGCN will use histology from '{lib_id}' for all spots. "
+                    "Image-coordinate mismatch may affect domain boundaries. "
+                    "Consider running per-library or set "
+                    "spagcn_use_histology=False."
+                )
 
             if lib_id is not None:
                 spatial_data = adata.uns["spatial"][lib_id]

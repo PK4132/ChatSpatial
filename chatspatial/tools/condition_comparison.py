@@ -102,6 +102,25 @@ async def compare_conditions(
     mask = adata.obs[params.condition_key].isin([params.condition1, params.condition2])
     adata_filtered = shallow_copy_adata(adata[mask])
 
+    # Detect and drop cells with NaN in sample_key or condition_key
+    # groupby silently ignores NaN, which would miscount samples/conditions.
+    nan_mask = (
+        adata_filtered.obs[params.sample_key].isna()
+        | adata_filtered.obs[params.condition_key].isna()
+    )
+    n_nan = int(nan_mask.sum())
+    if n_nan > 0:
+        adata_filtered = shallow_copy_adata(adata_filtered[~nan_mask])
+        await ctx.warning(
+            f"Dropped {n_nan} cells with missing values in "
+            f"'{params.sample_key}' or '{params.condition_key}'."
+        )
+        if adata_filtered.n_obs == 0:
+            raise DataError(
+                "No cells remain after removing missing values in "
+                f"'{params.sample_key}' / '{params.condition_key}'."
+            )
+
     await ctx.info(
         f"Comparing {params.condition1} vs {params.condition2}: "
         f"{adata_filtered.n_obs} cells from {adata_filtered.obs[params.sample_key].nunique()} samples"
