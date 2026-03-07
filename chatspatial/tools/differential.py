@@ -508,16 +508,18 @@ async def _run_pydeseq2(
     group2 = params.group2
 
     # If group1 is None, find first two groups for pairwise comparison
-    unique_groups = adata.obs[group_key].unique()
+    unique_groups = sorted(adata.obs[group_key].unique().astype(str))
     if group1 is None:
         if len(unique_groups) < 2:
             raise DataError(
-                f"Need at least 2 groups for DE analysis, found {len(unique_groups)}"
+                f"Need at least 2 groups for DE analysis, "
+                f"found {len(unique_groups)}"
             )
-        group1 = str(unique_groups[0])
-        group2 = str(unique_groups[1])
+        group1 = unique_groups[0]
+        group2 = unique_groups[1]
         await ctx.info(
-            f"No group specified, comparing first two groups: {group1} vs {group2}"
+            f"No group specified, comparing first two groups "
+            f"(alphabetical): {group1} vs {group2}"
         )
     elif group2 is None or group2 == "rest":
         # Compare group1 vs all others combined as "rest"
@@ -541,18 +543,24 @@ async def _run_pydeseq2(
 
     # Build pseudobulk labels without mutating adata.obs
     condition_values = np.asarray(condition, dtype=str)
-    pseudobulk_ids_arr = sample_values + "_" + condition_values
     pseudobulk_obs = pd.DataFrame(
         {
             "condition": condition_values,
             "sample": sample_values,
-            "_pseudobulk_id": pseudobulk_ids_arr,
         }
     )
 
-    # Aggregate counts
-    pseudobulk_groups = pseudobulk_obs.groupby("_pseudobulk_id").indices
-    pseudobulk_ids = list(pseudobulk_groups.keys())
+    # Aggregate counts using (sample, condition) tuple to avoid
+    # string-concatenation collisions (e.g. sample="A_B" + cond="C"
+    # vs sample="A" + cond="B_C" both producing "A_B_C").
+    pseudobulk_groups = pseudobulk_obs.groupby(
+        ["sample", "condition"]
+    ).indices
+    pseudobulk_tuples = list(pseudobulk_groups.keys())
+    # Create collision-free string IDs using unit separator (\x1f)
+    pseudobulk_ids = [
+        f"{s}\x1f{c}" for s, c in pseudobulk_tuples
+    ]
     n_samples = len(pseudobulk_ids)
 
     if n_samples < 4:
@@ -566,9 +574,9 @@ async def _run_pydeseq2(
     pseudobulk_counts = np.zeros((n_samples, raw_X_work.shape[1]), dtype=np.int64)
     pseudobulk_metadata = []
 
-    for i, pb_id in enumerate(pseudobulk_ids):
+    for i, pb_tuple in enumerate(pseudobulk_tuples):
         # Get integer positional indices for this pseudobulk group
-        int_idx = pseudobulk_groups[pb_id]
+        int_idx = pseudobulk_groups[pb_tuple]
         # Sum counts (handles both sparse and dense matrices)
         pseudobulk_counts[i] = (
             np.asarray(raw_X_work[int_idx].sum(axis=0)).flatten().astype(np.int64)
@@ -577,7 +585,7 @@ async def _run_pydeseq2(
         first_int_idx = int(int_idx[0])
         pseudobulk_metadata.append(
             {
-                "sample_id": pb_id,
+                "sample_id": pseudobulk_ids[i],
                 "condition": condition_values[first_int_idx],
                 "sample": sample_values[first_int_idx],
             }
@@ -601,7 +609,10 @@ async def _run_pydeseq2(
 
     # Run PyDESeq2
     try:
-        # Create DESeq2 dataset
+        # Design: ~condition (standard for pseudobulk DE).
+        # Samples are biological replicates — including them as
+        # covariates would consume degrees of freedom without benefit.
+        # For paired designs, users should encode pairing in condition.
         dds = DeseqDataSet(
             counts=counts_df,
             metadata=metadata_df,

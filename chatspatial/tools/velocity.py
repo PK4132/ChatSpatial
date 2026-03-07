@@ -224,15 +224,21 @@ async def _prepare_velovi_data(
             enforce=True,
         )
     except Exception as e:
-        if ctx:
-            await ctx.warning(f"scvelo preprocessing warning: {e}")
+        raise ProcessingError(
+            f"VELOVI preprocessing failed: {e}. "
+            "Check that spliced/unspliced layers exist "
+            "and contain valid data."
+        ) from e
 
     # Compute moments
     try:
         scv.pp.moments(adata_velovi, n_pcs=n_pcs, n_neighbors=n_neighbors)
     except Exception as e:
-        if ctx:
-            await ctx.warning(f"moments computation warning: {e}")
+        raise ProcessingError(
+            f"Moments computation failed: {e}. "
+            "This may indicate insufficient cells or genes "
+            "after filtering."
+        ) from e
 
     return adata_velovi
 

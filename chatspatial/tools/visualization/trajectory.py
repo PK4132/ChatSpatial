@@ -645,6 +645,13 @@ async def _create_palantir_results(
             # CellRank returns ndarray - use argmax
             dominant_fate = fate_probs.argmax(axis=1)
 
+            # NaN rows (failed computation) should not be assigned a fate
+            nan_rows = np.isnan(fate_probs).any(axis=1)
+            if nan_rows.any():
+                # Convert to object array to allow string labels
+                dominant_fate = dominant_fate.astype(object)
+                dominant_fate[nan_rows] = "unassigned"
+
         _fate_temp_key = "_dominant_fate"
         adata.obs[_fate_temp_key] = dominant_fate.astype(str)
         try:

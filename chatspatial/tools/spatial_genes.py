@@ -311,6 +311,17 @@ async def _identify_spatial_genes_spatialde(
         total_counts = total_counts.loc[~zero_count_mask]
         coords = coords.loc[~zero_count_mask]
 
+    if counts.shape[0] < 3:
+        raise DataError(
+            f"Too few spots ({counts.shape[0]}) remain after filtering "
+            "zero-count spots. "
+            "SpatialDE requires at least 3 spots with non-zero expression."
+        )
+    if counts.shape[1] == 0:
+        raise DataError(
+            "No genes remain after filtering. Cannot run SpatialDE."
+        )
+
     # Apply official SpatialDE preprocessing workflow
     # Step 1: Variance stabilization
     norm_expr = NaiveDE.stabilize(counts.T).T
@@ -730,6 +741,13 @@ async def _identify_spatial_genes_sparkx(
 
     # Update gene count after filtering
     n_genes = len(gene_names)
+
+    if n_genes == 0:
+        raise DataError(
+            "No genes passed the expression filter for SPARK-X. "
+            f"Try lowering min_pct (current: {percentage*100:.0f}%) "
+            f"or min_total_counts (current: {min_total_counts})."
+        )
 
     # Transpose for SPARK format (genes × spots)
     counts_transposed = counts_matrix.T
