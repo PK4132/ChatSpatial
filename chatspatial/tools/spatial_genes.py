@@ -42,9 +42,6 @@ from ..utils.mcp_utils import suppress_output  # noqa: E402
 # Shared Utilities for Spatial Variable Gene Detection
 # =============================================================================
 
-# Default limit for spatial_genes list returned to LLM
-# Full results stored in adata.var for complete access
-DEFAULT_TOP_GENES_LIMIT = 500
 
 
 # Gene name deduplication is handled by make_unique_names from adata_utils
@@ -349,7 +346,11 @@ async def _identify_spatial_genes_spatialde(
     significant_genes_all = results[results["qval"] < 0.05]["g"].tolist()
 
     # Limit for MCP response (full results stored in adata.var)
-    limit = params.n_top_genes or DEFAULT_TOP_GENES_LIMIT
+    limit = (
+        params.n_top_genes
+        if params.n_top_genes is not None
+        else len(significant_genes_all)
+    )
     significant_genes = significant_genes_all[:limit]
 
     # Store results in adata.var (per-gene statistics)
@@ -501,7 +502,11 @@ async def _identify_spatial_genes_flashs(
         (result_df["tested"]) & (result_df["qval"] < 0.05)
     ]["gene"].tolist()
 
-    limit = params.n_top_genes or DEFAULT_TOP_GENES_LIMIT
+    limit = (
+        params.n_top_genes
+        if params.n_top_genes is not None
+        else len(significant_genes_all)
+    )
     significant_genes = significant_genes_all[:limit]
 
     from ..utils.adata_utils import store_analysis_metadata
@@ -874,7 +879,11 @@ async def _identify_spatial_genes_sparkx(
     ].tolist()
 
     # Limit for MCP response (full results stored in adata.var)
-    limit = params.n_top_genes or DEFAULT_TOP_GENES_LIMIT
+    limit = (
+        params.n_top_genes
+        if params.n_top_genes is not None
+        else len(significant_genes_all)
+    )
     significant_genes = significant_genes_all[:limit]
 
     # TIER 3: Housekeeping gene warnings (post-processing quality check)

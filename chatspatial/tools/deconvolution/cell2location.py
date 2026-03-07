@@ -215,12 +215,19 @@ def deconvolve(
             sp, sample_kwargs={"num_samples": 1000, "batch_size": 2500}
         )
 
-        # Extract cell abundance
+        # Extract cell abundance and normalize to proportions
         cell_abundance = _extract_cell_abundance(sp)
+
+        # Cell2location outputs absolute abundance (not 0-1 proportions).
+        # Normalize each spot's abundances to sum to 1 for consistent
+        # downstream interpretation as cell type proportions.
+        row_sums = cell_abundance.sum(axis=1, keepdims=True)
+        row_sums = np.where(row_sums == 0, 1.0, row_sums)  # avoid /0
+        cell_proportions = cell_abundance / row_sums
 
         # Create proportions DataFrame
         proportions = pd.DataFrame(
-            cell_abundance,
+            cell_proportions,
             index=sp.obs_names,
             columns=ref_signatures.columns,
         )
@@ -318,10 +325,11 @@ def _extract_cell_abundance(sp: "ad.AnnData"):
     'q05cell_abundance_w_sf_CellType'. We need to extract the values and
     return them as a numpy array for consistent downstream processing.
     """
+    # Prefer posterior mean (unbiased), then median, then lower quantile
     possible_keys = [
-        "q05_cell_abundance_w_sf",
         "means_cell_abundance_w_sf",
         "q50_cell_abundance_w_sf",
+        "q05_cell_abundance_w_sf",
     ]
 
     for key in possible_keys:
