@@ -58,6 +58,19 @@ def _validate_spatial_coords(adata_list: list["ad.AnnData"]) -> str:
                 f"but slice {i} uses '{key}'. All slices must store "
                 f"coordinates under the same obsm key."
             )
+
+        # Validate coordinate values
+        coords = adata.obsm[key]
+        if np.isnan(coords).any():
+            raise ParameterError(
+                f"Slice {i} has NaN values in spatial coordinates "
+                f"('{key}'). Clean the data before registration."
+            )
+        if np.isinf(coords).any():
+            raise ParameterError(
+                f"Slice {i} has Inf values in spatial coordinates "
+                f"('{key}'). Clean the data before registration."
+            )
     return spatial_key or "spatial"
 
 
@@ -179,6 +192,12 @@ def _register_paste(
     import paste as pst
 
     reference_idx = params.reference_idx or 0
+    if reference_idx < 0 or reference_idx >= len(adata_list):
+        raise ParameterError(
+            f"reference_idx={reference_idx} is out of range for "
+            f"{len(adata_list)} slices "
+            f"(valid: 0 to {len(adata_list) - 1})"
+        )
     # Memory optimization: keep lightweight working copies and avoid duplicating X.
     registered = [shallow_copy_adata(adata) for adata in adata_list]
     common_genes = _get_common_genes(registered)
@@ -187,21 +206,29 @@ def _register_paste(
     slices = _prepare_paste_slices(registered, common_genes, spatial_key)
 
     if len(registered) == 2:
-        # Pairwise alignment
-        slice1, slice2 = slices
+        # Pairwise alignment — reference_idx determines which slice
+        # is "fixed" (slice1 in PASTE convention).
+        ref_idx = reference_idx  # 0 or 1
+        other_idx = 1 - ref_idx
 
         pi = pst.pairwise_align(
-            slice1,
-            slice2,
+            slices[ref_idx],
+            slices[other_idx],
             alpha=params.paste_alpha,
             numItermax=params.paste_numItermax,
             verbose=True,
         )
 
         # Stack and extract aligned coordinates
-        aligned = pst.stack_slices_pairwise([slice1, slice2], [pi])
-        registered[0].obsm["spatial_registered"] = aligned[0].obsm["spatial"]
-        registered[1].obsm["spatial_registered"] = aligned[1].obsm["spatial"]
+        aligned = pst.stack_slices_pairwise(
+            [slices[ref_idx], slices[other_idx]], [pi]
+        )
+        registered[ref_idx].obsm["spatial_registered"] = (
+            aligned[0].obsm["spatial"]
+        )
+        registered[other_idx].obsm["spatial_registered"] = (
+            aligned[1].obsm["spatial"]
+        )
 
     else:
         # Multi-slice center alignment

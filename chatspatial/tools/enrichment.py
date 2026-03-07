@@ -1070,22 +1070,22 @@ def perform_ssgsea(
                     sample_scores = df.set_index("Term")["ES"]
                     scores_matrix[sample] = sample_scores.reindex(all_gene_sets_list)
 
-            scores_df = scores_matrix.fillna(0)  # Fill missing values with 0
+            scores_df = scores_matrix  # Keep NaN for accurate statistics
         else:
             error_msg = "ssGSEA results format not recognized."
             logger.error(error_msg)
             raise ProcessingError(error_msg)
 
-        # Calculate statistics - vectorized (50x faster than row-by-row)
+        # Calculate statistics - vectorized, NaN-aware (50x faster than row-by-row)
         enrichment_scores = {}
         gene_set_statistics = {}
 
         if not scores_df.empty:
             values = scores_df.values
-            means = np.mean(values, axis=1)
-            stds = np.std(values, axis=1)
-            mins = np.min(values, axis=1)
-            maxs = np.max(values, axis=1)
+            means = np.nanmean(values, axis=1)
+            stds = np.nanstd(values, axis=1)
+            mins = np.nanmin(values, axis=1)
+            maxs = np.nanmax(values, axis=1)
 
             enrichment_scores = dict(zip(scores_df.index, means.astype(float)))
 
@@ -1098,8 +1098,10 @@ def perform_ssgsea(
                     "size": len(gene_sets.get(gs_name, [])),
                 }
 
-            # Add scores to adata - use transposed DataFrame for efficient row access
-            scores_T = scores_df.T
+            # Add scores to adata - fill NaN with 0 for storage (downstream
+            # viz/export needs numeric values)
+            scores_for_storage = scores_df.fillna(0)
+            scores_T = scores_for_storage.T
             for gs_name in scores_df.index:
                 adata.obs[f"ssgsea_{gs_name}"] = scores_T[gs_name].values
 

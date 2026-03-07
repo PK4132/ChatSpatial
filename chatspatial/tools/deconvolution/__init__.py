@@ -413,6 +413,11 @@ async def _store_results(
             n_nan,
             method,
         )
+        # Store mask so downstream can distinguish real zeros
+        # from method failures
+        spatial_adata.obs[
+            f"{proportions_key}_nan_flag"
+        ] = method_nan_mask.values
 
     # Fill all NaN with 0 for downstream compatibility
     full_proportions = reindexed.fillna(0).values

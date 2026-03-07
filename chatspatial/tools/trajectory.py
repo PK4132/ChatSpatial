@@ -452,7 +452,18 @@ def compute_dpt_trajectory(
     if "dpt_pseudotime" not in adata.obs.columns:
         raise ProcessingError("DPT computation did not create 'dpt_pseudotime' column")
 
-    adata.obs["dpt_pseudotime"] = adata.obs["dpt_pseudotime"].fillna(0)
+    dpt_pseudotime = adata.obs["dpt_pseudotime"]
+    nan_count = int(dpt_pseudotime.isna().sum())
+    if nan_count > 0:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "%d cells have NaN pseudotime (unreachable from root). "
+            "These are preserved as NaN; downstream tools may "
+            "need to handle them.",
+            nan_count,
+        )
+    # Do NOT fill NaN — preserve for accurate downstream interpretation
 
     return adata
 
