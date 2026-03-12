@@ -4,6 +4,8 @@
 
 **MCP server for spatial transcriptomics analysis via natural language**
 
+[![Paper](https://img.shields.io/badge/bioRxiv-2026.02.26.708361-b31b1b.svg)](https://doi.org/10.64898/2026.02.26.708361)
+[![MLGenX @ ICLR 2026](https://img.shields.io/badge/MLGenX%20@%20ICLR%202026-Accepted-brightgreen.svg)](https://openreview.net/forum?id=xZ814yNaUW)
 [![CI](https://github.com/cafferychen777/ChatSpatial/actions/workflows/ci.yml/badge.svg)](https://github.com/cafferychen777/ChatSpatial/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/chatspatial)](https://pypi.org/project/chatspatial/)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
