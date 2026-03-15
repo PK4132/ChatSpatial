@@ -216,6 +216,9 @@ scalefactors_json.json
 *.tiff
 *.bmp
 
+# Allow README assets
+!assets/images/**
+
 # Video files
 *.mp4
 *.avi

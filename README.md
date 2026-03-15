@@ -14,44 +14,11 @@
 
 </div>
 
----
+<p align="center">
+  <img src="assets/images/overview.jpg" alt="ChatSpatial Overview" width="900">
+</p>
 
-<table>
-<tr>
-<td width="50%">
-
-### Before
-```python
-import scanpy as sc
-import squidpy as sq
-adata = sc.read_h5ad("data.h5ad")
-sc.pp.filter_cells(adata, min_genes=200)
-sc.pp.normalize_total(adata)
-sc.pp.log1p(adata)
-sc.pp.highly_variable_genes(adata)
-sc.tl.pca(adata)
-sc.pp.neighbors(adata)
-# ... 40 more lines
-```
-
-</td>
-<td width="50%">
-
-### After
-```text
-"Load my Visium data and identify
- spatial domains"
-```
-
-```
-Loaded 3,456 spots, 18,078 genes
-Identified 7 spatial domains
-Generated visualization
-```
-
-</td>
-</tr>
-</table>
+ChatSpatial replaces ad-hoc LLM code generation with **schema-enforced orchestration** — the LLM selects methods and parameters from a curated registry instead of writing arbitrary code, ensuring reproducible results across sessions and platforms. It exposes **60+ spatial transcriptomics methods** as MCP tools that any compatible client can call.
 
 ---
 
@@ -84,7 +51,9 @@ See [Installation Guide](INSTALLATION.md) for detailed setup including virtual e
 
 ---
 
-## Use
+## Usage
+
+Talk to ChatSpatial in natural language:
 
 ```text
 Load /path/to/spatial_data.h5ad and show me the tissue structure
@@ -102,6 +71,8 @@ Find spatially variable genes and create a heatmap
 
 ## Capabilities
 
+60+ methods across 10 categories. Supports 10x Visium, Xenium, Slide-seq v2, MERFISH, seqFISH.
+
 | Category | Methods |
 |----------|---------|
 | **Spatial Domains** | SpaGCN, STAGATE, GraphST, Leiden, Louvain |
@@ -114,8 +85,6 @@ Find spatially variable genes and create a heatmap
 | **Spatial Genes** | SpatialDE, SPARK-X |
 | **Integration** | Harmony, BBKNN, Scanorama, scVI |
 | **Other** | CNV Analysis, Spatial Registration |
-
-**60+ methods** across 15 categories. **Supports** 10x Visium, Xenium, Slide-seq v2, MERFISH, seqFISH.
 
 ---
 
