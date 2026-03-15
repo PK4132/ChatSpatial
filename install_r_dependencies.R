@@ -80,8 +80,7 @@ cran_packages <- c(
   "openxlsx",     # Excel file reading (required by scType)
   "HGNChelper",   # Gene name validation (required by scType)
   "sctransform",  # SCTransform v2 normalization (variance-stabilizing)
-  "Matrix",       # Sparse matrix operations (required by SCTransform)
-  "mclust"        # Model-based clustering (required by GraphST)
+  "Matrix"        # Sparse matrix operations (required by SCTransform)
 )
 
 for (pkg in cran_packages) {
@@ -193,7 +192,6 @@ if (length(failed_packages) > 0) {
   cat("  • scType cell type annotation (dplyr, openxlsx, HGNChelper)\n")
   cat("  • Numbat CNV analysis (numbat)\n")
   cat("  • SPARK-X spatial variable genes (SPARK)\n")
-  cat("  • GraphST clustering (mclust)\n")
   cat("\n")
 }
 

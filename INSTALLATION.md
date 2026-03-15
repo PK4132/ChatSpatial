@@ -107,7 +107,7 @@ pip install chatspatial[full]
 
 ### R Methods
 
-For RCTD, SPOTlight, CARD, CellChat, SPARK-X, scType, Numbat, SCTransform, GraphST:
+For RCTD, SPOTlight, CARD, CellChat, SPARK-X, scType, Numbat, SCTransform:
 
 ```bash
 # Install R 4.4+ from https://cran.r-project.org/
