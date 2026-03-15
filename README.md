@@ -71,20 +71,21 @@ Find spatially variable genes and create a heatmap
 
 ## Capabilities
 
-60+ methods across 10 categories. Supports 10x Visium, Xenium, Slide-seq v2, MERFISH, seqFISH.
+60+ methods across 11 categories. Supports 10x Visium, Xenium, Slide-seq v2, MERFISH, seqFISH.
 
 | Category | Methods |
 |----------|---------|
-| **Spatial Domains** | SpaGCN, STAGATE, GraphST, Leiden, Louvain |
+| **Spatial Domains** | SpaGCN, STAGATE, GraphST, BANKSY, Leiden, Louvain |
 | **Deconvolution** | FlashDeconv, Cell2location, RCTD, DestVI, Stereoscope, SPOTlight, Tangram, CARD |
 | **Cell Communication** | LIANA+, CellPhoneDB, CellChat, FastCCC |
 | **Cell Type Annotation** | Tangram, scANVI, CellAssign, mLLMCelltype, scType, SingleR |
+| **Differential Expression** | Wilcoxon, t-test, Logistic Regression, pyDESeq2 |
 | **Trajectory & Velocity** | CellRank, Palantir, DPT, scVelo, VeloVI |
-| **Spatial Statistics** | Moran's I, Local Moran, Geary's C, Getis-Ord Gi*, Ripley's K, Neighborhood Enrichment |
+| **Spatial Statistics** | Moran's I, Local Moran, Geary's C, Getis-Ord Gi*, Ripley's K, Co-occurrence, Neighborhood Enrichment, Centrality Scores |
 | **Enrichment** | GSEA, ORA, Enrichr, ssGSEA, Spatial EnrichMap |
-| **Spatial Genes** | SpatialDE, SPARK-X |
+| **Spatial Genes** | SpatialDE, SPARK-X, FlashS |
 | **Integration** | Harmony, BBKNN, Scanorama, scVI |
-| **Other** | CNV Analysis, Spatial Registration |
+| **Other** | CNV Analysis (InferCNVPy, Numbat), Spatial Registration (PASTE, STalign) |
 
 ---
 
