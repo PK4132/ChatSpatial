@@ -118,6 +118,8 @@ If you use ChatSpatial in your research, please cite:
 }
 ```
 
+ChatSpatial orchestrates many excellent third-party methods. **Please also cite the original tools your analysis used.** For example, if you ran spatial domain identification with SpaGCN, cite both ChatSpatial and SpaGCN. Each method's original publication can be found in its documentation or GitHub repository.
+
 <div align="center">
 
 **MIT License** · [GitHub](https://github.com/cafferychen777/ChatSpatial) · [Issues](https://github.com/cafferychen777/ChatSpatial/issues)
