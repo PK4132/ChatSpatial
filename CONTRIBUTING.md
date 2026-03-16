@@ -1,885 +1,183 @@
 # Contributing to ChatSpatial
 
-Thank you for your interest in contributing to ChatSpatial! This document provides guidelines for contributing to the project.
+Contributions are welcome — bug reports, new analysis methods, documentation improvements, and feature requests.
 
 ## Getting Started
 
-### Prerequisites
-- Python 3.11 or higher (3.12 recommended, 3.13 supported)
-- Git
-- Basic understanding of spatial transcriptomics
-- Familiarity with Model Context Protocol (MCP) is helpful
-- For visualization testing: Understanding of matplotlib and image processing
-- For advanced methods: Knowledge of PyTorch, R 4.4+ (for R-based methods)
+```bash
+# Fork and clone
+git clone https://github.com/YOUR_USERNAME/ChatSpatial.git
+cd ChatSpatial
 
-### Development Setup
+# Create environment and install
+python3 -m venv venv && source venv/bin/activate
+pip install -e ".[dev]"
 
-1. **Fork and clone the repository**
-   ```bash
-   git clone https://github.com/cafferychen777/ChatSpatial.git
-   cd ChatSpatial
-   ```
+# Verify
+pytest tests/unit/ -x
+```
 
-2. **Create a virtual environment**
-   ```bash
-   # Create virtual environment for development
-   python3 -m venv chatspatial_dev
-   source chatspatial_dev/bin/activate  # macOS/Linux
-   # chatspatial_dev\Scripts\activate    # Windows
-   ```
+**Prerequisites**: Python 3.11+, Git. For R-based methods (RCTD, CellChat, SPARK-X, etc.): R 4.4+ and rpy2.
 
-3. **Install development dependencies**
-   ```bash
-   # Install ChatSpatial with development dependencies
-   pip install -e ".[dev]"
-   
-   # Install development tools
-   pip install pytest pytest-cov black isort mypy flake8
-   
-   # Install MCP development tools
-   pip install mcp[dev]
-   
-   # Optional: Install R dependencies for R-based methods
-   pip install rpy2  # Requires R to be installed separately
-   ```
-
-4. **Run tests to ensure everything works**
-   ```bash
-   # Run basic test suite
-   pytest tests/
-   
-   # Run with coverage reporting
-   pytest tests/ --cov=chatspatial --cov-report=html
-   
-   # Run specific test categories
-   pytest tests/unit/          # Unit tests
-   pytest tests/integration/   # Integration tests
-   pytest tests/e2e/          # End-to-end MCP tests
-   
-   # Test MCP server directly
-   python -m chatspatial --help
-   ```
-
-## Project Architecture
-
-### Core Components
-
-ChatSpatial follows a modular MCP server architecture:
+## Project Structure
 
 ```
 chatspatial/
-├── server.py                    # Main MCP server with 20 tool definitions
-├── spatial_mcp_adapter.py       # Spatial data adapter for MCP
-├── config.py                    # Runtime configuration (SSOT)
-├── tools/                       # Analysis tool implementations
-│   ├── annotation.py            # Cell type annotation (Tangram, scANVI, etc.)
-│   ├── cell_communication.py    # LIANA, CellPhoneDB, CellChat, FastCCC
-│   ├── spatial_genes.py         # SpatialDE, SPARK-X
-│   ├── spatial_domains.py       # SpaGCN, STAGATE, GraphST, Leiden
-│   ├── spatial_statistics.py    # Moran's I, Getis-Ord, Ripley's K
-│   ├── deconvolution/           # Deconvolution submodule
-│   │   ├── flashdeconv.py       # Fast sketch-based (default)
-│   │   ├── cell2location.py     # Deep learning method
-│   │   ├── rctd.py              # R-based method
-│   │   └── ...
-│   ├── visualization/           # Visualization submodule
-│   │   ├── main.py              # Plot type dispatcher
-│   │   ├── core.py              # Core plotting utilities
-│   │   ├── expression.py        # Expression plots
-│   │   └── ...
+├── server.py                 # MCP tool definitions (entry point)
+├── spatial_mcp_adapter.py    # ToolContext and data manager
+├── config.py                 # Runtime configuration
+├── tools/                    # Analysis implementations
+│   ├── spatial_genes.py      # SpatialDE, SPARK-X, FlashS
+│   ├── spatial_domains.py    # SpaGCN, STAGATE, GraphST, BANKSY, Leiden
+│   ├── cell_communication.py # FastCCC, LIANA, CellPhoneDB, CellChat
+│   ├── deconvolution/        # FlashDeconv, Cell2location, RCTD, etc.
+│   ├── visualization/        # 11 plot types
 │   └── ...
-├── models/                      # Pydantic data models
-│   ├── data.py                  # Parameter models for each tool
-│   └── analysis.py              # Result models for analysis outputs
-├── utils/                       # Utility functions
-│   ├── exceptions.py            # Custom exception classes
-│   ├── mcp_utils.py             # MCP error handling decorators
-│   ├── data_loader.py           # Data loading utilities
-│   ├── persistence.py           # Data export/reload utilities
-│   └── image_utils.py           # Image processing and conversion
-└── cli/                         # CLI entry points
-    └── __init__.py
+├── models/
+│   ├── data.py               # Pydantic parameter models
+│   └── analysis.py           # Pydantic result models
+└── utils/
+    ├── mcp_utils.py           # @mcp_tool_error_handler decorator
+    ├── exceptions.py          # Custom exception classes
+    ├── adata_utils.py         # AnnData validation helpers
+    └── dependency_manager.py  # Optional dependency checking
 ```
 
-### Key Design Principles
+## Adding a New Analysis Method
 
-1. **Separation of Analysis and Visualization**: Each analysis tool focuses on computation, visualization is handled separately
-2. **Two-Layer Error Handling**: Data validation errors vs. MCP protocol errors
-3. **Pydantic Parameter Validation**: All tool parameters are validated using Pydantic models
-4. **Image Object Handling**: Critical handling of matplotlib images for MCP display
-5. **Resource Management**: Automatic cleanup and memory management for large datasets
+This is the most common contribution. Follow the existing pattern:
 
-## Development Workflow
-
-### Branching Strategy
-- `main`: Stable release branch (production-ready)
-- `develop`: Development branch for new features (optional - direct to main is acceptable)
-- Feature branches: `feature/your-feature-name`
-- Bug fixes: `bugfix/issue-description`
-- Documentation: `docs/update-description`
-
-### Making Changes
-
-1. **Create a feature branch**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-2. **Make your changes**
-   - Follow the existing code style
-   - Add tests for new functionality
-   - Update documentation as needed
-
-3. **Run tests and linting**
-   ```bash
-   # Run tests
-   pytest tests/
-   
-   # Format code
-   black .
-   isort .
-   
-   # Check linting
-   flake8 .
-   mypy chatspatial
-   ```
-
-4. **Commit your changes**
-   ```bash
-   git add .
-   git commit -m "feat: add new spatial analysis method"
-   ```
-
-5. **Push and create a Pull Request**
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-
-## Code Style Guidelines
-
-### Python Code Style
-- Follow PEP 8
-- Use Black for code formatting
-- Use isort for import sorting
-- Maximum line length: 88 characters (Black default)
-- Use type hints where appropriate
-
-### Commit Message Format
-Follow conventional commits:
-- `feat:` for new features
-- `fix:` for bug fixes
-- `docs:` for documentation changes
-- `test:` for adding tests
-- `refactor:` for code refactoring
-- `perf:` for performance improvements
-
-### Documentation
-- Update README.md for new features
-- Add docstrings to all public functions and classes
-- Include examples in docstrings
-- Update API documentation
-
-## Testing Guidelines
-
-### Test Structure
-
-ChatSpatial uses a layered testing strategy:
-
-```
-tests/
-├── unit/                        # Pure function tests
-├── integration/                # Multi-component tests
-├── e2e/                        # Workflow tests via public tool APIs
-└── fixtures/                   # Shared fixtures/helpers
-```
-
-Legacy exploratory scripts previously under `scripts/tests/` are deprecated and not part of the CI test contract.
-
-### Test Categories and When to Use
-
-1. **Unit Tests**: Individual function/method testing
-   ```python
-   # Test single function behavior
-   async def test_validate_adata():
-       # Test data validation logic
-   ```
-
-2. **Integration Tests**: Multi-component workflows
-   ```python
-   # Test complete analysis workflows
-   async def test_gaston_spatial_genes_workflow():
-       # Test load → preprocess → analyze → visualize
-   ```
-
-3. **E2E Tests**: Public API workflow testing
-   ```python
-   # Test MCP tool calls end-to-end
-   async def test_mcp_spatial_analysis_complete():
-       # Test through MCP protocol
-   ```
-
-4. **Stress Tests**: Large dataset and performance testing
-   ```python
-   # Test with realistic dataset sizes
-   async def test_large_dataset_performance():
-       # Test memory usage and timeout handling
-   ```
-
-5. **Visualization Tests**: Image generation testing
-   ```python
-   # Test image creation and format
-    async def test_spatial_plot_generation():
-        # Test matplotlib → MCP Image object conversion
-    ```
-
-### Quality Gates
-
-Run the local quality gate script before opening a PR:
-
-```bash
-scripts/quality/check_test_gates.sh
-```
-
-This enforces:
-- pytest collection count > 0
-- fast default suite passes (`not slow`)
-- at least one core e2e workflow passes
-- e2e failure artifacts written to `tests/artifacts/e2e_failures/` with `data_id` and parameter snapshots
-
-Convenience targets:
-
-```bash
-make test-fast   # default fast suite (not slow)
-make test-slow   # optional heavy dependency suite
-make test-e2e    # core e2e workflows only
-make test-gates  # full local quality gate
-```
-
-### Critical Testing Requirements
-
-#### **Image Object Testing**
-
-**Current Architecture (2024-12):**
-
-All visualizations save to disk and return file paths (DIRECT_EMBED_THRESHOLD = 0). This avoids MCP protocol token overhead issues with embedded images.
+### 1. Parameter model (`models/data.py`)
 
 ```python
-# Test current image handling (file paths)
-async def test_image_object_handling():
-    """Test that visualizations return file paths correctly."""
-
-    # Test visualization tool
-    result = await visualize_data("test_data", params)
-
-    # Currently returns file path string
-    assert isinstance(result, str)  # File path to saved image
-    assert result.startswith("file://") or result.startswith("/")
-    assert result.endswith(".png")
-
-    # Future: When DIRECT_EMBED_THRESHOLD > 0, small images may return ImageContent
-    # See docs/IMAGE_HANDLING_ARCHITECTURE.md for details
-```
-
-#### **MCP Error Handling Testing**
-
-Test both error handling layers:
-
-```python
-# Test data validation layer
-async def test_data_validation_errors():
-    with pytest.raises(ProcessingError):
-        await analyze_with_invalid_data()
-
-# Test MCP protocol layer  
-async def test_mcp_error_formatting():
-    result = await mcp_tool_with_error()
-    assert result["isError"] == True
-    assert "Error:" in result["content"][0]["text"]
-```
-
-### Test Data Management
-
-#### **Synthetic Data Creation**
-
-```python
-# Create realistic synthetic data for testing
-def create_synthetic_spatial_data(n_spots=200, n_genes=100):
-    """Create synthetic spatial transcriptomics data."""
-    
-    # Create spatial coordinates
-    spatial_coords = generate_spatial_pattern()
-    
-    # Create expression data with spatial patterns
-    X = create_spatial_expression(n_spots, n_genes, spatial_coords)
-    
-    # Create AnnData with proper structure
-    adata = sc.AnnData(X)
-    adata.obsm['spatial'] = spatial_coords
-    adata.obs['cell_type'] = assign_cell_types(spatial_coords)
-    
-    return adata
-```
-
-#### **Test Data Guidelines**
-
-- **Small datasets**: <1000 spots, <500 genes for unit tests
-- **Medium datasets**: 1000-3000 spots for integration tests  
-- **Large datasets**: >3000 spots only for stress tests
-- **Don't commit large files**: Use `.gitignore` for test data >10MB
-- **Reproducible data**: Set random seeds for consistent test results
-
-### Performance Testing
-
-#### **Memory Usage Testing**
-
-```python
-import psutil
-import os
-
-async def test_memory_usage():
-    """Test memory usage during analysis."""
-    
-    # Get initial memory
-    process = psutil.Process(os.getpid())
-    initial_memory = process.memory_info().rss
-    
-    # Run analysis
-    result = await analyze_large_dataset()
-    
-    # Check memory increase is reasonable
-    final_memory = process.memory_info().rss
-    memory_increase = (final_memory - initial_memory) / 1024 / 1024  # MB
-    
-    assert memory_increase < 500  # Less than 500MB increase
-```
-
-#### **Timeout Testing**
-
-```python
-import asyncio
-
-async def test_analysis_timeout():
-    """Test that long-running analysis completes within reasonable time."""
-    
-    start_time = time.time()
-    
-    # Run analysis with timeout
-    try:
-        result = await asyncio.wait_for(
-            analyze_complex_data(), 
-            timeout=300  # 5 minutes max
-        )
-        assert result.success
-    except asyncio.TimeoutError:
-        pytest.fail("Analysis took too long (>5 minutes)")
-    
-    end_time = time.time()
-    assert end_time - start_time < 300
-```
-
-### Test Fixtures and Utilities
-
-Create reusable test fixtures:
-
-```python
-# tests/fixtures/__init__.py
-import pytest
-
-@pytest.fixture
-def sample_spatial_data():
-    """Standard spatial transcriptomics test data."""
-    return create_synthetic_spatial_data(n_spots=100, n_genes=50)
-
-@pytest.fixture  
-def mock_context():
-    """Mock MCP context for testing."""
-    class MockContext:
-        async def info(self, msg): pass
-        async def warning(self, msg): pass
-    return MockContext()
-
-@pytest.fixture
-def data_store(sample_spatial_data):
-    """Standard data store for testing."""
-    return {
-        "test_data": {
-            "adata": sample_spatial_data,
-            "name": "Test Dataset",
-            "type": "synthetic"
-        }
-    }
-```
-
-### Test Automation and CI
-
-#### **Pre-commit Testing**
-
-```bash
-# Test before committing
-python -m pytest tests/unit/ -x          # Stop on first failure
-python -m pytest tests/integration/ -v   # Verbose integration tests
-python -m pytest tests/e2e/ --timeout=300  # E2E with timeout
-```
-
-#### **Coverage Requirements**
-
-```bash
-# Generate coverage report
-pytest tests/ --cov=chatspatial --cov-report=html --cov-report=term
-
-# Minimum coverage targets:
-# - Unit tests: >90% coverage
-# - Integration tests: >80% coverage
-# - Overall: >85% coverage
-```
-
-#### **Test Performance Monitoring**
-
-```bash
-# Run with performance profiling
-pytest tests/ --durations=10  # Show 10 slowest tests
-
-# Memory profiling
-pytest tests/ --memory-profiler  # If installed
-```
-
-### Debugging Test Failures
-
-#### **Common Test Failure Patterns**
-
-1. **Image Display Issues**: Check Image object handling
-2. **Memory Errors**: Reduce test dataset size or increase system memory
-3. **Timeout Errors**: Use Cherry Studio configuration for testing
-4. **Import Errors**: Check optional dependencies are installed
-5. **Data Format Errors**: Verify AnnData structure matches expectations
-
-#### **Test Debugging Tools**
-
-```python
-# Add debug logging to tests
-import logging
-logging.basicConfig(level=logging.DEBUG)
-
-# Use pytest debugging
-pytest tests/test_your_tool.py -v -s --pdb  # Drop to debugger on failure
-
-# Capture stdout/stderr
-pytest tests/test_your_tool.py -s  # Don't capture output
-```
-
-## Adding New Features
-
-### Adding New MCP Tools
-
-Follow this pattern for adding new analysis tools:
-
-#### 1. Create Parameter Model (`chatspatial/models/data.py`)
-
-```python
-from pydantic import BaseModel, Field
-from typing import Optional, List
-
-class YourAnalysisParameters(BaseModel):
-    """Parameters for your new analysis method."""
-    
-    method: str = Field("default_method", description="Analysis method to use")
-    parameter1: int = Field(10, description="Description of parameter1")
-    parameter2: Optional[float] = Field(None, description="Optional parameter")
-    genes: Optional[List[str]] = Field(None, description="Genes to analyze")
-```
-
-#### 2. Create Result Model (`chatspatial/models/analysis.py`)
-
-```python
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
-
-class YourAnalysisResult(BaseModel):
-    """Result from your analysis method."""
-    
-    method: str
-    success: bool
-    n_features_analyzed: int
-    results_key: Optional[str] = None  # Key in adata.uns where results are stored
-    statistics: Optional[Dict[str, Any]] = None
-    message: str
-```
-
-#### 3. Implement Tool Logic (`chatspatial/tools/your_tool.py`)
-
-```python
-from chatspatial.utils.error_handling import validate_adata, ProcessingError
-from chatspatial.utils.tool_error_handling import mcp_tool_error_handler
-from chatspatial.models.data import YourAnalysisParameters
-from chatspatial.models.analysis import YourAnalysisResult
-
-async def your_analysis_function(
-    data_id: str,
-    data_store: dict,
-    params: YourAnalysisParameters,
-    context
-) -> YourAnalysisResult:
-    """
-    Implement your analysis method.
-    
-    Args:
-        data_id: Dataset identifier
-        data_store: Data storage dictionary
-        params: Analysis parameters
-        context: MCP context for logging
-        
-    Returns:
-        YourAnalysisResult: Analysis results
-    """
-    
-    # Validate input data
-    adata = data_store[data_id]["adata"]
-    validate_adata(adata, {
-        'obs': ['required_column'],  # Add required columns
-        'obsm': ['spatial']          # Spatial coordinates usually required
-    }, check_spatial=True)
-    
-    # Implement your analysis logic
-    try:
-        # Your analysis code here
-        results = run_your_analysis(adata, params)
-        
-        # Store results in adata
-        adata.uns['your_analysis_results'] = results
-        
-        return YourAnalysisResult(
-            method=params.method,
-            success=True,
-            n_features_analyzed=len(results),
-            results_key='your_analysis_results',
-            message=f"Analysis completed successfully with {len(results)} features"
-        )
-        
-    except Exception as e:
-        raise ProcessingError(f"Analysis failed: {str(e)}")
-```
-
-#### 4. Register MCP Tool (`chatspatial/server.py`)
-
-```python
-from chatspatial.tools.your_tool import your_analysis_function
-
-@mcp.tool()
-@mcp_tool_error_handler()
-async def your_analysis_tool(
-    data_id: str,
-    params: Optional[Dict[str, Any]] = None,
-    context: Context = None
-) -> YourAnalysisResult:
-    """
-    Brief description of your analysis tool.
-    
-    Args:
-        data_id: Dataset identifier from load_data
-        params: Analysis parameters (optional)
-        
-    Returns:
-        Analysis results
-    """
-    
-    # Parse parameters
-    analysis_params = YourAnalysisParameters(**(params or {}))
-    
-    # Run analysis
-    return await your_analysis_function(
-        data_id, data_store, analysis_params, context
+class YourMethodParameters(BaseModel):
+    method: Literal["method_a", "method_b"] = Field(
+        default="method_a",
+        description="Which algorithm to use.",
+    )
+    n_top_genes: Optional[int] = Field(
+        default=None, description="Number of top genes to return."
     )
 ```
 
-#### 5. Add Tests
-
-Create comprehensive tests in `tests/`:
+### 2. Result model (`models/analysis.py`)
 
 ```python
-# tests/test_your_tool.py
-import pytest
-from chatspatial.tools.your_tool import your_analysis_function
-from chatspatial.models.data import YourAnalysisParameters
-
-@pytest.fixture
-def sample_data():
-    # Create or load sample data for testing
-    pass
-
-async def test_your_analysis_basic(sample_data):
-    """Test basic functionality."""
-    params = YourAnalysisParameters(method="basic")
-    result = await your_analysis_function("test_data", sample_data, params, None)
-    
-    assert result.success
-    assert result.n_features_analyzed > 0
-    assert result.results_key in sample_data["test_data"]["adata"].uns
-
-async def test_your_analysis_error_handling(sample_data):
-    """Test error handling."""
-    # Test with invalid parameters
-    params = YourAnalysisParameters(parameter1=-1)  # Invalid value
-    
-    with pytest.raises(ProcessingError):
-        await your_analysis_function("test_data", sample_data, params, None)
+class YourMethodResult(BaseModel):
+    data_id: str
+    method: str
+    n_genes_analyzed: int
+    results_key: Optional[str] = None
 ```
 
-### Adding New Visualization Types
-
-To add support for visualizing your analysis results:
-
-#### 1. Add Plot Type to Visualization Tool (`chatspatial/tools/visualization.py`)
+### 3. Tool implementation (`tools/your_tool.py`)
 
 ```python
-def create_your_analysis_plot(adata, params):
-    """Create visualization for your analysis results."""
-    
-    # Get your results from adata.uns
-    results = adata.uns.get(params.results_key, None)
-    if results is None:
-        raise ValueError(f"Results not found: {params.results_key}")
-    
-    # Create your plot
-    fig, ax = plt.subplots(figsize=params.figure_size)
-    
-    # Your plotting logic here
-    
-    return fig
+from ..utils.exceptions import DataError, ProcessingError
+from ..utils.dependency_manager import require
+
+async def your_method(
+    data_id: str,
+    ctx: "ToolContext",
+    params: YourMethodParameters,
+) -> YourMethodResult:
+    """Implement your analysis."""
+    require("optional_package")  # Checks at runtime, clear error if missing
+
+    adata = await ctx.get_adata(data_id)
+    # ... analysis logic ...
+    return YourMethodResult(...)
 ```
 
-#### 2. Register Plot Type in the Main Visualization Function
+### 4. Register in `server.py`
 
-Add your plot type to the main `visualize_data` function's plot type mapping.
+```python
+@mcp.tool()
+@mcp_tool_error_handler()
+async def your_tool(
+    data_id: str,
+    params: Optional[YourMethodParameters] = None,
+    context: Optional[Context] = None,
+) -> YourMethodResult:
+    """Brief description for LLM tool selection."""
+    ctx = ToolContext(_data_manager=data_manager, _mcp_context=context)
+    p = _resolve_params(params, YourMethodParameters)
+    return await your_method(data_id, ctx, p)
+```
 
-### Spatial Analysis Methods
+### 5. Add tests
 
-For new spatial analysis methods (like adding support for a new spatial variable genes method):
+```python
+# tests/unit/test_your_tool.py
+@pytest.mark.asyncio
+async def test_your_method_basic(minimal_spatial_adata, monkeypatch):
+    # Mock external dependencies, test logic
+    ...
+```
 
-1. **Study Existing Patterns**: Look at `spatial_genes.py` for GASTON, SpatialDE, SPARK-X implementations
-2. **Follow Error Handling**: Use both data validation and MCP error handling layers
-3. **Parameter Validation**: Create comprehensive Pydantic models
-4. **Result Standardization**: Follow existing result model patterns
-5. **Testing**: Add unit tests, integration tests, and real data tests
+### Checklist
 
-### Method Integration Checklist
+- [ ] Parameter model with Pydantic validation
+- [ ] Result model following existing patterns
+- [ ] Implementation using `ToolContext` (not raw data_store dict)
+- [ ] Optional dependencies handled via `require()`
+- [ ] MCP tool registered with `@mcp_tool_error_handler()`
+- [ ] Unit tests with mocked dependencies
+- [ ] Docstrings on public functions
 
-When adding a new method:
+## Code Style
 
-- [ ] Parameter model created with proper validation
-- [ ] Result model follows existing patterns
-- [ ] Implementation handles all error cases
-- [ ] MCP tool registered with proper decorators
-- [ ] Comprehensive tests added
-- [ ] Documentation updated
-- [ ] Example usage provided
-- [ ] Integration with visualization tool (if applicable)
-- [ ] Memory usage optimized for large datasets
-- [ ] Optional dependencies properly handled
+```bash
+# Format and lint
+black chatspatial/
+isort chatspatial/
+ruff check chatspatial/ --fix
 
-### Dependencies
-- Add new dependencies to `pyproject.toml`
-- Use optional dependencies for specialized features
-- Document installation requirements
+# Type check
+mypy chatspatial/
+```
 
-## Documentation
+- Max line length: 88 (Black default)
+- Type hints on all public functions
+- Imports: stdlib, third-party, local (isort handles this)
 
-### API Documentation
-- Use Google-style docstrings
-- Include parameter types and descriptions
-- Provide usage examples
-- Document return values
+## Testing
 
-### User Documentation
-- Update README.md for new features
-- Add examples to `examples/` directory
-- Create tutorials for complex workflows
+```bash
+pytest tests/unit/           # Fast, no external deps
+pytest tests/integration/    # Multi-component workflows
+pytest tests/e2e/            # Full MCP tool calls
 
-## Issue Reporting
+# Pre-PR quality gate
+make test-gates
+```
 
-### Bug Reports
-- Use the bug report template
-- Include minimal reproducible example
-- Provide environment information
-- Include error messages and stack traces
+- Unit tests: mock external packages, test logic in isolation
+- Integration tests: test tool dispatch and result storage
+- Keep test data small (<1000 spots, <500 genes)
+- Set random seeds for reproducibility
 
-### Feature Requests
-- Use the feature request template
-- Describe the use case clearly
-- Suggest implementation approach
-- Consider backwards compatibility
+## Submitting Changes
 
-## Review Process
+1. Create a branch: `git checkout -b feature/your-feature`
+2. Make changes, run tests and linting
+3. Commit with clear messages: `feat: add X method for Y analysis`
+4. Open a PR against `main`
 
-### Pull Request Requirements
-- All tests must pass
-- Code coverage should not decrease
-- Documentation must be updated
-- Follow the PR template
-- Get approval from maintainers
+### Commit style
 
-### Review Criteria
-- Code quality and style
-- Test coverage and quality
-- Documentation completeness
-- Backwards compatibility
-- Performance impact
+```
+feat: add new spatial analysis method
+fix: handle edge case in deconvolution
+docs: update methods reference
+test: add integration test for trajectory
+```
 
-## Community Guidelines
+## Reporting Issues
 
-### Code of Conduct
-- Be respectful and inclusive
-- Focus on constructive feedback
-- Help newcomers learn
-- Acknowledge contributions
-- Provide clear, reproducible examples when reporting issues
-- Respect the time constraints of maintainers
+- **Bugs**: include a minimal reproducible example, error traceback, and `pip show chatspatial` output
+- **Feature requests**: describe the use case and suggest which tool category it fits
 
-### Communication Channels
+## Questions?
 
-1. **GitHub Issues**: Bug reports, feature requests, method proposals
-2. **GitHub Discussions**: General questions, usage help, method comparisons
-3. **Pull Request Reviews**: Code-specific feedback and suggestions
-4. **Documentation**: Update guides and examples to help future contributors
-
-### When Contributing
-
-#### **Before Starting Work**
-
-1. **Check existing issues** to avoid duplication
-2. **Discuss major changes** in GitHub issues first
-3. **Review the USER_GUIDE.md** to understand current capabilities
-4. **Check method compatibility** with existing analysis workflows
-
-#### **Quality Standards**
-
-- **Code must be production-ready**: All methods should be thoroughly tested
-- **Follow existing patterns**: Study current implementations before adding new ones
-- **Document everything**: Include comprehensive docstrings and usage examples
-- **Test comprehensively**: Unit tests, integration tests, and real-data validation
-
-### Common Pitfalls and How to Avoid Them
-
-#### **1. Image Display Issues**
-**Problem**: Modifying image handling can affect visualization delivery
-**Solution**:
-- Understand the current architecture (DIRECT_EMBED_THRESHOLD = 0)
-- Always test image display end-to-end with MCP tools
-- Read `/docs/IMAGE_HANDLING_ARCHITECTURE.md` before touching visualization code
-- Don't modify the type-aware error handling in `tool_error_handling.py` without testing
-
-#### **2. Memory Issues with Large Datasets**
-**Problem**: New methods consume too much memory
-**Solution**:
-- Test with datasets >3000 spots during development
-- Implement subsampling options for large datasets  
-- Use memory profiling during testing
-- Provide clear memory requirements in documentation
-
-#### **3. Optional Dependency Hell**
-**Problem**: New methods introduce complex dependency conflicts
-**Solution**:
-- Use optional dependencies in `pyproject.toml`
-- Provide clear installation instructions
-- Test installation in clean environments
-- Handle import errors gracefully with informative messages
-
-#### **4. Breaking Existing Workflows**
-**Problem**: Changes break existing analysis patterns
-**Solution**:
-- Maintain backward compatibility for parameter models
-- Test integration with existing workflows
-- Follow the two-step analysis pattern (analyze → visualize)
-- Update examples and documentation when changing APIs
-
-#### **5. Inadequate Error Handling**
-**Problem**: New tools don't follow the two-layer error handling pattern
-**Solution**:
-- Use `validate_adata()` for data validation (business logic layer)
-- Use `@mcp_tool_error_handler()` for MCP tools (protocol layer)
-- Provide informative error messages
-- Test error conditions comprehensively
-
-### Method Integration Best Practices
-
-#### **When Adding New Analysis Methods**
-
-1. **Research Integration**: Study how similar tools (GASTON, LIANA+, SpaGCN) are integrated
-2. **Parameter Design**: Create comprehensive Pydantic models with validation
-3. **Result Standardization**: Follow existing result model patterns
-4. **Visualization Support**: Ensure results can be visualized using existing plot types
-5. **Documentation**: Provide usage examples and method comparison guidance
-
-#### **Performance Considerations**
-
-- **Fast methods** (<2 min): Can be used freely in interactive workflows
-- **Moderate methods** (2-10 min): Should provide progress feedback
-- **Slow methods** (>10 min): Must support parameter optimization for speed
-- **Memory-intensive methods**: Must handle large datasets gracefully
-
-#### **Testing New Methods**
-
-1. **Synthetic data testing**: Create controlled test cases
-2. **Real data validation**: Test with actual spatial transcriptomics datasets
-3. **Comparison testing**: Compare results with reference implementations
-4. **Performance testing**: Measure memory usage and execution time
-5. **Integration testing**: Test full workflows including visualization
-
-### Contributing Workflow Checklist
-
-Before submitting a pull request:
-
-- [ ] **Code follows existing patterns** and uses established error handling
-- [ ] **All tests pass** including unit, integration, and visualization tests
-- [ ] **Documentation is complete** with usage examples and parameter descriptions
-- [ ] **Method comparison guide updated** if adding new analysis capability
-- [ ] **Memory usage tested** with realistic dataset sizes
-- [ ] **Optional dependencies handled** correctly with clear installation instructions
-- [ ] **Backward compatibility maintained** for existing parameter models
-- [ ] **Image handling tested** if visualization is involved
-- [ ] **Performance benchmarked** and optimization options provided
-- [ ] **Real data validation** completed for new analysis methods
-
-### Common Review Comments and How to Address Them
-
-#### **"This breaks the image display"**
-- **Cause**: Modified Image object handling incorrectly
-- **Fix**: Revert to returning raw Image objects, never wrap them
-
-#### **"Memory usage is too high"**
-- **Cause**: New method doesn't handle large datasets efficiently
-- **Fix**: Add subsampling options, implement memory-efficient algorithms
-
-#### **"Error handling doesn't follow project patterns"**
-- **Cause**: Not using the two-layer error handling system
-- **Fix**: Use `validate_adata()` and `@mcp_tool_error_handler()` appropriately
-
-#### **"Tests are insufficient"**
-- **Cause**: Missing critical test scenarios
-- **Fix**: Add unit tests, integration tests, error condition tests, and performance tests
-
-#### **"Documentation is incomplete"**
-- **Cause**: Missing usage examples or parameter descriptions
-- **Fix**: Add comprehensive docstrings, usage examples, and update user guides
-
-## Release Process
-
-### Version Numbering
-- Follow semantic versioning (SemVer)
-- Major: Breaking changes
-- Minor: New features, backwards compatible
-- Patch: Bug fixes, backwards compatible
-
-### Release Checklist
-- Update version in `pyproject.toml`
-- Update CHANGELOG.md
-- Create release notes
-- Tag release in Git
-- Publish to PyPI (when ready)
-
-## Getting Help
-
-- Check existing issues and documentation
-- Ask questions in GitHub discussions
-- Contact maintainers for complex issues
-
-Thank you for contributing to ChatSpatial!
+Open a [GitHub Discussion](https://github.com/cafferychen777/ChatSpatial/discussions) or check the [docs](https://cafferychen777.github.io/ChatSpatial/).
