@@ -20,13 +20,13 @@ Spatial transcriptomics measures gene expression while preserving the physical l
 
 **When to use**: First step after preprocessing. Identifies tissue architecture like tumor regions, immune infiltrates, or tissue layers.
 
-**Method selection**:
+**How to choose**:
 
-| Your Data | Recommended Method |
-|-----------|-------------------|
-| Visium with H&E image | SpaGCN (uses histology) |
-| High-resolution (Xenium, MERFISH) | STAGATE or GraphST |
-| Quick exploratory analysis | Leiden clustering |
+- If your data includes informative histology images, prefer a histology-aware method.
+- If your data is high-resolution single-cell spatial data, prefer graph or deep-learning domain methods.
+- If you want a quick baseline, use clustering-first exploration.
+
+See [Methods Reference](advanced/methods-reference.md) for the full supported domain methods and defaults.
 
 ---
 
@@ -70,39 +70,42 @@ These two concepts are often confused. Here's the difference:
 
 ## Choosing Methods
 
-### Deconvolution Methods
+### Deconvolution
 
-| Method | Speed | Accuracy | When to Use |
-|--------|-------|----------|-------------|
-| **FlashDeconv** | Fast | Good | Default choice, quick exploration |
-| **Cell2location** | Slow | Excellent | Final analysis, publication |
-| **RCTD** | Fast | Good | R users, batch processing |
-| **CARD** | Medium | Good | Need spatial imputation |
+Use deconvolution when a spot contains multiple cell types and you want proportions rather than a single label.
 
-**Accuracy vs Speed tradeoff**: Start with FlashDeconv for exploration, run Cell2location for final figures.
+**How to choose**:
+- start with a fast method for exploration
+- move to a slower, stronger method for final figures
+- prefer methods with explicit spatial modeling if tissue structure matters to the question
+
+See [Methods Reference](advanced/methods-reference.md) for the full deconvolution method list, defaults, and requirements.
 
 ---
 
-### Annotation Methods
+### Annotation
 
-| Method | Requires | Best For |
-|--------|----------|----------|
-| **Tangram** | Reference scRNA-seq | Most accurate when reference matches tissue |
-| **scANVI** | Reference scRNA-seq | Large datasets, GPU available |
-| **CellAssign** | Marker gene list | When you know cell type markers |
-| **mLLMCelltype** | Nothing | Quick automated annotation |
+Use annotation when your platform already has single-cell resolution or when you want one dominant label per cell/spot.
+
+**How to choose**:
+- use transfer methods when you have a strong matching reference
+- use marker-based methods when marker genes are well established
+- use automated methods for quick initial labeling, then validate biologically
+
+See [Methods Reference](advanced/methods-reference.md) for supported annotation methods and exact requirements.
 
 ---
 
 ### Spatial Statistics
 
-| Analysis | Question It Answers |
-|----------|-------------------|
-| **Moran's I** | "Is this gene spatially clustered?" (global) |
-| **Local Moran's I** | "Where are the clusters?" (local hotspots) |
-| **Getis-Ord Gi*** | "Where are the high/low expression hotspots?" |
-| **Neighborhood enrichment** | "Do these cell types co-localize?" |
-| **Co-occurrence** | "How does co-localization change with distance?" |
+Spatial statistics answer different spatial questions.
+
+**How to choose**:
+- use global autocorrelation when you want one summary statistic for a gene
+- use local hotspot methods when you want to locate spatially enriched regions
+- use neighborhood or co-occurrence analyses when your question is about cell-type organization rather than gene-level spatial patterning
+
+See [Methods Reference](advanced/methods-reference.md) for the full analysis-type matrix and required inputs.
 
 ---
 
@@ -144,14 +147,9 @@ Most analyses fail because preprocessing wasn't run. Always preprocess first:
 
 ### 2. Wrong Species Parameter
 
-Cell communication analysis requires correct species:
-```
-# Human data
-species="human"
+Cell communication analysis depends on species-specific resources. Use the resource that matches the organism, especially for mouse data.
 
-# Mouse data
-species="mouse", liana_resource="mouseconsensus"
-```
+See [Methods Reference](advanced/methods-reference.md) for the canonical species and resource settings.
 
 ### 3. Expecting Single-Cell Resolution from Visium
 
@@ -191,10 +189,3 @@ Load → Preprocess → Domains → Deconvolve → Statistics → Communication 
 
 Best for: Comprehensive analysis for publication.
 
----
-
-## Next Steps
-
-- [Quick Start](quickstart.md) — Get running in 5 minutes
-- [Examples](examples.md) — See all analysis types
-- [Methods Reference](advanced/methods-reference.md) — Full parameter details

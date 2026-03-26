@@ -54,7 +54,7 @@ Identify tissue regions and niches.
 "Use Leiden clustering with resolution 0.5"
 ```
 
-**Methods**: SpaGCN (default), STAGATE, GraphST, BANKSY, Leiden, Louvain
+Common choices include SpaGCN, STAGATE, GraphST, BANKSY, and Leiden. See [Methods Reference](advanced/methods-reference.md) for the full supported list and defaults.
 
 ---
 
@@ -69,7 +69,7 @@ Assign cell types to spots or cells.
 "Annotate with marker genes using CellAssign"
 ```
 
-**Methods**: Tangram, scANVI, CellAssign, scType, SingleR, mLLMCelltype
+Common choices include Tangram, scANVI, CellAssign, SingleR, and mLLMCelltype. See [Methods Reference](advanced/methods-reference.md) for the full supported list.
 
 **Requires**: Reference dataset with cell type labels (for transfer methods)
 
@@ -86,7 +86,7 @@ Estimate cell type proportions in each spot.
 "Run RCTD deconvolution"
 ```
 
-**Methods**: FlashDeconv (default, fastest), Cell2location, RCTD, DestVI, Stereoscope, Tangram, SPOTlight, CARD
+Common choices include FlashDeconv, Cell2location, RCTD, DestVI, and CARD. See [Methods Reference](advanced/methods-reference.md) for the full supported list and defaults.
 
 **Requires**: Reference single-cell dataset with cell type annotations
 
@@ -104,7 +104,7 @@ Analyze spatial patterns and autocorrelation.
 "Analyze co-occurrence of cell types"
 ```
 
-**Methods**: Moran's I, Local Moran's I, Geary's C, Getis-Ord Gi*, Ripley's K, neighborhood enrichment, co-occurrence, local join count, network properties, spatial centrality
+Choose the exact spatial statistic based on your biological question. See [Concepts](concepts.md) for how to choose, and [Methods Reference](advanced/methods-reference.md) for the full analysis-type list.
 
 ---
 
@@ -118,7 +118,7 @@ Find genes with spatial expression patterns.
 "Use SPARK-X to find spatial patterns"
 ```
 
-**Methods**: FlashS (default, fast), SPARK-X, SpatialDE
+Common choices include FlashS, SPARK-X, and SpatialDE. See [Methods Reference](advanced/methods-reference.md) for canonical defaults and supported values.
 
 ---
 
@@ -159,7 +159,7 @@ Analyze ligand-receptor interactions.
 "Which cell types are communicating?"
 ```
 
-**Methods**: FastCCC (default, fastest), LIANA, CellPhoneDB, CellChat (`cellchat_r`)
+Common choices include FastCCC, LIANA, CellPhoneDB, and CellChat (`cellchat_r`). See [Methods Reference](advanced/methods-reference.md) for canonical names, defaults, and species-specific settings.
 
 **Requires**: Cell type annotations
 
@@ -175,7 +175,7 @@ Understand cellular dynamics.
 "Use VeloVI for velocity estimation"
 ```
 
-**Methods**: scVelo (deterministic/stochastic/dynamical), VeloVI
+Common choices include scVelo and VeloVI. See [Methods Reference](advanced/methods-reference.md) for exact modes and accepted values.
 
 **Requires**: Spliced and unspliced count layers
 
@@ -192,7 +192,7 @@ Infer developmental trajectories.
 "Compute diffusion pseudotime"
 ```
 
-**Methods**: CellRank (requires velocity), Palantir, DPT
+Common choices include CellRank, Palantir, and DPT. See [Methods Reference](advanced/methods-reference.md) for exact method names and requirements.
 
 ---
 
@@ -207,7 +207,7 @@ Find enriched biological pathways.
 "Run GSEA on marker genes"
 ```
 
-**Methods**: Spatial EnrichMap (default), ORA, GSEA, ssGSEA, Enrichr
+Common choices include Spatial EnrichMap, ORA, GSEA, ssGSEA, and Enrichr. See [Methods Reference](advanced/methods-reference.md) for defaults and parameter details.
 
 ---
 
@@ -221,7 +221,7 @@ Detect copy number variations.
 "Find chromosomal alterations in tumor cells"
 ```
 
-**Methods**: inferCNVpy (default), Numbat
+Common choices include inferCNVpy and Numbat. See [Methods Reference](advanced/methods-reference.md) for canonical defaults and requirements.
 
 **Requires**: Normal cell types as reference
 
@@ -237,7 +237,7 @@ Combine multiple datasets.
 "Combine datasets using scVI"
 ```
 
-**Methods**: Harmony (default), BBKNN, Scanorama, scVI
+Common choices include Harmony, BBKNN, Scanorama, and scVI. See [Methods Reference](advanced/methods-reference.md) for the supported integration methods.
 
 ---
 
@@ -250,7 +250,7 @@ Align tissue sections.
 "Register spatial slices for 3D reconstruction"
 ```
 
-**Methods**: PASTE, STalign
+Common choices include PASTE and STalign. See [Methods Reference](advanced/methods-reference.md) for the supported registration methods.
 
 ---
 
@@ -338,8 +338,8 @@ Align tissue sections.
 ## Tips
 
 **Be specific when needed**
-- General: "Analyze the data" → ChatSpatial chooses defaults
-- Specific: "Use SpaGCN with 7 domains" → ChatSpatial uses your settings
+- General: "Analyze the data" → ChatSpatial can choose a reasonable default workflow
+- Specific: "Use SpaGCN with 7 domains" → ChatSpatial follows your requested method and settings
 
 **Chain commands naturally**
 - "Load the data, preprocess it, and identify spatial domains"

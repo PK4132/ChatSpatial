@@ -1,6 +1,6 @@
 # Methods Reference
 
-All 20 ChatSpatial tools with parameters and options.
+This page is the canonical specification for ChatSpatial tool names, method names, defaults, accepted values, and parameter behavior.
 
 ---
 
@@ -369,10 +369,3 @@ Set `use_gpu=True` for these methods:
 | Integration | scVI |
 | CNV | inferCNVpy |
 
----
-
-## Next Steps
-
-- [Examples](../examples.md) — See methods in action
-- [Concepts](../concepts.md) — When to use which method
-- [Troubleshooting](troubleshooting.md) — Common issues and fixes
