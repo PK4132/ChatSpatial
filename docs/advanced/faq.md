@@ -1,116 +1,96 @@
 # Frequently Asked Questions
 
-Common questions and their answers.
+This page gives **short answers and pointers** to the canonical docs.
 
 ---
 
-## General Questions
+## General
 
 ### What is ChatSpatial?
 
-ChatSpatial is an LLM agent for spatial transcriptomics analysis via MCP. It integrates 60+ methods from Python and R ecosystems into a unified conversational interface.
+ChatSpatial is an MCP server for spatial transcriptomics analysis through natural language. See the project overview on the [documentation home](../index).
 
 ### What is MCP?
 
-MCP (Model Context Protocol) is an open standard that enables secure connections between AI applications and external tools. ChatSpatial uses MCP to allow LLMs like Claude to perform spatial analysis through natural language.
+MCP (Model Context Protocol) is the interface layer that lets AI clients call external tools safely. ChatSpatial uses MCP so clients can run spatial analysis tools through structured commands.
 
 ### What data formats does ChatSpatial support?
 
-- H5AD (AnnData format)
-- 10X Visium spatial folders
-- H5 files from 10X Genomics
-- MTX matrix files
-- Slide-seq, MERFISH, and other spatial formats
+Common formats include H5AD, 10X Visium folders, 10X H5, MTX, Slide-seq, and MERFISH-style spatial data. For a first successful run, see [Quick Start](../quickstart.md).
 
 ### Do I need programming experience?
 
-No! ChatSpatial is designed for natural language conversation. However, understanding basic spatial transcriptomics concepts is helpful.
+No. ChatSpatial is designed for natural-language use, though basic spatial transcriptomics knowledge still helps.
 
 ---
 
-## Installation and Setup
+## Setup
 
 ### What Python version do I need?
 
-Python 3.11 or higher (3.12 recommended, 3.13 supported).
+Python 3.11-3.13 is supported, with 3.12 recommended. See [Installation](../installation.md).
 
 ### Should I use a virtual environment?
 
-Yes, strongly recommended! Virtual environments prevent dependency conflicts.
+Yes. Use a dedicated environment to avoid dependency conflicts. See [Installation](../installation.md).
 
-### How do I configure ChatSpatial?
+### How do I configure ChatSpatial in my client?
 
-See our [Configuration Guide](configuration.md) for MCP client setup instructions.
+Use the [Configuration Guide](configuration.md) for exact client syntax.
 
 ### Can I use ChatSpatial without Claude?
 
-Yes! ChatSpatial works with any MCP-compatible client.
+Yes. ChatSpatial works with any MCP-compatible client.
 
 ---
 
-## Analysis Questions
+## Analysis
 
 ### How do I choose the right method?
 
-See our [Concepts Guide](../concepts.md) for detailed method comparisons. Quick summary:
-
-**Cell Type Annotation:**
-| Situation | Recommended Method |
-|-----------|-------------------|
-| Have reference scRNA-seq | Tangram or scANVI |
-| Have marker gene list | CellAssign |
-| Want automatic annotation | mLLMCelltype |
-
-**Spatial Domains:**
-| Situation | Recommended Method |
-|-----------|-------------------|
-| Visium with H&E image | SpaGCN |
-| High-resolution, no image | STAGATE or GraphST |
-| Quick exploration | Leiden |
-
-**Deconvolution:**
-| Situation | Recommended Method |
-|-----------|-------------------|
-| Quick exploration | FlashDeconv (fast) |
-| Publication quality | Cell2location (accurate) |
-| R environment | RCTD |
+Use:
+- [Concepts](../concepts.md) for method selection guidance
+- [Examples](../examples.md) for prompt recipes
+- [Methods Reference](methods-reference.md) for exact parameters and defaults
 
 ### Why does my analysis take so long?
 
-Large datasets and complex methods can be time-consuming. Tips:
-- Use GPU acceleration when available (Cell2location, scVI)
-- Reduce dataset size for initial testing
-- Use faster methods for exploratory analysis
-- Check system resources (RAM, CPU)
+Large datasets and heavier methods can be slow. Try:
+- smaller datasets for testing
+- faster baseline methods first
+- GPU where supported
+- checking memory and CPU limits
+
+If performance is failing rather than merely slow, see [Troubleshooting](troubleshooting.md).
 
 ### How much memory do I need?
 
-Depends on dataset size:
-- Small (<5000 cells): 8GB RAM sufficient
-- Medium (5000-50000 cells): 16GB RAM recommended
-- Large (>50000 cells): 32GB+ RAM needed
+A rough rule:
+- small datasets: 8GB RAM
+- medium datasets: 16GB RAM
+- large datasets: 32GB+ RAM
+
+See [Troubleshooting](troubleshooting.md) for failure-mode guidance.
 
 ---
 
-## Advanced Topics
+## Advanced
 
-### Can I use ChatSpatial in research publications?
+### Can I use ChatSpatial in publications?
 
-Yes! ChatSpatial is open-source under MIT license. Please cite our paper if you use it in published research.
+Yes. It is MIT licensed. See citation details in the [documentation home](../index.rst).
 
 ### How do I contribute?
 
-See our [Contributing Guide](https://github.com/cafferychen777/ChatSpatial/blob/main/CONTRIBUTING.md).
+See [Contributing](../contributing.md).
 
 ### Can I add my own analysis methods?
 
-Yes! ChatSpatial's modular architecture makes it easy to add new tools. See developer documentation.
+Yes. The project is modular, but contributor-facing implementation guidance belongs in the codebase and contributor docs rather than the FAQ.
 
 ### Is GPU acceleration supported?
 
-Yes, for many methods including Cell2location, scANVI, STAGATE, and VeloVI. Set `use_gpu=True` in parameters to enable.
-
-See [Methods Reference](methods-reference.md) for the full list of GPU-accelerated methods.
+Yes, for many methods. See [Methods Reference](methods-reference.md) for exact support.
 
 ---
 
@@ -118,21 +98,23 @@ See [Methods Reference](methods-reference.md) for the full list of GPU-accelerat
 
 ### Is my data sent to external servers?
 
-No. ChatSpatial runs locally. Your data never leaves your computer. Only natural language commands are sent to the LLM for interpretation.
+No. ChatSpatial runs locally; your analysis data stays on your machine.
 
 ### Can I use ChatSpatial offline?
 
-Analysis tools work offline, but you need internet to communicate with the LLM (Claude) for command interpretation.
+The analysis stack can run locally, but you still need an LLM client for natural-language interaction.
 
 ### How is my data stored?
 
-Data is stored in standard H5AD format. You control save locations through the `CHATSPATIAL_DATA_DIR` environment variable.
+Saved data locations can be controlled through `CHATSPATIAL_DATA_DIR`. See [Configuration Guide](configuration.md).
 
 ---
 
 ## Still Have Questions?
 
-- Check the [Quick Start](../quickstart.md)
-- Read the [Methods Reference](methods-reference.md)
-- Browse [GitHub Discussions](https://github.com/cafferychen777/ChatSpatial/discussions)
-- [Report issues on GitHub](https://github.com/cafferychen777/ChatSpatial/issues)
+- [Installation](../installation.md)
+- [Quick Start](../quickstart.md)
+- [Configuration Guide](configuration.md)
+- [Troubleshooting](troubleshooting.md)
+- [Methods Reference](methods-reference.md)
+- [GitHub Issues](https://github.com/cafferychen777/ChatSpatial/issues)

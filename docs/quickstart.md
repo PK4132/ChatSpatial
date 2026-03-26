@@ -1,48 +1,61 @@
 # Quick Start
 
-First time? Complete [Installation](https://github.com/cafferychen777/ChatSpatial/blob/main/INSTALLATION.md) first, then come back here.
+This page is for your **first successful analysis after installation**.
+
+- Install first: [Installation](installation.md)
+- Configure your client first: [Configuration Guide](advanced/configuration.md)
+- If something fails: [Troubleshooting](advanced/troubleshooting.md)
 
 ---
 
 ## Your First Analysis
 
-Open your MCP client (Claude, OpenCode, Codex, etc.) and type:
+Open your MCP client and type:
 
-```
-Load /path/to/spatial_data.h5ad and show the tissue structure
+```text
+Load /absolute/path/to/spatial_data.h5ad and show me the tissue structure
 ```
 
-ChatSpatial handles the rest.
+Then continue with:
+
+```text
+Normalize and cluster the data
+```
+
+```text
+Identify spatial domains with SpaGCN
+```
 
 ---
 
-## What You Can Do
+## Common First Prompts
 
 | Task | Say This |
 |------|----------|
-| Load data | "Load my Visium data from /path/to/data" |
-| Preprocess | "Normalize and cluster the data" |
-| Find domains | "Identify spatial domains with SpaGCN" |
-| Annotate cells | "Annotate cell types using the reference" |
-| Deconvolve | "Estimate cell type proportions" |
-| Analyze patterns | "Find spatially variable genes" |
-| Visualize | "Show expression of CD3D on the tissue" |
+| Load data | `Load my Visium data from /absolute/path/to/data` |
+| Preprocess | `Normalize and cluster the data` |
+| Find domains | `Identify spatial domains with SpaGCN` |
+| Annotate cells | `Annotate cell types using the reference` |
+| Deconvolve | `Estimate cell type proportions` |
+| Find spatial genes | `Find spatially variable genes` |
+| Visualize | `Show expression of CD3D on the tissue` |
 
 ---
 
 ## Sample Data
 
-Test with our datasets:
+Try these public test files:
 
-- [card_spatial.h5ad](https://github.com/cafferychen777/ChatSpatial/releases/tag/v0.3.0-data) (7.7 MB) - Pancreatic spatial
-- [card_reference_filtered.h5ad](https://github.com/cafferychen777/ChatSpatial/releases/tag/v0.3.0-data) (36 MB) - Reference
+- [card_spatial.h5ad](https://github.com/cafferychen777/ChatSpatial/releases/tag/v0.3.0-data) — pancreatic spatial data
+- [card_reference_filtered.h5ad](https://github.com/cafferychen777/ChatSpatial/releases/tag/v0.3.0-data) — reference dataset
 
 ---
 
 ## What Success Looks Like
 
 **After loading:**
-```
+
+```text
 Dataset loaded successfully
 - ID: spatial_data_abc123
 - 3000 spots, 18000 genes
@@ -50,31 +63,32 @@ Dataset loaded successfully
 ```
 
 **After preprocessing:**
-```
+
+```text
 Preprocessing complete
 - Filtered to 2800 spots, 2000 HVGs
 - Computed 30 PCs, UMAP
 - Found 8 clusters (Leiden)
 ```
 
-**Visualizations** appear directly in the chat.
+Visualizations appear directly in the chat or client UI.
 
 ---
 
-## Quick Troubleshooting
+## Before You Troubleshoot
 
-| Issue | Fix |
-|-------|-----|
-| Tools not showing | Restart your MCP client |
-| "Dataset not found" | Use absolute path: `/Users/you/data.h5ad` |
-| Analysis fails | Run preprocessing first |
+Check these three things first:
 
-More: [Troubleshooting Guide](advanced/troubleshooting.md)
+- Use an **absolute** data path, not `~/...` or `./...`
+- Restart your client after MCP configuration changes
+- Run preprocessing before most downstream analyses
+
+If that does not fix the problem, go to the [Troubleshooting Guide](advanced/troubleshooting.md).
 
 ---
 
 ## Next Steps
 
-- [Concepts](concepts.md) — Understand what each analysis does
-- [Examples](examples.md) — Complete workflows
-- [Methods Reference](advanced/methods-reference.md) — All 20 tools with parameters
+- [Concepts](concepts.md) — choose the right analysis strategy
+- [Examples](examples.md) — complete workflow recipes
+- [Methods Reference](advanced/methods-reference.md) — exact tool parameters and defaults

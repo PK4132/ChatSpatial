@@ -35,6 +35,15 @@ Getting Started
 .. grid:: 3
     :gutter: 3
 
+    .. grid-item-card:: Installation
+        :link: installation
+        :link-type: doc
+        :class-card: sd-rounded-3
+
+        **Set up the environment**
+
+        Install ChatSpatial and prepare your Python environment.
+
     .. grid-item-card:: Quick Start
         :link: quickstart
         :link-type: doc
@@ -88,6 +97,12 @@ Reference
 
         External dataset registry and fetch workflow
 
+    .. grid-item-card:: Contributing
+        :link: contributing
+        :link-type: doc
+
+        Contributor entry point for docs and code changes
+
 ----
 
 Support
@@ -104,9 +119,11 @@ Support
    :hidden:
    :caption: Getting Started
 
+   installation
    quickstart
    concepts
    examples
+   contributing
 
 .. toctree::
    :maxdepth: 2

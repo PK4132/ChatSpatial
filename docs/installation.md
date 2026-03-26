@@ -1,10 +1,10 @@
-# ChatSpatial Installation
+# Installation
 
-This page covers **environment setup and package installation**.
+This page is the docs-site version of the installation guide. It is the canonical installation page for the documentation site.
 
-- For exact MCP client configuration, see the [Configuration Guide](docs/advanced/configuration.md).
-- For your first analysis after setup, see [Quick Start](docs/quickstart.md).
-- For installation failures, see [Troubleshooting](docs/advanced/troubleshooting.md).
+- For exact MCP client syntax, see [Configuration Guide](advanced/configuration.md).
+- For your first workflow after setup, see [Quick Start](quickstart.md).
+- For installation failures, see [Troubleshooting](advanced/troubleshooting.md).
 
 ---
 
@@ -82,7 +82,7 @@ which python
 
 4. Restart your client after configuration changes.
 
-For exact client-specific syntax, use the [Configuration Guide](docs/advanced/configuration.md).
+For exact client-specific syntax, use the [Configuration Guide](advanced/configuration.md).
 
 ---
 
@@ -93,7 +93,7 @@ python -c "import chatspatial; print(f'ChatSpatial {chatspatial.__version__} rea
 python -m chatspatial server --help
 ```
 
-If both commands work, continue to [Quick Start](docs/quickstart.md).
+If both commands work, continue to [Quick Start](quickstart.md).
 
 ---
 
@@ -138,6 +138,6 @@ cd STAGATE_pyG && python setup.py install
 
 ## Next Steps
 
-- [Configuration Guide](docs/advanced/configuration.md) — Exact client setup
-- [Quick Start](docs/quickstart.md) — First successful analysis
-- [Troubleshooting](docs/advanced/troubleshooting.md) — Fix install or runtime issues
+- [Configuration Guide](advanced/configuration.md) — exact client setup
+- [Quick Start](quickstart.md) — first successful analysis
+- [Troubleshooting](advanced/troubleshooting.md) — fix install or runtime issues

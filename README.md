@@ -10,7 +10,7 @@
 [![IBC 2026](https://img.shields.io/badge/IBC%202026-Oral-blue.svg)](https://www.ibc2026.org/home)
 [![CI](https://github.com/cafferychen777/ChatSpatial/actions/workflows/ci.yml/badge.svg)](https://github.com/cafferychen777/ChatSpatial/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/chatspatial)](https://pypi.org/project/chatspatial/)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.11-3.13](https://img.shields.io/badge/python-3.11--3.13-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Docs](https://img.shields.io/badge/docs-available-blue)](https://cafferychen777.github.io/ChatSpatial/)
 
@@ -20,54 +20,25 @@
   <img src="assets/images/overview.jpg" alt="ChatSpatial Overview" width="900">
 </p>
 
-ChatSpatial replaces ad-hoc LLM code generation with **schema-enforced orchestration** — the LLM selects methods and parameters from a curated registry instead of writing arbitrary code, ensuring reproducible results across sessions and platforms. It exposes **60+ spatial transcriptomics methods** as MCP tools that any compatible client can call.
+ChatSpatial replaces ad-hoc LLM code generation with **schema-enforced orchestration**. Instead of generating arbitrary scripts, the LLM selects tools and parameters from a curated registry, making spatial transcriptomics workflows more reproducible across sessions and clients.
+
+It exposes **60+ spatial transcriptomics methods** as MCP tools, so any MCP-compatible client can analyze data through natural language.
 
 ---
 
-## Quick Start
+## Start Here
 
-**Using Claude Code / Codex / OpenCode?** Just paste this:
-```
-Install ChatSpatial following https://github.com/cafferychen777/ChatSpatial/blob/main/INSTALLATION.md
-```
+1. **Install ChatSpatial** — [Installation Guide](INSTALLATION.md)
+2. **Configure your MCP client** — [Configuration Guide](docs/advanced/configuration.md)
+3. **Run your first analysis** — [Quick Start](docs/quickstart.md)
 
-<details>
-<summary>Manual installation</summary>
-
-```bash
-# Install uv (recommended - handles complex dependencies)
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Create environment and install
-python3 -m venv venv && source venv/bin/activate
-uv pip install chatspatial
-
-# Configure (use your venv Python path)
-claude mcp add chatspatial /path/to/venv/bin/python -- -m chatspatial server
-```
-</details>
-
-> **Works with any MCP-compatible client** — not just Claude. Use with [OpenCode](https://opencode.ai/), Codex, or any client supporting [Model Context Protocol](https://modelcontextprotocol.io/). Configure your preferred LLM (Qwen, DeepSeek, Doubao, etc.) as the backend.
-
-See [Installation Guide](INSTALLATION.md) for detailed setup including virtual environments and all MCP clients.
-
----
-
-## Usage
-
-Talk to ChatSpatial in natural language:
+**Minimal example prompt:**
 
 ```text
-Load /path/to/spatial_data.h5ad and show me the tissue structure
+Load /absolute/path/to/spatial_data.h5ad and show me the tissue structure
 ```
 
-```text
-Identify spatial domains using SpaGCN
-```
-
-```text
-Find spatially variable genes and create a heatmap
-```
+> ChatSpatial works with **any MCP-compatible client** — Claude Code, Claude Desktop, Codex, OpenCode, and other MCP-capable tools.
 
 ---
 
@@ -79,11 +50,11 @@ Find spatially variable genes and create a heatmap
 |----------|---------|
 | **Spatial Domains** | SpaGCN, STAGATE, GraphST, BANKSY, Leiden, Louvain |
 | **Deconvolution** | FlashDeconv, Cell2location, RCTD, DestVI, Stereoscope, SPOTlight, Tangram, CARD |
-| **Cell Communication** | LIANA+, CellPhoneDB, CellChat, FastCCC |
+| **Cell Communication** | LIANA+, CellPhoneDB, CellChat (`cellchat_r`), FastCCC |
 | **Cell Type Annotation** | Tangram, scANVI, CellAssign, mLLMCelltype, scType, SingleR |
 | **Differential Expression** | Wilcoxon, t-test, Logistic Regression, pyDESeq2 |
 | **Trajectory & Velocity** | CellRank, Palantir, DPT, scVelo, VeloVI |
-| **Spatial Statistics** | Moran's I, Local Moran, Geary's C, Getis-Ord Gi*, Ripley's K, Co-occurrence, Neighborhood Enrichment, Centrality Scores |
+| **Spatial Statistics** | Moran's I, Local Moran, Geary's C, Getis-Ord Gi*, Ripley's K, Co-occurrence, Neighborhood Enrichment, Centrality Scores, Local Join Count, Network Properties |
 | **Enrichment** | GSEA, ORA, Enrichr, ssGSEA, Spatial EnrichMap |
 | **Spatial Genes** | SpatialDE, SPARK-X, FlashS |
 | **Integration** | Harmony, BBKNN, Scanorama, scVI |
@@ -93,13 +64,16 @@ Find spatially variable genes and create a heatmap
 
 ## Documentation
 
-| Guide | Description |
-|-------|-------------|
-| [Installation](INSTALLATION.md) | Virtual environment setup, all platforms |
-| [Quick Start](docs/quickstart.md) | 5-minute first analysis |
-| [Examples](docs/examples.md) | Step-by-step workflows |
-| [Methods Reference](docs/advanced/methods-reference.md) | All 20 tools with parameters |
-| [Full Docs](https://cafferychen777.github.io/ChatSpatial/) | Complete reference |
+| Guide | Owns |
+|-------|------|
+| [Installation](INSTALLATION.md) | Environment setup, package install, platform notes |
+| [Quick Start](docs/quickstart.md) | First successful analysis after setup |
+| [Concepts](docs/concepts.md) | Method selection and analysis reasoning |
+| [Examples](docs/examples.md) | Prompt recipes and workflow examples |
+| [Configuration](docs/advanced/configuration.md) | Exact MCP client configuration syntax |
+| [Troubleshooting](docs/advanced/troubleshooting.md) | Symptom → fix guidance |
+| [Methods Reference](docs/advanced/methods-reference.md) | Canonical tool parameters and defaults |
+| [Full Docs](https://cafferychen777.github.io/ChatSpatial/) | Complete documentation site |
 
 ---
 
@@ -120,13 +94,13 @@ If you use ChatSpatial in your research, please cite:
 }
 ```
 
-ChatSpatial orchestrates many excellent third-party methods. **Please also cite the original tools your analysis used.** For example, if you ran spatial domain identification with SpaGCN, cite both ChatSpatial and SpaGCN. Each method's original publication can be found in its documentation or GitHub repository.
+ChatSpatial orchestrates many excellent third-party methods. **Please also cite the original tools your analysis used.**
 
 ---
 
 ## Contributing
 
-ChatSpatial is open to contributions! Whether it's bug reports, new analysis methods, documentation improvements, or feature requests — all are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+Documentation improvements, bug reports, and new analysis methods are all welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 <div align="center">
 

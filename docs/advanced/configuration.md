@@ -1,100 +1,98 @@
 # Configuration Guide
 
-Configure ChatSpatial MCP server for your environment.
+This page is the canonical reference for **exact MCP client configuration syntax**.
+
+- To install ChatSpatial, see [Installation](../installation.md).
+- To run your first workflow after setup, see [Quick Start](../quickstart.md).
+- If configuration fails, see [Troubleshooting](troubleshooting.md).
 
 ---
 
-## MCP Client Configuration
+## Configuration Workflow
 
-### Claude Code (Recommended)
+1. Install ChatSpatial in a virtual environment.
+2. Activate the environment and run `which python`.
+3. Use that **absolute** Python path in your MCP client config.
+4. Restart the client after configuration changes.
+5. Verify the server can start.
+
+Canonical command shape:
+
+```text
+/absolute/path/to/python -m chatspatial server
+```
+
+---
+
+## Claude Code (Recommended)
 
 ```bash
-# Find your virtual environment Python path
 source venv/bin/activate
 which python
-# Copy the output path
-
-# Add ChatSpatial MCP server
 claude mcp add chatspatial /path/to/venv/bin/python -- -m chatspatial server
-
-# Verify connection
 claude mcp list
-# Should show: chatspatial: ... - Connected
 ```
 
-**Key points:**
-- The `--` separates the Python path from the module arguments
-- Always use absolute path from `which python`
-- Use `--scope user` to make ChatSpatial available across all projects
+**Notes:**
+- `--` separates the Python path from module arguments
+- use the absolute Python path from `which python`
+- use `--scope user` if you want the server available across projects
 
 ---
 
-### Codex (CLI and IDE Extension)
+## Codex
 
-Codex stores MCP configuration in `~/.codex/config.toml`. The CLI and IDE extension share this configuration.
+Codex stores MCP configuration in `~/.codex/config.toml`.
 
-**Add via CLI:**
+### Add via CLI
 
 ```bash
-# Find your virtual environment Python path
 source venv/bin/activate
 which python
-# Copy the output path
-
-# Add ChatSpatial MCP server
 codex mcp add chatspatial -- /path/to/venv/bin/python -m chatspatial server
-
-# Verify in Codex TUI
-/mcp
 ```
 
-**Or edit `~/.codex/config.toml` directly:**
+### Or edit config directly
 
 ```toml
 [mcp_servers.chatspatial]
 command = "/path/to/venv/bin/python"
 args = ["-m", "chatspatial", "server"]
 
-# Optional: Environment variables
 [mcp_servers.chatspatial.env]
 CHATSPATIAL_DATA_DIR = "/path/to/data"
 ```
 
-**Advanced options:**
+### Advanced options
 
 ```toml
 [mcp_servers.chatspatial]
 command = "/path/to/venv/bin/python"
 args = ["-m", "chatspatial", "server"]
-startup_timeout_sec = 30    # Default: 10
-tool_timeout_sec = 120      # Default: 60
-enabled = true              # Set to false to disable without deleting
+startup_timeout_sec = 30
+tool_timeout_sec = 120
+enabled = true
 ```
-
-**Key points:**
-- Use `[mcp_servers.chatspatial]` (underscore, not hyphen)
-- Configuration is shared between CLI and IDE extension
-- Use `/mcp` in Codex TUI to verify connection
 
 ---
 
-### OpenCode (CLI and TUI)
+## OpenCode
 
 OpenCode stores MCP configuration in:
 
-- Global: `~/.config/opencode/opencode.json`
-- Project: `opencode.json` (in your project root)
+- global: `~/.config/opencode/opencode.json`
+- project: `opencode.json`
 
 Project config takes precedence when both exist.
 
-**Add via CLI (wizard):**
+### Add via CLI
 
 ```bash
 opencode mcp add
 opencode mcp list
 ```
 
-**Or edit config JSON directly (recommended for repeatability):**
+### Or edit config directly
 
 ```json
 {
@@ -112,24 +110,20 @@ opencode mcp list
 }
 ```
 
-**Key points:**
-- Use the **absolute** Python path from `which python`
+**Notes:**
 - `command` is an array: `[executable, ...args]`
-- Prefer project-level `opencode.json` if you want repo-specific settings
-- Docs: https://opencode.ai/docs/mcp
+- use the **absolute** Python path from `which python`
+- prefer project-level config for repo-specific settings
 
 ---
 
-### Claude Desktop
+## Claude Desktop
 
-Edit Claude Desktop configuration file:
+Edit the Claude Desktop config file:
 
-**Location:**
 - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 - Linux: `~/.config/Claude/claude_desktop_config.json`
-
-**Configuration:**
 
 ```json
 {
@@ -142,91 +136,50 @@ Edit Claude Desktop configuration file:
 }
 ```
 
-**Example with actual path:**
-
-```json
-{
-  "mcpServers": {
-    "chatspatial": {
-      "command": "/Users/yourname/Projects/venv/bin/python",
-      "args": ["-m", "chatspatial", "server"]
-    }
-  }
-}
-```
-
-**Important:** Restart Claude Desktop after configuration changes.
+Restart Claude Desktop after saving the file.
 
 ---
 
-### Other MCP Clients (Qwen, DeepSeek, Doubao, etc.)
+## Other MCP Clients
 
-ChatSpatial is an MCP server that works with **any MCP-compatible client** — not limited to Claude/Anthropic.
+ChatSpatial works with any MCP-compatible client.
 
-**Using OpenCode with other LLMs:**
+Minimum requirement:
+- configure the executable as your environment’s Python
+- pass `-m chatspatial server` as arguments
 
-[OpenCode](https://opencode.ai/) supports multiple LLM providers. You can use ChatSpatial with Qwen, DeepSeek, Doubao, or any other supported model:
-
-1. Install OpenCode and configure your preferred LLM as the backend
-2. Add ChatSpatial as an MCP server (see OpenCode section above)
-3. Start analyzing with your chosen LLM
-
-**For any MCP-compatible client:**
-
-1. **Find Python path:** Activate virtual environment and run `which python`
-2. **Configure MCP server:** Use command `/path/to/venv/bin/python -m chatspatial server`
-
-The key requirement is **MCP support**, not a specific LLM provider.
+Use the same absolute Python path pattern shown above.
 
 ---
 
-## Environment Variables (Optional)
+## Environment Variables
 
-Configure ChatSpatial behavior using environment variables:
-
-### Data Storage
+### Data storage
 
 ```bash
-# Set custom data directory for saved datasets
 export CHATSPATIAL_DATA_DIR="/path/to/your/spatial/data"
 ```
 
-**Usage:** When you use `export_data()` without specifying `path`, datasets are saved to this directory.
+When `export_data()` is called without an explicit `path`, ChatSpatial saves to this directory.
 
-**Default:** `.chatspatial_saved/` next to original data file
+Default behavior: `.chatspatial_saved/` next to the original data file.
 
 ---
 
-## Troubleshooting Configuration
-
-### Common Issues
-
-| Problem | Solution |
-|---------|----------|
-| "python not found" | Use full path to virtual environment Python |
-| "module not found" | Ensure virtual environment is activated before adding server |
-| Claude can't connect | Check JSON syntax and restart Claude Desktop |
-| Server not showing up | Verify Python path is correct with `which python` |
-
-### Verify Configuration
+## Verify Configuration
 
 ```bash
-# Make sure you're in the virtual environment
 which python
-# Should show virtual environment path, not system Python
-
-# Test ChatSpatial import
 python -c "import chatspatial; print(f'ChatSpatial {chatspatial.__version__} ready')"
-
-# Test MCP server
 python -m chatspatial server --help
-# Should display server options
 ```
+
+If these checks fail, use [Troubleshooting](troubleshooting.md).
 
 ---
 
 ## Next Steps
 
-- [Quick Start](../quickstart.md) - Start analyzing data
-- [Troubleshooting](troubleshooting.md) - Solve common problems
-- [Methods Reference](methods-reference.md) - Explore available tools
+- [Quick Start](../quickstart.md) — first successful analysis
+- [Troubleshooting](troubleshooting.md) — fix configuration or runtime issues
+- [Methods Reference](methods-reference.md) — exact parameters and defaults

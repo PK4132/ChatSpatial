@@ -1,34 +1,42 @@
 # Troubleshooting
 
-Quick solutions to common problems.
+This page is the canonical **symptom → fix** guide.
+
+- For installation steps, see [Installation](../installation.md).
+- For exact MCP client syntax, see [Configuration Guide](configuration.md).
+- For a first-run workflow, see [Quick Start](../quickstart.md).
 
 ---
 
-## MCP Connection
+## MCP Connection Problems
 
-### Tools not showing in Claude
+### Tools not showing in the client
 
-1. **Check config path:**
-   - macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-   - Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-   - Linux: `~/.config/Claude/claude_desktop_config.json`
+1. Confirm you used the correct config file for your client.
+2. Confirm the Python path is an **absolute** path from `which python`.
+3. Check the config file for JSON/TOML syntax errors.
+4. Restart the client after configuration changes.
+5. Test the server directly:
 
-2. **Verify JSON syntax** (missing commas, brackets)
+```bash
+python -m chatspatial server --help
+```
 
-3. **Restart Claude** after config changes
+If you need the exact config file format, go back to the [Configuration Guide](configuration.md).
 
-4. **Test server:**
-   ```bash
-   python -m chatspatial server --help
-   ```
+### "python not found" or "module not found"
+
+- Make sure ChatSpatial is installed inside the environment you configured
+- Re-run `which python` inside the activated environment
+- Update the MCP config to use that exact path
 
 ---
 
-## Data Loading
+## Data Loading Problems
 
 ### "Dataset not found"
 
-**Use absolute paths:**
+Use an **absolute** path:
 
 ```text
 ❌ ~/data/sample.h5ad
@@ -38,28 +46,31 @@ Quick solutions to common problems.
 
 ### File format not recognized
 
-- **H5AD:** Verify with `python -c "import scanpy as sc; sc.read_h5ad('file.h5ad')"`
-- **Visium:** Point to directory containing `spatial/` folder
-- **Check file:** `file yourdata.h5ad` should show "HDF5"
+- **H5AD:** verify with `python -c "import scanpy as sc; sc.read_h5ad('file.h5ad')"`
+- **Visium:** point to the directory containing the `spatial/` folder
+- **HDF5 check:** `file yourdata.h5ad`
 
 ---
 
-## Analysis Errors
+## Analysis Problems
 
 ### "Run preprocessing first"
 
-Most analyses require preprocessing. Ask Claude:
+Most analyses require preprocessing first.
+
 ```text
-"Preprocess the data"
+Preprocess the data
 ```
 
 ### "No significant results"
 
-- Check data quality (>500 spots, >1000 genes)
-- Lower significance thresholds
-- Try different methods
+- check data quality (>500 spots, >1000 genes)
+- lower significance thresholds
+- try a different analysis method
 
 ### Cell communication fails
+
+Use species/resource pairs that match the dataset:
 
 ```text
 For mouse: species="mouse", liana_resource="mouseconsensus"
@@ -68,45 +79,39 @@ For human: species="human", liana_resource="consensus"
 
 ---
 
-## Memory Issues
+## Resource Problems
 
 ### System freezes / MemoryError
 
-- Subsample data for testing
-- Use smaller batch sizes
-- Monitor with `top` command
-- For large datasets: use 32GB+ RAM or cloud
+- subsample data for testing
+- reduce batch sizes
+- monitor memory with `top`
+- use 32GB+ RAM or cloud resources for large datasets
 
 ### CUDA out of memory
 
-- Set `use_gpu=False`
-- Reduce batch size
-- Run `torch.cuda.empty_cache()`
+- set `use_gpu=False`
+- reduce batch size
+- clear cached GPU memory if your workflow allows it
 
 ---
 
-## Quick Fixes
+## Quick Fix Table
 
-| Problem | Solution |
-|---------|----------|
-| Import errors | `uv pip install --upgrade chatspatial[full]` |
+| Problem | First fix |
+|---------|-----------|
+| Import errors | Reinstall with `uv pip install chatspatial[full]` |
 | `resolution-too-deep` | Use `uv` instead of `pip` |
-| Claude not connecting | Restart Claude, check JSON config |
+| Client not connecting | Re-check config and restart the client |
 | Path errors | Use absolute paths |
-| Analysis fails | Run preprocessing first |
-| R methods fail | Install R + packages |
+| Analysis fails immediately | Run preprocessing first |
+| R methods fail | Install R and the required R packages |
 
 ---
 
-## Get Help
+## Still Stuck?
 
-- [GitHub Issues](https://github.com/cafferychen777/ChatSpatial/issues) — Report bugs
-- [FAQ](faq.md) — Common questions
-
----
-
-## Next Steps
-
-- [FAQ](faq.md) — Frequently asked questions
-- [Configuration Guide](configuration.md) — Detailed MCP setup
-- [Methods Reference](methods-reference.md) — All tools and parameters
+- [FAQ](faq.md) — short answers and pointers
+- [Configuration Guide](configuration.md) — exact client syntax
+- [Methods Reference](methods-reference.md) — tool parameters and defaults
+- [GitHub Issues](https://github.com/cafferychen777/ChatSpatial/issues) — report reproducible bugs
