@@ -8,7 +8,42 @@ these tests fail immediately.
 
 from __future__ import annotations
 
+from pathlib import Path
+import tomllib
+
+from packaging.specifiers import SpecifierSet
 import pytest
+
+
+@pytest.mark.unit
+def test_runtime_version_matches_pyproject():
+    """Runtime package version should match pyproject.toml."""
+    import chatspatial
+
+    pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
+    with pyproject_path.open("rb") as f:
+        expected_version = tomllib.load(f)["project"]["version"]
+
+    assert chatspatial.__version__ == expected_version
+
+
+@pytest.mark.unit
+def test_docs_build_python_satisfies_package_requires_python():
+    """Read the Docs build Python must satisfy the package support policy."""
+    repo_root = Path(__file__).resolve().parents[2]
+
+    with (repo_root / "pyproject.toml").open("rb") as f:
+        requires_python = tomllib.load(f)["project"]["requires-python"]
+    with (repo_root / ".readthedocs.yaml").open("r", encoding="utf-8") as f:
+        rtd_config = f.read()
+
+    declared_python = next(
+        line.split('"')[1]
+        for line in rtd_config.splitlines()
+        if 'python:' in line and '"' in line
+    )
+
+    assert f"{declared_python}.0" in SpecifierSet(requires_python)
 
 
 @pytest.mark.unit

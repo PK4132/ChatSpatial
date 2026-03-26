@@ -7,8 +7,13 @@ from pydantic import ValidationError
 
 from chatspatial.models.data import (
     AnnotationParameters,
+    CellCommunicationParameters,
     DifferentialExpressionParameters,
+    EnrichmentParameters,
     PreprocessingParameters,
+    SpatialDomainParameters,
+    SpatialStatisticsParameters,
+    SpatialVariableGenesParameters,
     VisualizationParameters,
 )
 
@@ -79,3 +84,65 @@ def test_visualization_communication_defaults_to_dotplot():
 def test_annotation_rejects_invalid_method_literal():
     with pytest.raises(ValidationError):
         AnnotationParameters(method="not_supported")
+
+
+def test_preprocessing_uses_canonical_scrublet_field_name():
+    params = PreprocessingParameters(use_scrublet=True)
+    assert params.use_scrublet is True
+    assert "use_scrublet" in PreprocessingParameters.model_fields
+
+
+def test_spatial_domain_includes_banksy_literal():
+    params = SpatialDomainParameters(method="banksy")
+    assert params.method == "banksy"
+
+
+def test_spatial_variable_genes_default_is_flashs():
+    params = SpatialVariableGenesParameters()
+    assert params.method == "flashs"
+
+
+def test_enrichment_default_is_spatial_enrichmap():
+    params = EnrichmentParameters(species="human")
+    assert params.method == "spatial_enrichmap"
+
+
+def test_cell_communication_uses_canonical_cellchat_literal():
+    params = CellCommunicationParameters(
+        method="cellchat_r",
+        species="mouse",
+        cell_type_key="cell_type",
+    )
+    assert params.method == "cellchat_r"
+
+    with pytest.raises(ValidationError):
+        CellCommunicationParameters(
+            method="cellchat",
+            species="human",
+            cell_type_key="cell_type",
+        )
+
+
+def test_spatial_statistics_accepts_extended_analysis_literals():
+    for analysis_type in ["local_join_count", "network_properties", "spatial_centrality"]:
+        params = SpatialStatisticsParameters(analysis_type=analysis_type, cluster_key="cluster")
+        assert params.analysis_type == analysis_type
+
+
+@pytest.mark.parametrize(
+    ("plot_type", "subtype"),
+    [
+        ("deconvolution", "imputation"),
+        ("trajectory", "circular"),
+        ("trajectory", "fate_heatmap"),
+        ("trajectory", "palantir"),
+        ("velocity", "proportions"),
+        ("velocity", "heatmap"),
+        ("statistics", "getis_ord"),
+        ("statistics", "centrality"),
+        ("integration", "highlight"),
+    ],
+)
+def test_visualization_accepts_documented_subtypes(plot_type: str, subtype: str):
+    params = VisualizationParameters(plot_type=plot_type, subtype=subtype)
+    assert params.subtype == subtype

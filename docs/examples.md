@@ -54,7 +54,7 @@ Identify tissue regions and niches.
 "Use Leiden clustering with resolution 0.5"
 ```
 
-**Methods**: SpaGCN (default), STAGATE, GraphST, Leiden, Louvain
+**Methods**: SpaGCN (default), STAGATE, GraphST, BANKSY, Leiden, Louvain
 
 ---
 
@@ -104,7 +104,7 @@ Analyze spatial patterns and autocorrelation.
 "Analyze co-occurrence of cell types"
 ```
 
-**Methods**: Moran's I, Local Moran's I, Geary's C, Getis-Ord Gi*, Ripley's K, neighborhood enrichment, co-occurrence
+**Methods**: Moran's I, Local Moran's I, Geary's C, Getis-Ord Gi*, Ripley's K, neighborhood enrichment, co-occurrence, local join count, network properties, spatial centrality
 
 ---
 
@@ -118,7 +118,7 @@ Find genes with spatial expression patterns.
 "Use SPARK-X to find spatial patterns"
 ```
 
-**Methods**: SPARK-X (default, fast), SpatialDE
+**Methods**: FlashS (default, fast), SPARK-X, SpatialDE
 
 ---
 
@@ -159,7 +159,7 @@ Analyze ligand-receptor interactions.
 "Which cell types are communicating?"
 ```
 
-**Methods**: FastCCC (default, fastest), LIANA, CellPhoneDB, CellChat
+**Methods**: FastCCC (default, fastest), LIANA, CellPhoneDB, CellChat (`cellchat_r`)
 
 **Requires**: Cell type annotations
 
@@ -207,7 +207,7 @@ Find enriched biological pathways.
 "Run GSEA on marker genes"
 ```
 
-**Methods**: ORA (default), GSEA, ssGSEA, Enrichr
+**Methods**: Spatial EnrichMap (default), ORA, GSEA, ssGSEA, Enrichr
 
 ---
 

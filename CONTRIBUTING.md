@@ -17,7 +17,7 @@ pip install -e ".[dev]"
 pytest tests/unit/ -x
 ```
 
-**Prerequisites**: Python 3.11+, Git. For R-based methods (RCTD, CellChat, SPARK-X, etc.): R 4.4+ and rpy2.
+**Prerequisites**: Python 3.11-3.13, Git. For R-based methods (RCTD, CellChat, SPARK-X, etc.): R 4.4+ and rpy2.
 
 ## Project Structure
 
@@ -29,7 +29,7 @@ chatspatial/
 ├── tools/                    # Analysis implementations
 │   ├── spatial_genes.py      # SpatialDE, SPARK-X, FlashS
 │   ├── spatial_domains.py    # SpaGCN, STAGATE, GraphST, BANKSY, Leiden
-│   ├── cell_communication.py # FastCCC, LIANA, CellPhoneDB, CellChat
+│   ├── cell_communication.py # FastCCC, LIANA, CellPhoneDB, CellChat (`cellchat_r`)
 │   ├── deconvolution/        # FlashDeconv, Cell2location, RCTD, etc.
 │   ├── visualization/        # 11 plot types
 │   └── ...

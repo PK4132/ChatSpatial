@@ -40,7 +40,7 @@ Normalize, filter, and prepare data.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `normalization` | `log` | `log`, `sct`, `pearson_residuals`, `scvi`, `none` |
+| `normalization` | `pearson_residuals` | `log`, `sct`, `pearson_residuals`, `scvi`, `none` |
 | `n_hvgs` | 2000 | Highly variable genes |
 | `n_pcs` | 30 | Principal components |
 | `n_neighbors` | 15 | Neighbor graph |
@@ -54,7 +54,7 @@ Normalize, filter, and prepare data.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `scrublet_enable` | False | Enable doublet detection (for single-cell resolution data) |
+| `use_scrublet` | False | Enable doublet detection (for single-cell resolution data) |
 | `normalize_target_sum` | None | Target counts per cell (None=median, 1e4=Visium, 1e6=MERFISH) |
 | `remove_mito_genes` | True | Exclude mito genes from HVG |
 | `batch_key` | `batch` | Batch column for batch-aware normalization |
@@ -115,7 +115,10 @@ Analyze spatial patterns and autocorrelation.
 | `co_occurrence` | Group | Yes |
 | `ripley` | Group | Yes |
 | `join_count` | Group | Yes |
-| `centrality` | Network | Optional |
+| `local_join_count` | Group | Yes |
+| `centrality` | Network | Yes |
+| `network_properties` | Network | Yes |
+| `spatial_centrality` | Network | Yes |
 
 ---
 
@@ -125,7 +128,7 @@ Identify spatially variable genes.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `method` | `sparkx` | `sparkx`, `flashs`, `spatialde` |
+| `method` | `flashs` | `sparkx`, `flashs`, `spatialde` |
 | `n_top_genes` | None | Top genes to return (None = all significant) |
 
 ---
@@ -136,7 +139,7 @@ Find tissue domains and spatial niches.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `method` | `spagcn` | `spagcn`, `stagate`, `graphst`, `leiden`, `louvain` |
+| `method` | `spagcn` | `spagcn`, `stagate`, `graphst`, `banksy`, `leiden`, `louvain` |
 | `n_domains` | 7 | Expected number of domains |
 | `resolution` | 0.5 | Clustering resolution |
 
@@ -244,7 +247,7 @@ Gene set enrichment analysis.
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `species` | required | `human`, `mouse`, `zebrafish` |
-| `method` | `pathway_ora` | `pathway_ora`, `pathway_gsea`, `pathway_ssgsea`, `spatial_enrichmap` |
+| `method` | `spatial_enrichmap` | `pathway_ora`, `pathway_gsea`, `pathway_ssgsea`, `spatial_enrichmap` |
 | `gene_set_database` | `GO_Biological_Process` | See databases below |
 
 **Databases**: `GO_Biological_Process`, `GO_Molecular_Function`, `KEGG_Pathways`, `Reactome_Pathways`, `MSigDB_Hallmark`
@@ -340,15 +343,15 @@ Create all plot types.
 |------|----------|-----|
 | `feature` | — | Gene/metadata on spatial or UMAP |
 | `expression` | `heatmap`, `violin`, `dotplot`, `correlation` | Aggregated expression |
-| `deconvolution` | `spatial_multi`, `pie`, `dominant`, `diversity`, `umap` | Cell proportions |
+| `deconvolution` | `spatial_multi`, `pie`, `dominant`, `diversity`, `umap`, `imputation` | Cell proportions |
 | `communication` | `dotplot`, `tileplot`, `circle_plot` | LR interactions |
 | `interaction` | — | Spatial LR pairs |
-| `trajectory` | `pseudotime`, `fate_map`, `gene_trends` | Pseudotime |
-| `velocity` | `stream`, `phase`, `paga` | RNA velocity |
-| `statistics` | `neighborhood`, `co_occurrence`, `ripley`, `moran` | Spatial stats |
+| `trajectory` | `pseudotime`, `circular`, `fate_map`, `gene_trends`, `fate_heatmap`, `palantir` | Pseudotime |
+| `velocity` | `stream`, `phase`, `proportions`, `heatmap`, `paga` | RNA velocity |
+| `statistics` | `neighborhood`, `co_occurrence`, `ripley`, `moran`, `centrality`, `getis_ord` | Spatial stats |
 | `enrichment` | `barplot`, `dotplot` | Pathway results |
 | `cnv` | `heatmap`, `spatial` | CNV results |
-| `integration` | `batch`, `cluster` | Integration QC |
+| `integration` | `batch`, `cluster`, `highlight` | Integration QC |
 
 ---
 

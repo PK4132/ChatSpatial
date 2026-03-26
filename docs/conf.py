@@ -3,17 +3,22 @@
 
 import os
 import sys
+import tomllib
 from datetime import datetime
+from pathlib import Path
 
 # -- Path setup --------------------------------------------------------------
 sys.path.insert(0, os.path.abspath(".."))
+
+ROOT = Path(__file__).resolve().parents[1]
+with (ROOT / "pyproject.toml").open("rb") as f:
+    release = tomllib.load(f)["project"]["version"]
+version = ".".join(release.split(".")[:2])
 
 # -- Project information -----------------------------------------------------
 project = "ChatSpatial"
 copyright = f"{datetime.now().year}, ChatSpatial Project"
 author = "ChatSpatial Contributors"
-release = "1.1.2"
-version = "1.1"
 
 # -- General configuration ---------------------------------------------------
 extensions = [
