@@ -1964,9 +1964,9 @@ class ConditionComparisonParameters(BaseModel):
 
 class StLearnParameters(BaseModel):
     method: Literal["stlearn"] = Field(
-        default = "stlearn"
-        description = "stlearn is a spatial data package that specialises in the analysis of "
+        default="stlearn",
+        description="stlearn is a spatial data package that specialises in the analysis of "
         "Spatial Transcriptomics (ST) data to investigate complex biological processes within "
         "an undissociated tissue"
-    )
+        )
     
